@@ -63,7 +63,7 @@ object RecordingNotificationHelper {
 
         // Intent para abrir MainActivity al presionar la notificación
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
         val openAppPendingIntent = PendingIntent.getActivity(context, 0, openAppIntent, flags)
 
