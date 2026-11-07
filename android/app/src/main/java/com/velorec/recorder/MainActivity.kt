@@ -13,59 +13,61 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import com.velorec.recorder.data.model.NativeRecordingConfig
+import com.velorec.recorder.ui.MainViewModel
+import com.velorec.recorder.ui.VeloRecMainScreen
+import com.velorec.recorder.ui.theme.DarkBackground
+import com.velorec.recorder.ui.theme.DarkSurface
+import com.velorec.recorder.ui.theme.PrimaryIndigo
 
 /**
  * MainActivity.kt
  * 
- * Punto de entrada principal de VeloRec Studio en Android.
+ * ¿QUÉ HACE ESTE ARCHIVO?
+ * Punto de entrada de la aplicación en Android.
  * Integra la interfaz táctil en Jetpack Compose (Material 3) y la orquestación
  * del servicio en primer plano para MediaProjection (Android 14+ API 34/35).
  * 
- * CERO COPIA EN KOTLIN:
- * Kotlin solo solicita los permisos del sistema (MediaProjection, Audio, Notificaciones)
- * y pasa la Surface obtenida directamente del codificador por hardware en C++23 o Rust 2024.
- * La grabación pesada, codificación H.264/HEVC/AV1 y multiplexación MP4 es 100% nativa.
+ * LÓGICA Y ARQUITECTURA MODULAR:
+ * 1. Conexión con 'MainViewModel' para preservar el estado del grabador y cronómetro ante
+ *    rotaciones del dispositivo móvil.
+ * 2. Gestión de permisos con ActivityResultContracts:
+ *    - Captura de audio (Manifest.permission.RECORD_AUDIO)
+ *    - Notificaciones en Android 13+ (Manifest.permission.POST_NOTIFICATIONS)
+ *    - Token de MediaProjection para captura de pantalla del sistema.
+ * 3. Tubería CERO COPIA: Kotlin solo orquesta permisos y arranca 'ScreenRecordService';
+ *    la codificación pesada en H.264/HEVC/AV1 corre 100% nativa en el NDK con C++23 y Rust 2024.
  */
 class MainActivity : ComponentActivity() {
+
+    private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = Color(0xFF6366F1),
-                    background = Color(0xFF090D16),
-                    surface = Color(0xFF131A29),
+                    primary = PrimaryIndigo,
+                    background = DarkBackground,
+                    surface = DarkSurface,
                     onPrimary = Color.White,
                     onBackground = Color(0xFFF1F5F9),
                     onSurface = Color(0xFFF1F5F9)
                 )
             ) {
-                var isRecording by remember { mutableStateOf(false) }
-                var isPaused by remember { mutableStateOf(false) }
-                var durationSec by remember { mutableIntStateOf(0) }
+                val isRecording by viewModel.isRecording.collectAsState()
+                val isPaused by viewModel.isPaused.collectAsState()
+                val durationSec by viewModel.durationSec.collectAsState()
+                val pendingConfig by viewModel.pendingConfig.collectAsState()
 
-                // Timer en tiempo real para el contador REC mm:ss
-                LaunchedEffect(isRecording, isPaused) {
-                    if (isRecording && !isPaused) {
-                        while (true) {
-                            kotlinx.coroutines.delay(1000L)
-                            durationSec++
-                        }
-                    }
-                }
-
-                // Parámetros pendientes de grabación mientras el usuario acepta el diálogo del sistema
-                var pendingConfig by remember {
-                    mutableStateOf<NativeRecordingConfig?>(null)
-                }
-
-                // Launcher para MediaProjection (Captura de Pantalla del Sistema)
+                // Launcher para MediaProjection (Captura de Pantalla del Sistema Android)
                 val mediaProjectionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.StartActivityForResult()
                 ) { result ->
@@ -90,17 +92,15 @@ class MainActivity : ComponentActivity() {
                             startService(serviceIntent)
                         }
 
-                        isRecording = true
-                        isPaused = false
-                        durationSec = 0
+                        viewModel.onRecordingStarted()
                         Toast.makeText(
                             this,
                             "Grabando pantalla (${config.width}x${config.height} @ ${config.fps}fps - ${config.bitrateBps / 1_000_000}Mbps)",
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
-                        Toast.makeText(this, "Permiso de captura de pantalla cancelado", Toast.LENGTH_SHORT).show()
-                        isRecording = false
+                        Toast.makeText(this, "Permiso de captura cancelado", Toast.LENGTH_SHORT).show()
+                        viewModel.onRecordingStopped()
                     }
                 }
 
@@ -110,7 +110,8 @@ class MainActivity : ComponentActivity() {
                 ) { permissions ->
                     val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: true
                     if (audioGranted) {
-                        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                        val projectionManager =
+                            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                         mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
                     } else {
                         Toast.makeText(this, "Se requiere permiso de audio para capturar", Toast.LENGTH_SHORT).show()
@@ -122,14 +123,22 @@ class MainActivity : ComponentActivity() {
                     isPaused = isPaused,
                     durationSec = durationSec,
                     onStartRecording = { config ->
-                        pendingConfig = config
+                        viewModel.setPendingConfig(config)
                         val permissionsToRequest = mutableListOf<String>()
 
-                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        if (ContextCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.RECORD_AUDIO
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
                             permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
                         }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            if (ContextCompat.checkSelfPermission(
+                                    this,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
                                 permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
                             }
                         }
@@ -137,15 +146,19 @@ class MainActivity : ComponentActivity() {
                         if (permissionsToRequest.isNotEmpty()) {
                             permissionLauncher.launch(permissionsToRequest.toTypedArray())
                         } else {
-                            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                            val projectionManager =
+                                getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                             mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
                         }
                     },
                     onTogglePause = {
-                        val newPausedState = !isPaused
-                        isPaused = newPausedState
+                        val newPausedState = viewModel.onPauseToggled()
                         val pauseIntent = Intent(this, ScreenRecordService::class.java).apply {
-                            action = if (newPausedState) ScreenRecordService.ACTION_PAUSE else ScreenRecordService.ACTION_RESUME
+                            action = if (newPausedState) {
+                                ScreenRecordService.ACTION_PAUSE
+                            } else {
+                                ScreenRecordService.ACTION_RESUME
+                            }
                         }
                         startService(pauseIntent)
                     },
@@ -154,9 +167,7 @@ class MainActivity : ComponentActivity() {
                             action = ScreenRecordService.ACTION_STOP
                         }
                         startService(stopIntent)
-                        isRecording = false
-                        isPaused = false
-                        durationSec = 0
+                        viewModel.onRecordingStopped()
                         Toast.makeText(this, "Grabación finalizada y guardada en MP4", Toast.LENGTH_LONG).show()
                     }
                 )

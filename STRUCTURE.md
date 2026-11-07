@@ -31,10 +31,30 @@
 │           │   ├── mipmap-anydpi-v26/  # Iconos adaptativos para Android 8.0+
 │           │   └── values/             # strings.xml, styles.xml y colors.xml
 │           ├── java/com/velorec/recorder/
-│           │   ├── MainActivity.kt          # Punto de entrada de ComponentActivity con setContent Compose
-│           │   ├── VeloRecComposeUI.kt      # Interfaz móvil 100% nativa con Jetpack Compose Material 3
-│           │   ├── ScreenRecorderModule.kt  # Módulo puente React Native con Corrutinas (Dispatchers.IO)
-│           │   └── ScreenRecordService.kt   # Foreground Service con Surface nativa Zero-Copy
+│           │   ├── MainActivity.kt          # Punto de entrada de ComponentActivity con StateFlow/ViewModel
+│           │   ├── VeloRecComposeUI.kt      # Fachada modular retrocompatible de Jetpack Compose
+│           │   ├── ScreenRecordService.kt   # Foreground Service con Surface nativa Zero-Copy y JNI
+│           │   ├── data/
+│           │   │   ├── model/
+│           │   │   │   ├── RecordingConfig.kt   # Modelos de configuración, presets de resolución y bitrate
+│           │   │   │   └── RemoteUiConfig.kt    # Modelos Server-Driven UI (app_config.json)
+│           │   │   └── repository/
+│           │   │       └── RemoteConfigRepository.kt # Carga asíncrona segura de GitHub Releases (Dispatchers.IO)
+│           │   ├── service/
+│           │   │   └── RecordingNotificationHelper.kt # Gestión de canal y notificaciones de Foreground Service
+│           │   └── ui/
+│           │       ├── MainViewModel.kt     # ViewModel de retención de estado de grabación y cronómetro
+│           │       ├── VeloRecMainScreen.kt # Scaffold principal, TopAppBar y navegación inferior
+│           │       ├── theme/
+│           │       │   └── Color.kt         # Paleta oscura Material 3 y parseColorSafe
+│           │       ├── components/
+│           │       │   ├── MetricBadge.kt   # Componente de telemetría de hardware
+│           │       │   └── RemoteAnnouncementDialog.kt # Diálogo modal para anuncios remotos
+│           │       └── screens/
+│           │           ├── RecorderScreen.kt  # Pantalla de visor de captura, chips y botones REC
+│           │           ├── SettingsScreen.kt  # Ajustes de hardware, códec, audio y GitHub
+│           │           ├── GalleryScreen.kt   # Galería de videos grabados con FileProvider
+│           │           └── BenchmarkScreen.kt # Telemetría comparativa C++23 vs Rust 2024
 │           └── cpp/
 │               ├── CMakeLists.txt      # Configuración CMake para C++23 (-std=c++23, -O3)
 │               ├── NativeRecorderEngine.hpp # Cabecera C++23 con std::expected, span y jthread
@@ -62,13 +82,13 @@
 │   │   │   ├── CMakeLists.txt
 │   │   │   ├── NativeRecorderEngine.hpp
 │   │   │   └── NativeRecorderEngine.cpp
-│   │   ├── kotlin/
+│   │   ├── kotlin/                     # Módulos Kotlin desacoplados (data, ui, screens, service)
 │   │   │   ├── MainActivity.kt
 │   │   │   ├── VeloRecComposeUI.kt
-│   │   │   ├── ScreenRecorderModule.kt
-│   │   │   └── ScreenRecordService.kt
-│   │   ├── react_native/
-│   │   │   └── NativeScreenRecorder.ts
+│   │   │   ├── ScreenRecordService.kt
+│   │   │   ├── data/ (model y repository)
+│   │   │   ├── service/ (RecordingNotificationHelper)
+│   │   │   └── ui/ (ViewModel, screens, components, theme)
 │   │   └── rust/
 │   │       ├── Cargo.toml
 │   │       └── src/lib.rs

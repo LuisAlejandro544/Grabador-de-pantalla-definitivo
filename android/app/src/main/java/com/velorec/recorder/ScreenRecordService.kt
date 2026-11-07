@@ -1,21 +1,7 @@
 package com.velorec.recorder
 
-/**
- * ScreenRecordService.kt
- * Servicio en primer plano (Foreground Service) de Android para captura de pantalla.
- * 
- * ¿QUÉ HACE ESTE ARCHIVO?
- * 1. Mantiene el proceso activo en segundo plano mientras el usuario usa otras aplicaciones o juegos.
- * 2. Cumple estrictamente con las políticas de Android 14+ (API 34/35) declarando
- *    FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION en el AndroidManifest.
- * 3. Delega la codificación pesada a C++23 o Rust 2024:
- *    - Obtiene una 'Surface' de hardware directamente del motor nativo (AMediaCodec / EGL / Rust).
- *    - Pasa esa Surface al VirtualDisplay de MediaProjection.
- *    - ¡CERO COPIA DE MEMORIA EN KOTLIN! No se instancian Bitmaps ni buffers en la máquina virtual JVM/ART.
- * 4. Gestiona las llamadas JNI cargando 'velorec_cpp23' o 'velorec_rust2024'.
- */
-
-import android.app.*
+import android.app.Activity
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -26,21 +12,41 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import android.view.Surface
-import androidx.core.app.NotificationCompat
-import kotlinx.coroutines.*
+import com.velorec.recorder.service.RecordingNotificationHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.io.File
 
+/**
+ * ScreenRecordService.kt
+ * 
+ * ¿QUÉ HACE ESTE ARCHIVO?
+ * Servicio en primer plano (Foreground Service) de Android para captura de pantalla de alto rendimiento.
+ * 
+ * LÓGICA Y ARQUITECTURA MODULAR:
+ * 1. Mantiene el proceso activo en segundo plano mientras el usuario navega o juega en su smartphone.
+ * 2. Cumple estrictamente con las políticas de Android 14+ (API 34/35) utilizando
+ *    FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION.
+ * 3. Delega la creación de canales y notificaciones a 'RecordingNotificationHelper'.
+ * 4. Tubería ZERO-COPY:
+ *    - Obtiene la Surface de hardware directamente del codificador nativo en C++23 o Rust 2024.
+ *    - Vincula esa Surface con el VirtualDisplay de MediaProjection.
+ *    - ¡CERO alocación de memoria ni bitmaps en la máquina virtual Java/ART!
+ * 5. Ejecución en Corrutinas ('Dispatchers.IO'): Todas las llamadas al NDK se ejecutan fuera
+ *    del hilo principal para prevenir congelamientos de UI o bloqueos ANR.
+ * 6. Mantiene las firmas JNI exactas ('Java_com_velorec_recorder_ScreenRecordService_native*')
+ *    para garantizar paridad y enlace sin errores con 'NativeRecorderEngine.cpp' y 'rust/src/lib.rs'.
+ */
 class ScreenRecordService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
-    private var nativeEnginePointer: Long = 0L
 
     companion object {
-        const val CHANNEL_ID = "velorec_recording_channel"
-        const val NOTIFICATION_ID = 8801
-
         const val ACTION_START = "com.velorec.ACTION_START"
         const val ACTION_PAUSE = "com.velorec.ACTION_PAUSE"
         const val ACTION_RESUME = "com.velorec.ACTION_RESUME"
@@ -61,13 +67,13 @@ class ScreenRecordService : Service() {
         var lastDurationMs: Long = 0L
         var lastFileSizeBytes: Long = 0L
 
-        // Carga dinámica de las bibliotecas nativas compiladas
+        // Carga dinámica de las bibliotecas nativas C++23 y Rust 2024
         init {
             try {
                 System.loadLibrary("velorec_cpp23")
                 System.loadLibrary("velorec_rust2024")
             } catch (e: UnsatisfiedLinkError) {
-                // Las librerías se cargarán bajo demanda en tiempo de ejecución
+                // Las librerías nativas se compilan con CMake y Cargo-NDK en GitHub Actions
                 e.printStackTrace()
             }
         }
@@ -77,7 +83,7 @@ class ScreenRecordService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
+        RecordingNotificationHelper.createNotificationChannel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -98,6 +104,7 @@ class ScreenRecordService : Service() {
             @Suppress("DEPRECATION")
             intent.getParcelableExtra(EXTRA_RESULT_DATA) as? Intent
         } ?: return
+
         val engine = intent.getStringExtra(EXTRA_ENGINE) ?: "cpp23"
         val width = intent.getIntExtra(EXTRA_WIDTH, 1080)
         val height = intent.getIntExtra(EXTRA_HEIGHT, 1920)
@@ -108,21 +115,27 @@ class ScreenRecordService : Service() {
 
         activeEngine = engine
 
-        // Configuración del Foreground Service según versión de Android
-        val notification = buildRecordingNotification(engine, width, height, fps)
+        // Configuración del Foreground Service modular según versión de Android
+        val notification = RecordingNotificationHelper.buildRecordingNotification(
+            this,
+            engine,
+            width,
+            height,
+            fps
+        )
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                // Android 14+ (API 34) exige FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             } else {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             }
-            startForeground(NOTIFICATION_ID, notification, serviceType)
+            startForeground(RecordingNotificationHelper.NOTIFICATION_ID, notification, serviceType)
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            startForeground(RecordingNotificationHelper.NOTIFICATION_ID, notification)
         }
 
-        // Ejecutamos la inicialización en hilo de fondo usando Corrutinas
+        // Ejecución en hilo de fondo usando Corrutinas (Dispatchers.IO)
         serviceScope.launch(Dispatchers.IO) {
             try {
                 val outputDir = getExternalFilesDir(null) ?: filesDir
@@ -130,7 +143,7 @@ class ScreenRecordService : Service() {
                 val outputFile = File(outputDir, "VeloRec_${timestamp}_${engine}.mp4")
                 lastOutputFilePath = outputFile.absolutePath
 
-                // Inicializar motor nativo elegido (C++23 o Rust 2024) y obtener la Surface de entrada de hardware
+                // Inicializar motor nativo elegido (C++23 o Rust 2024) y obtener la Surface de hardware
                 val nativeSurface: Surface = if (engine == "rust2024") {
                     nativeInitRustRecorder(
                         outputFile.absolutePath,
@@ -154,7 +167,8 @@ class ScreenRecordService : Service() {
                 }
 
                 // Iniciar MediaProjection del sistema
-                val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                val projectionManager =
+                    getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                 mediaProjection = projectionManager.getMediaProjection(resultCode, resultData)
 
                 // Crear VirtualDisplay conectado directamente a la Surface nativa de hardware (Zero-Copy)
@@ -207,7 +221,7 @@ class ScreenRecordService : Service() {
     private fun handleStopRecording() {
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // Detener codificación en el motor nativo
+                // Detener codificación en el motor nativo en Dispatchers.IO
                 if (activeEngine == "rust2024") {
                     nativeStopRustEncoding()
                 } else {
@@ -233,32 +247,6 @@ class ScreenRecordService : Service() {
         }
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Grabación de Pantalla VeloRec",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Muestra el estado activo de grabación con C++23 / Rust"
-                setShowBadge(false)
-            }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
-        }
-    }
-
-    private fun buildRecordingNotification(engine: String, width: Int, height: Int, fps: Int): Notification {
-        val engineLabel = if (engine == "rust2024") "Rust 2024" else "C++23"
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Grabando pantalla")
-            .setContentText("Motor: $engineLabel | ${width}x${height} @ ${fps}fps")
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
@@ -266,6 +254,7 @@ class ScreenRecordService : Service() {
 
     // ==========================================
     // FIRMAS JNI PARA MOTOR C++23
+    // (Enlazan con Java_com_velorec_recorder_ScreenRecordService_native*)
     // ==========================================
     private external fun nativeInitCppRecorder(
         path: String, width: Int, height: Int, fps: Int, bitrate: Int, codec: String, audio: String
@@ -277,6 +266,7 @@ class ScreenRecordService : Service() {
 
     // ==========================================
     // FIRMAS JNI PARA MOTOR RUST (EDITION 2024)
+    // (Enlazan con Java_com_velorec_recorder_ScreenRecordService_native*Rust*)
     // ==========================================
     private external fun nativeInitRustRecorder(
         path: String, width: Int, height: Int, fps: Int, bitrate: Int, codec: String, audio: String

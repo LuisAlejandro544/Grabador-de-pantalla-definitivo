@@ -10,7 +10,7 @@
 |---|---|
 | **Nombre** | VeloRec Studio (Grabador de Pantalla 100% Móvil Nativo) |
 | **Plataformas de Destino** | Android Nativo (APK instalable, Uptodown, F-Droid) |
-| **Frontend Móvil** | **React Native (TurboModule)** + **Kotlin Jetpack Compose (Material 3)** |
+| **Frontend Móvil** | **Kotlin Jetpack Compose (Material 3)** (100% Nativo) |
 | **Orquestación Nativa** | Kotlin (Jetpack Compose UI + Coroutines `Dispatchers.IO` + Foreground Service) |
 | **Motores de Video** | **C++23** (AMediaCodec NDK) y **Rust (Edition 2024 / 1.85+)** |
 | **Versiones de Android** | `minSdkVersion = 26` (Android 8.0) \| `targetSdkVersion = 35` (Android 15) |
@@ -22,11 +22,20 @@
 
 ## ⚡ Mapa Rápido de Componentes
 
-- **`.github/workflows/build-apk.yml`**: Flujo de GitHub Actions manual para compilar `app-debug.apk` con Node 20, Java 17, Android SDK 35, NDK r26c, Rust 2024 y `cargo-ndk`.
-- **`android/app/src/main/java/com/velorec/recorder/VeloRecComposeUI.kt`**: Interfaz de usuario táctil nativa en Kotlin con Jetpack Compose Material 3.
-- **`src/native_source/react_native/NativeScreenRecorder.ts`**: Especificación TurboModule tipada para React Native.
-- **`src/native_source/kotlin/ScreenRecorderModule.kt`**: Módulo puente de React Native con Corrutinas para delegación asíncrona.
-- **`src/native_source/kotlin/ScreenRecordService.kt`**: Servicio en primer plano con `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` que vincula la `Surface` nativa con `MediaProjection`.
+- **`.github/workflows/build-apk.yml`**: Flujo de GitHub Actions manual para compilar `app-debug.apk` con Java 17, Android SDK 35, NDK r26c, Rust 2024 y `cargo-ndk`.
+- **`.github/workflows/publish-config-release.yml`**: Flujo manual para publicar `app_config.json` a GitHub Releases.
+- **`android/app/src/main/java/com/velorec/recorder/`**: Módulos nativos desacoplados:
+  - `MainActivity.kt`: Entrada de ComponentActivity conectada a `MainViewModel`.
+  - `ui/MainViewModel.kt`: Manejador de estado reactivo y temporizador persistente a rotaciones.
+  - `ui/VeloRecMainScreen.kt`: Scaffold principal, barra de navegación táctil y conmutador NDK.
+  - `ui/screens/`: Pantallas desacopladas (`RecorderScreen.kt`, `SettingsScreen.kt`, `GalleryScreen.kt`, `BenchmarkScreen.kt`).
+  - `ui/components/`: Componentes modulares (`MetricBadge.kt`, `RemoteAnnouncementDialog.kt`).
+  - `ui/theme/Color.kt`: Paleta Material 3 Dark Theme y parseo seguro de colores remotos.
+  - `data/model/`: `RecordingConfig.kt` y `RemoteUiConfig.kt`.
+  - `data/repository/RemoteConfigRepository.kt`: Sincronización asíncrona de `app_config.json` en `Dispatchers.IO`.
+  - `service/RecordingNotificationHelper.kt`: Canales y construcción de notificaciones del servicio.
+  - `ScreenRecordService.kt`: Servicio en primer plano con `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION`, corrutinas IO y firmas JNI C++23 y Rust 2024.
+  - `VeloRecComposeUI.kt`: Fachada modular que mantiene retrocompatibilidad total.
 - **`src/native_source/cpp/NativeRecorderEngine.hpp` & `.cpp`**: Motor C++23 con `AMediaCodec_createInputSurface` para codificación directa por hardware con cero copias.
 - **`src/native_source/cpp/CMakeLists.txt`**: Configuración CMake con `-std=c++23` y enlace a `mediandk`, `android` y `log`.
 - **`src/native_source/rust/Cargo.toml` & `src/lib.rs`**: Motor Rust Edition 2024 con canales `crossbeam-channel` y enlaces JNI.

@@ -1,8 +1,8 @@
 # 📱 VeloRec Studio — Grabador de Pantalla Móvil Nativo de Alto Rendimiento
 
-> **Arquitectura móvil nativa**: React Native + Kotlin (Jetpack Compose Material 3 & Corrutinas) + C++23 (AMediaCodec NDK) + Rust (Edition 2024).
+> **Arquitectura móvil 100% nativa**: Kotlin (Jetpack Compose Material 3 & Corrutinas) + C++23 (AMediaCodec NDK) + Rust (Edition 2024 Zero-Copy).
 
-VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificación de pantalla para Android. Diseñada con interfaz táctil ergonómica y moderna basada en **Jetpack Compose (Material 3)** y orquestada con **React Native TurboModules**, elimina por completo los cuellos de botella de la máquina virtual (JVM/ART) mediante una tubería **Zero-Copy** que transfiere directamente las superficies de hardware de la GPU a los codificadores nativos en C++23 y Rust.
+VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificación de pantalla para Android. Diseñada con interfaz táctil ergonómica y moderna basada en **Jetpack Compose (Material 3)** puro, elimina por completo los cuellos de botella de la máquina virtual (JVM/ART) mediante una tubería **Zero-Copy** que transfiere directamente las superficies de hardware de la GPU a los codificadores nativos en C++23 y Rust.
 
 ---
 
@@ -10,7 +10,8 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
 
 - **Diseño 100% Móvil Nativo (Sin Emuladores ni Marcos Web)**:
   - Interfaz táctil ergonómica adaptada para usarse con una sola mano en smartphones.
-  - Vistas nativas construidas con **Kotlin Jetpack Compose (Material 3)** integradas en la arquitectura de React Native.
+  - Vistas nativas construidas con **Kotlin Jetpack Compose (Material 3)** con arquitectura modular desacoplada en paquetes (`ui/screens`, `ui/components`, `ui/theme`, `data/repository`, `data/model` y `service`).
+  - Retención de estado persistente ante rotaciones mediante **`MainViewModel` (StateFlow)**.
   - Paleta oscura de alto contraste, tipografía nítida y botones de gran área de toque.
 - **Doble Motor de Codificación Nativo por Hardware**:
   - **⚡ C++23 Core Engine**: Acceso directo al Android NDK con `AMediaCodec_createInputSurface`, `std::expected` (manejo de errores de coste cero), `std::span`, `std::jthread` cooperativo y multiplexor MP4 de ultra baja latencia (~3.2 ms por cuadro).
@@ -43,11 +44,11 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
 ## 🏗️ Flujo de Arquitectura
 
 ```
-[React Native + Kotlin Jetpack Compose UI] 
-       │ (Material 3 Dark Theme + TurboModule Spec)
+[Kotlin Jetpack Compose Material 3 UI] 
+       │ (Material 3 Dark Theme + State Hoisting)
        ▼
-[Kotlin ScreenRecorderModule & VeloRecComposeUI] 
-       │ (Corrutinas Dispatchers.IO + MediaProjection)
+[MainActivity & ScreenRecordService] 
+       │ (Corrutinas Dispatchers.IO + MediaProjection Android 14/15)
        ▼
 [Android ScreenRecordService] 
        │ (Foreground Service tipo mediaProjection en Android 14+)

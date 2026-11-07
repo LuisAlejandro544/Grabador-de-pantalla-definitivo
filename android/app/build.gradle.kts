@@ -180,17 +180,7 @@ tasks.named("preBuild") {
     dependsOn("cargoNdkBuild")
 }
 
-configurations.all {
-    resolutionStrategy {
-        // Forzar fbjni 0.6.0 para compatibilidad estricta con compileSdk 35 (evita fbjni 0.8.1 que exige SDK 36)
-        force("com.facebook.fbjni:fbjni:0.6.0")
-    }
-}
-
 dependencies {
-    // React Native estable compatible con Android 15 (compileSdk 35)
-    implementation("com.facebook.react:react-android:0.76.5")
-
     // Jetpack Compose (Material 3 nativo para diseño móvil)
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

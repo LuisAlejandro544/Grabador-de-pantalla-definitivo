@@ -8,8 +8,8 @@ Este documento proporciona contexto técnico estructurado y reglas invariantes p
 
 VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendimiento diseñada para Android. Utiliza una arquitectura en cuatro capas para maximizar la tasa de cuadros por segundo (FPS) y minimizar el consumo térmico y de batería:
 
-1. **Frontend / Presentación**: Aplicación móvil 100% nativa con **React Native (TypeScript TurboModules)** y vistas nativas en **Kotlin Jetpack Compose (Material 3)**.
-2. **Orquestación en Android**: Kotlin con Corrutinas (`Dispatchers.IO`), gestión de permisos `MediaProjection`, Jetpack Compose UI y Foreground Service.
+1. **Frontend / Presentación**: Aplicación móvil 100% nativa con **Kotlin Jetpack Compose (Material 3)** organizada modularmente (`ui/screens`, `ui/components`, `ui/theme`, `data/repository`, `data/model`) con Server-Driven UI dinámico desde GitHub Releases.
+2. **Orquestación en Android**: Kotlin con Arquitectura MVVM (`MainViewModel` con StateFlow), Corrutinas (`Dispatchers.IO`), gestión modular de permisos `MediaProjection`, y `ScreenRecordService` con `RecordingNotificationHelper`.
 3. **Motores de Codificación Nativa (Hardware NDK)**:
    - **C++23**: `AMediaCodec_createInputSurface`, `std::expected`, `std::span`, `std::jthread`, `ANativeWindow`.
    - **Rust (Edition 2024)**: Crate con `crossbeam-channel`, seguridad de memoria garantizada en tiempo de compilación y enlaces JNI.

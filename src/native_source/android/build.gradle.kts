@@ -178,9 +178,6 @@ configurations.all {
 }
 
 dependencies {
-    // React Native estable compatible con Android 15 (compileSdk 35)
-    implementation("com.facebook.react:react-android:0.76.5")
-
     // Jetpack Compose (Material 3 nativo para diseño móvil)
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

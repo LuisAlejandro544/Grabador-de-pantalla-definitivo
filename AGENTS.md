@@ -7,7 +7,7 @@ Instrucciones de operación, comandos de prueba y protocolos de modificación pa
 ## 🎯 Protocolo de Actuación
 
 Antes de realizar cualquier cambio en el código:
-1. **Razonar antes de ejecutar**: Analizar el impacto en la arquitectura de cuatro capas (React Native + Jetpack Compose -> Kotlin Corrutinas -> JNI -> C++23/Rust 2024).
+1. **Razonar antes de ejecutar**: Analizar el impacto en la arquitectura móvil nativa (Kotlin Jetpack Compose -> Kotlin Corrutinas -> JNI -> C++23/Rust 2024).
 2. **Respetar la restricción móvil y diseño nativo**: La aplicación es 100% móvil nativa (no un sitio web). La interfaz debe ser ergonómica para interacción táctil (Jetpack Compose Material 3), con controles de gran tamaño y sin simular marcos o barras de estado (`09:41 5G 100%`) dentro de la pantalla, ya que el usuario opera desde un dispositivo físico.
 3. **No alterar el diseño gráfico sin solicitud explícita**: Mantener paleta de colores, iconos, tipografía y navegación existentes.
 4. **No modificar `commit_message.txt`**: Si existe dicho archivo, no actualizarlo a menos que el usuario lo solicite expresamente.
@@ -20,7 +20,7 @@ Este proyecto implementa el ciclo estructurado de 7 fases:
 
 | Rol | Función en el Proyecto |
 |---|---|
-| **01. El Arquitecto** | Planifica la estructura entre Kotlin Coroutines, NDK y React Native Specs. |
+| **01. El Arquitecto** | Planifica la estructura entre Kotlin Compose, Coroutines y NDK C++/Rust. |
 | **02. El Constructor** | Escribe código modular, tipado y listo para producción sin placeholders. |
 | **03. El Detective** | Diagnostica bugs en el ciclo de vida de `MediaProjection`, JNI o Web APIs. |
 | **04. El Crítico** | Revisa la seguridad de memoria (zero-copy), permisos y eficiencia de hilos. |
@@ -59,3 +59,7 @@ npm run build
   - Los codificadores de hardware NDK (`AMediaCodec`) en Android fallarán con error si el ancho o alto son números impares (ej: 1081x1920). Cualquier función que modifique resoluciones debe aplicar `width % 2 === 0 && height % 2 === 0`.
 - **Corrutinas en Kotlin**:
   - Toda llamada al NDK (`nativeInitCppRecorder`, `nativeInitRustRecorder`, `nativeStartCppEncoding`) debe ejecutarse en `Dispatchers.IO`, nunca en el hilo principal de la UI.
+- **Enlace de Firmas JNI en C++23 y Rust 2024**:
+  - Las firmas nativas exportadas en `NativeRecorderEngine.cpp` y `rust/src/lib.rs` corresponden a `Java_com_velorec_recorder_ScreenRecordService_native*`. Por ello, las declaraciones `external fun` residen en `ScreenRecordService` para evitar excepciones `UnsatisfiedLinkError` en tiempo de ejecución.
+- **Arquitectura Modular en Kotlin**:
+  - La capa nativa se estructura en paquetes (`data/model`, `data/repository`, `ui/screens`, `ui/components`, `ui/theme`, `service`), manteniendo `VeloRecComposeUI.kt` como fachada modular retrocompatible.
