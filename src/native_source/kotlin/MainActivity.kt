@@ -36,8 +36,10 @@ import com.velorec.recorder.ui.theme.PrimaryIndigo
  * del servicio en primer plano para MediaProjection (Android 14+ API 34/35).
  * 
  * LÓGICA Y ARQUITECTURA MODULAR:
- * 1. Conexión con 'MainViewModel' para preservar el estado del grabador y cronómetro ante
- *    rotaciones del dispositivo móvil.
+ * 1. Sincronización Directa con 'ScreenRecordService':
+ *    - Observa los flujos 'isRecordingFlow', 'isPausedFlow' y 'durationSecFlow' del Foreground Service.
+ *    - Si el usuario sale de la aplicación a jugar o ver videos y luego regresa, la interfaz
+ *      mantiene exactamente el estado de grabación en curso con el cronómetro sincronizado.
  * 2. Gestión de permisos con ActivityResultContracts:
  *    - Captura de audio (Manifest.permission.RECORD_AUDIO)
  *    - Notificaciones en Android 13+ (Manifest.permission.POST_NOTIFICATIONS)
@@ -62,9 +64,10 @@ class MainActivity : ComponentActivity() {
                     onSurface = Color(0xFFF1F5F9)
                 )
             ) {
-                val isRecording by viewModel.isRecording.collectAsState()
-                val isPaused by viewModel.isPaused.collectAsState()
-                val durationSec by viewModel.durationSec.collectAsState()
+                // Sincronización reactiva con el servicio en primer plano
+                val isRecording by ScreenRecordService.isRecordingFlow.collectAsState()
+                val isPaused by ScreenRecordService.isPausedFlow.collectAsState()
+                val durationSec by ScreenRecordService.durationSecFlow.collectAsState()
                 val pendingConfig by viewModel.pendingConfig.collectAsState()
 
                 // Launcher para MediaProjection (Captura de Pantalla del Sistema Android)
@@ -92,7 +95,6 @@ class MainActivity : ComponentActivity() {
                             startService(serviceIntent)
                         }
 
-                        viewModel.onRecordingStarted()
                         Toast.makeText(
                             this,
                             "Grabando pantalla (${config.width}x${config.height} @ ${config.fps}fps - ${config.bitrateBps / 1_000_000}Mbps)",
@@ -100,7 +102,6 @@ class MainActivity : ComponentActivity() {
                         ).show()
                     } else {
                         Toast.makeText(this, "Permiso de captura cancelado", Toast.LENGTH_SHORT).show()
-                        viewModel.onRecordingStopped()
                     }
                 }
 
@@ -152,12 +153,11 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onTogglePause = {
-                        val newPausedState = viewModel.onPauseToggled()
                         val pauseIntent = Intent(this, ScreenRecordService::class.java).apply {
-                            action = if (newPausedState) {
-                                ScreenRecordService.ACTION_PAUSE
-                            } else {
+                            action = if (isPaused) {
                                 ScreenRecordService.ACTION_RESUME
+                            } else {
+                                ScreenRecordService.ACTION_PAUSE
                             }
                         }
                         startService(pauseIntent)
@@ -167,7 +167,6 @@ class MainActivity : ComponentActivity() {
                             action = ScreenRecordService.ACTION_STOP
                         }
                         startService(stopIntent)
-                        viewModel.onRecordingStopped()
                         Toast.makeText(this, "Grabación finalizada y guardada en MP4", Toast.LENGTH_LONG).show()
                     }
                 )

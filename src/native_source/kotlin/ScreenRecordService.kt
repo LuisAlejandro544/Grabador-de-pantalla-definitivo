@@ -1,6 +1,7 @@
 package com.velorec.recorder
 
 import android.app.Activity
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -10,13 +11,21 @@ import android.hardware.display.VirtualDisplay
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.Surface
 import com.velorec.recorder.service.RecordingNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -28,23 +37,35 @@ import java.io.File
  * 
  * LÓGICA Y ARQUITECTURA MODULAR:
  * 1. Mantiene el proceso activo en segundo plano mientras el usuario navega o juega en su smartphone.
- * 2. Cumple estrictamente con las políticas de Android 14+ (API 34/35) utilizando
- *    FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION.
- * 3. Delega la creación de canales y notificaciones a 'RecordingNotificationHelper'.
+ * 2. CUMPLIMIENTO ESTRICTO CON ANDROID 14+ (API 34/35):
+ *    - Registra obligatoriamente 'MediaProjection.Callback' con Handler en el Looper principal.
+ *    - Devuelve 'START_STICKY' en 'onStartCommand' para evitar que el sistema cierre el servicio
+ *      al cambiar a otra aplicación o videojuego.
+ *    - Declara 'FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'.
+ * 3. Delega la creación de canales, notificaciones fijas y controles en la barra de estado
+ *    a 'RecordingNotificationHelper'.
  * 4. Tubería ZERO-COPY:
  *    - Obtiene la Surface de hardware directamente del codificador nativo en C++23 o Rust 2024.
  *    - Vincula esa Surface con el VirtualDisplay de MediaProjection.
- *    - ¡CERO alocación de memoria ni bitmaps en la máquina virtual Java/ART!
- * 5. Ejecución en Corrutinas ('Dispatchers.IO'): Todas las llamadas al NDK se ejecutan fuera
- *    del hilo principal para prevenir congelamientos de UI o bloqueos ANR.
- * 6. Mantiene las firmas JNI exactas ('Java_com_velorec_recorder_ScreenRecordService_native*')
- *    para garantizar paridad y enlace sin errores con 'NativeRecorderEngine.cpp' y 'rust/src/lib.rs'.
+ *    - CERO alocación de memoria ni bitmaps en la máquina virtual Java/ART.
+ * 5. Corrutinas ('Dispatchers.IO'): Todas las llamadas al NDK se ejecutan fuera del hilo de UI
+ *    para prevenir congelamientos ANR.
+ * 6. Sincronización Reactiva de Estado:
+ *    - Expone 'isRecordingFlow', 'isPausedFlow' y 'durationSecFlow' para que la UI de Jetpack Compose
+ *      refleje el estado real aunque la Activity haya sido pausada o recreada.
  */
 class ScreenRecordService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
+    private var timerJob: Job? = null
+
+    // Parámetros de la sesión actual
+    private var currentEngine: String = "cpp23"
+    private var currentWidth: Int = 1080
+    private var currentHeight: Int = 1920
+    private var currentFps: Int = 60
 
     companion object {
         const val ACTION_START = "com.velorec.ACTION_START"
@@ -67,13 +88,22 @@ class ScreenRecordService : Service() {
         var lastDurationMs: Long = 0L
         var lastFileSizeBytes: Long = 0L
 
+        // Flujos de estado globales observables por MainActivity y MainViewModel
+        private val _isRecordingFlow = MutableStateFlow(false)
+        val isRecordingFlow: StateFlow<Boolean> = _isRecordingFlow.asStateFlow()
+
+        private val _isPausedFlow = MutableStateFlow(false)
+        val isPausedFlow: StateFlow<Boolean> = _isPausedFlow.asStateFlow()
+
+        private val _durationSecFlow = MutableStateFlow(0)
+        val durationSecFlow: StateFlow<Int> = _durationSecFlow.asStateFlow()
+
         // Carga dinámica de las bibliotecas nativas C++23 y Rust 2024
         init {
             try {
                 System.loadLibrary("velorec_cpp23")
                 System.loadLibrary("velorec_rust2024")
             } catch (e: UnsatisfiedLinkError) {
-                // Las librerías nativas se compilan con CMake y Cargo-NDK en GitHub Actions
                 e.printStackTrace()
             }
         }
@@ -93,7 +123,9 @@ class ScreenRecordService : Service() {
             ACTION_RESUME -> handleResumeRecording()
             ACTION_STOP -> handleStopRecording()
         }
-        return START_NOT_STICKY
+        // START_STICKY para asegurar que el Foreground Service no sea terminado
+        // abruptamente cuando el usuario sale de la aplicación a jugar o ver videos
+        return START_STICKY
     }
 
     private fun handleStartRecording(intent: Intent) {
@@ -114,14 +146,23 @@ class ScreenRecordService : Service() {
         val audio = intent.getStringExtra(EXTRA_AUDIO) ?: "both"
 
         activeEngine = engine
+        currentEngine = engine
+        currentWidth = width
+        currentHeight = height
+        currentFps = fps
 
-        // Configuración del Foreground Service modular según versión de Android
+        _isRecordingFlow.value = true
+        _isPausedFlow.value = false
+        _durationSecFlow.value = 0
+
+        // Configuración de la notificación persistente
         val notification = RecordingNotificationHelper.buildRecordingNotification(
             this,
             engine,
             width,
             height,
-            fps
+            fps,
+            isPaused = false
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -134,6 +175,9 @@ class ScreenRecordService : Service() {
         } else {
             startForeground(RecordingNotificationHelper.NOTIFICATION_ID, notification)
         }
+
+        // Iniciar temporizador del servicio
+        startServiceTimer()
 
         // Ejecución en hilo de fondo usando Corrutinas (Dispatchers.IO)
         serviceScope.launch(Dispatchers.IO) {
@@ -169,11 +213,27 @@ class ScreenRecordService : Service() {
                 // Iniciar MediaProjection del sistema
                 val projectionManager =
                     getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                mediaProjection = projectionManager.getMediaProjection(resultCode, resultData)
+                val projection = projectionManager.getMediaProjection(resultCode, resultData)
+                mediaProjection = projection
+
+                // =========================================================================
+                // CORRECCIÓN CRÍTICA DE ANDROID 14+ (API 34 / 35):
+                // En Android 14+, registrar MediaProjection.Callback con un Handler en el Looper
+                // principal es OBLIGATORIO antes de llamar a createVirtualDisplay.
+                // Sin este registro, el sistema aborta la proyección de pantalla tan pronto
+                // la Activity sale a segundo plano.
+                // =========================================================================
+                val mainHandler = Handler(Looper.getMainLooper())
+                projection.registerCallback(object : MediaProjection.Callback() {
+                    override fun onStop() {
+                        super.onStop()
+                        handleStopRecording()
+                    }
+                }, mainHandler)
 
                 // Crear VirtualDisplay conectado directamente a la Surface nativa de hardware (Zero-Copy)
                 val densityDpi = resources.displayMetrics.densityDpi
-                virtualDisplay = mediaProjection?.createVirtualDisplay(
+                virtualDisplay = projection.createVirtualDisplay(
                     "VeloRec-Capture",
                     width,
                     height,
@@ -181,10 +241,10 @@ class ScreenRecordService : Service() {
                     DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                     nativeSurface,
                     null,
-                    null
+                    mainHandler
                 )
 
-                // Señalizar al motor nativo para comenzar a recibir frames
+                // Señalizar al motor nativo para comenzar a codificar fotogramas
                 if (engine == "rust2024") {
                     nativeStartRustEncoding()
                 } else {
@@ -193,12 +253,26 @@ class ScreenRecordService : Service() {
 
             } catch (e: Exception) {
                 e.printStackTrace()
-                stopSelf()
+                handleStopRecording()
+            }
+        }
+    }
+
+    private fun startServiceTimer() {
+        timerJob?.cancel()
+        timerJob = serviceScope.launch(Dispatchers.Default) {
+            while (isActive) {
+                delay(1000L)
+                if (_isRecordingFlow.value && !_isPausedFlow.value) {
+                    _durationSecFlow.value += 1
+                }
             }
         }
     }
 
     private fun handlePauseRecording() {
+        _isPausedFlow.value = true
+        updateNotification(isPaused = true)
         serviceScope.launch(Dispatchers.IO) {
             if (activeEngine == "rust2024") {
                 nativePauseRustEncoding()
@@ -209,6 +283,8 @@ class ScreenRecordService : Service() {
     }
 
     private fun handleResumeRecording() {
+        _isPausedFlow.value = false
+        updateNotification(isPaused = false)
         serviceScope.launch(Dispatchers.IO) {
             if (activeEngine == "rust2024") {
                 nativeResumeRustEncoding()
@@ -218,7 +294,25 @@ class ScreenRecordService : Service() {
         }
     }
 
+    private fun updateNotification(isPaused: Boolean) {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        val notification = RecordingNotificationHelper.buildRecordingNotification(
+            this,
+            currentEngine,
+            currentWidth,
+            currentHeight,
+            currentFps,
+            isPaused = isPaused
+        )
+        notificationManager?.notify(RecordingNotificationHelper.NOTIFICATION_ID, notification)
+    }
+
     private fun handleStopRecording() {
+        timerJob?.cancel()
+        timerJob = null
+        _isRecordingFlow.value = false
+        _isPausedFlow.value = false
+
         serviceScope.launch(Dispatchers.IO) {
             try {
                 // Detener codificación en el motor nativo en Dispatchers.IO
@@ -249,6 +343,10 @@ class ScreenRecordService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        timerJob?.cancel()
+        timerJob = null
+        _isRecordingFlow.value = false
+        _isPausedFlow.value = false
         serviceScope.cancel()
     }
 

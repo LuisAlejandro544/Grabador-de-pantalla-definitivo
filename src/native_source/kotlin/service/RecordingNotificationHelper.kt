@@ -3,9 +3,13 @@ package com.velorec.recorder.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.velorec.recorder.MainActivity
+import com.velorec.recorder.ScreenRecordService
 
 /**
  * RecordingNotificationHelper.kt
@@ -15,10 +19,12 @@ import androidx.core.app.NotificationCompat
  * de VeloRec Studio, cumpliendo con las políticas de Android 8.0 Oreo (API 26) hasta Android 15 (API 35).
  * 
  * LÓGICA Y SEGURIDAD:
- * 1. Crea el canal con importancia baja (IMPORTANCE_LOW) para que no emita sonidos intrusivos
- *    mientras el usuario graba partidas de juegos o contenido en su pantalla.
- * 2. Construye la notificación fija con icono, etiqueta del motor (C++23 o Rust 2024),
- *    resolución activa y tasa de cuadros por segundo.
+ * 1. Crea el canal con importancia baja (IMPORTANCE_LOW) para no emitir sonidos intrusivos
+ *    mientras el usuario graba partidas de juegos o videos en pantalla.
+ * 2. Construye la notificación persistente fija (ongoing) con icono del sistema y metadatos del motor (C++23 / Rust 2024).
+ * 3. Provee acciones rápidas de 'Detener' y 'Pausar/Reanudar' directamente en la barra de estado de Android
+ *    para permitir controlar la grabación sin necesidad de volver a abrir la pantalla principal.
+ * 4. Configura 'PendingIntent' seguro con 'FLAG_IMMUTABLE' para abrir 'MainActivity' al tocar la notificación.
  */
 object RecordingNotificationHelper {
 
@@ -45,15 +51,57 @@ object RecordingNotificationHelper {
         engine: String,
         width: Int,
         height: Int,
-        fps: Int
+        fps: Int,
+        isPaused: Boolean = false
     ): Notification {
         val engineLabel = if (engine == "rust2024") "Rust 2024" else "C++23"
-        return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("Grabando pantalla")
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+
+        // Intent para abrir MainActivity al presionar la notificación
+        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openAppPendingIntent = PendingIntent.getActivity(context, 0, openAppIntent, flags)
+
+        // Intent para detener la grabación desde la barra de notificaciones
+        val stopIntent = Intent(context, ScreenRecordService::class.java).apply {
+            action = ScreenRecordService.ACTION_STOP
+        }
+        val stopPendingIntent = PendingIntent.getService(context, 1, stopIntent, flags)
+
+        // Intent para pausar o reanudar
+        val pauseResumeIntent = Intent(context, ScreenRecordService::class.java).apply {
+            action = if (isPaused) ScreenRecordService.ACTION_RESUME else ScreenRecordService.ACTION_PAUSE
+        }
+        val pauseResumePendingIntent = PendingIntent.getService(context, 2, pauseResumeIntent, flags)
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle(if (isPaused) "Grabación en pausa" else "Grabando pantalla")
             .setContentText("Motor: $engineLabel | ${width}x${height} @ ${fps}fps")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+            .addAction(
+                if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
+                if (isPaused) "Reanudar" else "Pausar",
+                pauseResumePendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Detener",
+                stopPendingIntent
+            )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+
+        return builder.build()
     }
 }

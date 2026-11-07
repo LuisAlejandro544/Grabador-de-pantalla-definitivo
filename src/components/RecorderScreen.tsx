@@ -200,12 +200,45 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
         ctx.fillText(formatDuration(durationSec), 32, 52);
       }
 
-      animationFrameId.current = requestAnimationFrame(render);
+      if (document.hidden) {
+        // En segundo plano o fuera de foco, requestAnimationFrame se detiene.
+        // Usamos setInterval para continuar alimentando el stream de MediaRecorder.
+      } else {
+        animationFrameId.current = requestAnimationFrame(render);
+      }
     };
 
+    let bgInterval: number | null = null;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (animationFrameId.current) {
+          cancelAnimationFrame(animationFrameId.current);
+          animationFrameId.current = null;
+        }
+        if (!bgInterval) {
+          bgInterval = window.setInterval(() => {
+            render();
+          }, 1000 / Math.min(settings.fps, 30));
+        }
+      } else {
+        if (bgInterval) {
+          clearInterval(bgInterval);
+          bgInterval = null;
+        }
+        if (!animationFrameId.current) {
+          animationFrameId.current = requestAnimationFrame(render);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     render();
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (bgInterval) {
+        clearInterval(bgInterval);
+      }
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
       }
