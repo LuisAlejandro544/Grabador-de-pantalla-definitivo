@@ -98,9 +98,9 @@ tasks.register("cargoNdkBuild") {
 
     doLast {
         val targets = listOf(
-            "aarch64-linux-android" to "arm64-v8a",     // 64-bit ARM
-            "armv7-linux-androideabi" to "armeabi-v7a", // 32-bit ARM
-            "x86_64-linux-android" to "x86_64"         // Emulador x86_64
+            "arm64-v8a",     // 64-bit ARM
+            "armeabi-v7a",   // 32-bit ARM
+            "x86_64"         // Emulador x86_64
         )
 
         val rustDir = rootProject.projectDir.resolve("../rust").normalize()
@@ -108,13 +108,13 @@ tasks.register("cargoNdkBuild") {
 
         if (rustDir.exists()) {
             jniLibsDir.mkdirs()
-            for ((rustTarget, androidAbi) in targets) {
-                println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi ($rustTarget)...")
+            for (androidAbi in targets) {
+                println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi...")
                 try {
-                    // Se utiliza ProcessBuilder estándar de la JVM para evitar problemas de resolución de DSL en Gradle Kotlin
+                    // Se utiliza ProcessBuilder estándar de la JVM con el ABI de Android
                     val process = ProcessBuilder(
                         "cargo", "ndk",
-                        "-t", rustTarget,
+                        "-t", androidAbi,
                         "--platform", "26",
                         "-o", jniLibsDir.absolutePath,
                         "--",
@@ -145,9 +145,15 @@ tasks.named("preBuild") {
     dependsOn("cargoNdkBuild")
 }
 
+configurations.all {
+    resolutionStrategy {
+        force("com.facebook.fbjni:fbjni:0.6.0")
+    }
+}
+
 dependencies {
-    // React Native
-    implementation("com.facebook.react:react-android:+")
+    // React Native estable compatible con Android 15 (compileSdk 35)
+    implementation("com.facebook.react:react-android:0.76.5")
 
     // Kotlin y Corrutinas para evitar bloqueos en el Main Thread
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")

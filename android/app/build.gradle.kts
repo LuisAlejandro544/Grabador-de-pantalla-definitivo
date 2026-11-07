@@ -105,9 +105,9 @@ tasks.register("cargoNdkBuild") {
 
     doLast {
         val targets = listOf(
-            "aarch64-linux-android" to "arm64-v8a",     // 64-bit ARM
-            "armv7-linux-androideabi" to "armeabi-v7a", // 32-bit ARM
-            "x86_64-linux-android" to "x86_64"         // Emulador x86_64
+            "arm64-v8a",     // 64-bit ARM
+            "armeabi-v7a",   // 32-bit ARM
+            "x86_64"         // Emulador x86_64
         )
 
         val rustDir = rootProject.projectDir.resolve("../rust").normalize()
@@ -115,14 +115,13 @@ tasks.register("cargoNdkBuild") {
 
         if (rustDir.exists()) {
             jniLibsDir.mkdirs()
-            for ((rustTarget, androidAbi) in targets) {
-                println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi ($rustTarget)...")
+            for (androidAbi in targets) {
+                println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi...")
                 try {
-                    // Se utiliza ProcessBuilder de la JVM estándar para garantizar compatibilidad total
-                    // en Gradle Kotlin DSL (evitando fallos de resolución de ámbito con 'exec' en Gradle 8+)
+                    // Se utiliza ProcessBuilder con el ABI de Android ('arm64-v8a', etc.) y --platform 26
                     val process = ProcessBuilder(
                         "cargo", "ndk",
-                        "-t", rustTarget,
+                        "-t", androidAbi,
                         "--platform", "26",
                         "-o", jniLibsDir.absolutePath,
                         "--",
@@ -155,9 +154,16 @@ tasks.named("preBuild") {
     dependsOn("cargoNdkBuild")
 }
 
+configurations.all {
+    resolutionStrategy {
+        // Forzar fbjni 0.6.0 para compatibilidad estricta con compileSdk 35 (evita fbjni 0.8.1 que exige SDK 36)
+        force("com.facebook.fbjni:fbjni:0.6.0")
+    }
+}
+
 dependencies {
-    // React Native
-    implementation("com.facebook.react:react-android:+")
+    // React Native estable compatible con Android 15 (compileSdk 35)
+    implementation("com.facebook.react:react-android:0.76.5")
 
     // Kotlin Coroutines para evitar bloqueos en el hilo de la interfaz de usuario
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")

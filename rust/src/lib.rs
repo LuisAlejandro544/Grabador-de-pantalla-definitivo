@@ -77,7 +77,7 @@ pub struct RustRecorderEngine {
 
 impl RustRecorderEngine {
     /// Inicializa el codificador de hardware mediante el Android NDK y obtiene la Surface
-    pub fn new_and_init(env: &mut JNIEnv, config: RustRecorderConfig) -> Result<(Self, jobject), String> {
+    pub fn new_and_init(env: &mut JNIEnv<'_>, config: RustRecorderConfig) -> Result<(Self, jobject), String> {
         info!("Rust 2024: Inicializando encoder hardware: {}x{} @ {} fps, {} bps, mime: {}",
             config.width, config.height, config.fps, config.bitrate_bps, config.codec_mime);
 
@@ -343,16 +343,16 @@ static mut GLOBAL_RUST_ENGINE: Option<RustRecorderEngine> = None;
 // =========================================================================
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeInitRustRecorder(
-    mut env: JNIEnv,
-    _class: JClass,
-    path: JString,
+pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeInitRustRecorder<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    path: JString<'local>,
     width: jint,
     height: jint,
     fps: jint,
     bitrate: jint,
-    codec: JString,
-    audio: JString,
+    codec: JString<'local>,
+    audio: JString<'local>,
 ) -> jobject {
     let _ = android_logger::init_once(
         android_logger::Config::default()
@@ -395,8 +395,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeStartRustEncoding(
-    _env: JNIEnv,
-    _class: JClass,
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
 ) {
     if let Some(ref mut engine) = GLOBAL_RUST_ENGINE {
         if let Err(e) = engine.start() {
@@ -407,8 +407,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativePauseRustEncoding(
-    _env: JNIEnv,
-    _class: JClass,
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
 ) {
     if let Some(ref engine) = GLOBAL_RUST_ENGINE {
         engine.pause();
@@ -417,8 +417,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeResumeRustEncoding(
-    _env: JNIEnv,
-    _class: JClass,
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
 ) {
     if let Some(ref engine) = GLOBAL_RUST_ENGINE {
         engine.resume();
@@ -427,8 +427,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeStopRustEncoding(
-    _env: JNIEnv,
-    _class: JClass,
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
 ) {
     if let Some(ref mut engine) = GLOBAL_RUST_ENGINE {
         engine.stop();
