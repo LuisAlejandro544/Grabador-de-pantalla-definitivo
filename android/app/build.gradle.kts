@@ -110,14 +110,17 @@ tasks.register("cargoNdkBuild") {
             "x86_64-linux-android" to "x86_64"         // Emulador x86_64
         )
 
-        val rustDir = file("../../rust")
+        val rustDir = rootProject.projectDir.resolve("../rust").normalize()
         val jniLibsDir = file("src/main/jniLibs")
 
         if (rustDir.exists()) {
+            jniLibsDir.mkdirs()
             for ((rustTarget, androidAbi) in targets) {
                 println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi ($rustTarget)...")
                 try {
-                    exec {
+                    // En Gradle Kotlin DSL (build.gradle.kts), dentro de doLast (ámbito Task),
+                    // se debe invocar project.exec explícitamente para obtener el ExecSpec configurador.
+                    project.exec {
                         workingDir = rustDir
                         commandLine(
                             "cargo", "ndk",
@@ -131,6 +134,8 @@ tasks.register("cargoNdkBuild") {
                 }
             }
             println("✅ Tarea de Rust 2024 finalizada.")
+        } else {
+            println("ℹ️ Directorio Rust no encontrado en ${rustDir.absolutePath}, omitiendo cargoNdkBuild.")
         }
     }
 }

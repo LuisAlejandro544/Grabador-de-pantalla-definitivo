@@ -510,9 +510,12 @@ android {
 
 tasks.register("cargoNdkBuild") {
     doLast {
-        exec {
-            workingDir = file("../rust")
-            commandLine("cargo", "ndk", "-t", "arm64-v8a", "-o", "../android/src/main/jniLibs", "build", "--release")
+        val rustDir = rootProject.projectDir.resolve("../rust").normalize()
+        val jniLibsDir = file("src/main/jniLibs")
+        jniLibsDir.mkdirs()
+        project.exec {
+            workingDir = rustDir
+            commandLine("cargo", "ndk", "-t", "arm64-v8a", "-o", jniLibsDir.absolutePath, "build", "--release")
         }
     }
 }`

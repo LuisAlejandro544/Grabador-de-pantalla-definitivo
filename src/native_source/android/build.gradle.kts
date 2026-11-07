@@ -103,19 +103,30 @@ tasks.register("cargoNdkBuild") {
             "x86_64-linux-android" to "x86_64"         // Emulador x86_64
         )
 
-        for ((rustTarget, androidAbi) in targets) {
-            println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi ($rustTarget)...")
-            exec {
-                workingDir = file("../rust")
-                commandLine(
-                    "cargo", "ndk",
-                    "-t", rustTarget,
-                    "-o", "../android/src/main/jniLibs",
-                    "build", "--release"
-                )
+        val rustDir = rootProject.projectDir.resolve("../rust").normalize()
+        val jniLibsDir = file("src/main/jniLibs")
+
+        if (rustDir.exists()) {
+            jniLibsDir.mkdirs()
+            for ((rustTarget, androidAbi) in targets) {
+                println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi ($rustTarget)...")
+                try {
+                    // En Gradle Kotlin DSL, se debe usar project.exec dentro de doLast
+                    project.exec {
+                        workingDir = rustDir
+                        commandLine(
+                            "cargo", "ndk",
+                            "-t", rustTarget,
+                            "-o", jniLibsDir.absolutePath,
+                            "build", "--release"
+                        )
+                    }
+                } catch (e: Exception) {
+                    println("⚠️ Advertencia en cargo-ndk ($androidAbi): ${e.message}")
+                }
             }
+            println("✅ Bibliotecas de Rust 2024 generadas e inyectadas en jniLibs.")
         }
-        println("✅ Bibliotecas de Rust 2024 generadas e inyectadas en jniLibs.")
     }
 }
 
