@@ -16,7 +16,11 @@ import android.os.IBinder
 import android.os.Looper
 import android.view.Surface
 import androidx.core.content.IntentCompat
+import com.velorec.recorder.audio.AudioMuxerHelper
+import com.velorec.recorder.audio.AudioRecordEngine
+import com.velorec.recorder.ffmpeg.FFmpegRecoveryEngine
 import com.velorec.recorder.service.RecordingNotificationHelper
+import com.velorec.recorder.storage.GalleryStorageManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -68,6 +72,11 @@ class ScreenRecordService : Service() {
     private var currentHeight: Int = 1920
     private var currentFps: Int = 60
 
+    // Motor de captura y codificación de audio (micrófono, audio interno o mezcla estéreo)
+    private var audioEngine: AudioRecordEngine? = null
+    private var tempVideoFilePath: String? = null
+    private var tempAudioFilePath: String? = null
+
     companion object {
         const val ACTION_START = "com.velorec.ACTION_START"
         const val ACTION_PAUSE = "com.velorec.ACTION_PAUSE"
@@ -115,6 +124,10 @@ class ScreenRecordService : Service() {
     override fun onCreate() {
         super.onCreate()
         RecordingNotificationHelper.createNotificationChannel(this)
+        // Escanear y reparar automáticamente cualquier grabación truncada por apagón o cierre abrupto
+        serviceScope.launch(Dispatchers.IO) {
+            FFmpegRecoveryEngine.scanAndRepairPendingRecordings(applicationContext)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -163,7 +176,7 @@ class ScreenRecordService : Service() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             } else {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             }
@@ -180,13 +193,28 @@ class ScreenRecordService : Service() {
             try {
                 val outputDir = getExternalFilesDir(null) ?: filesDir
                 val timestamp = System.currentTimeMillis()
-                val outputFile = File(outputDir, "VeloRec_${timestamp}_${engine}.mp4")
-                lastOutputFilePath = outputFile.absolutePath
+                val finalOutputFile = File(outputDir, "VeloRec_${timestamp}_${engine}.mp4")
+                lastOutputFilePath = finalOutputFile.absolutePath
+
+                val shouldRecordAudio = audio != "mute"
+                val videoFileToEncode = if (shouldRecordAudio) {
+                    File(outputDir, "temp_video_${timestamp}.mp4").also { tempVideoFilePath = it.absolutePath }
+                } else {
+                    tempVideoFilePath = null
+                    finalOutputFile
+                }
+
+                val audioFileToEncode = if (shouldRecordAudio) {
+                    File(outputDir, "temp_audio_${timestamp}.m4a").also { tempAudioFilePath = it.absolutePath }
+                } else {
+                    tempAudioFilePath = null
+                    null
+                }
 
                 // Inicializar motor nativo elegido (C++23 o Rust 2024) y obtener la Surface de hardware
                 val nativeSurface: Surface = if (engine == "rust2024") {
                     nativeInitRustRecorder(
-                        outputFile.absolutePath,
+                        videoFileToEncode.absolutePath,
                         width,
                         height,
                         fps,
@@ -196,7 +224,7 @@ class ScreenRecordService : Service() {
                     )
                 } else {
                     nativeInitCppRecorder(
-                        outputFile.absolutePath,
+                        videoFileToEncode.absolutePath,
                         width,
                         height,
                         fps,
@@ -251,6 +279,18 @@ class ScreenRecordService : Service() {
                     nativeStartCppEncoding()
                 }
 
+                // Arrancar motor de captura y codificación de audio (micrófono, audio interno o mezcla estéreo)
+                if (shouldRecordAudio && audioFileToEncode != null) {
+                    audioEngine = AudioRecordEngine(
+                        context = this@ScreenRecordService,
+                        audioSource = audio,
+                        outputM4aPath = audioFileToEncode.absolutePath,
+                        mediaProjection = projection
+                    ).apply {
+                        start()
+                    }
+                }
+
             } catch (e: Exception) {
                 e.printStackTrace()
                 handleStopRecording()
@@ -273,6 +313,7 @@ class ScreenRecordService : Service() {
     private fun handlePauseRecording() {
         _isPausedFlow.value = true
         updateNotification(isPaused = true)
+        audioEngine?.pause()
         serviceScope.launch(Dispatchers.IO) {
             if (activeEngine == "rust2024") {
                 nativePauseRustEncoding()
@@ -285,6 +326,7 @@ class ScreenRecordService : Service() {
     private fun handleResumeRecording() {
         _isPausedFlow.value = false
         updateNotification(isPaused = false)
+        audioEngine?.resume()
         serviceScope.launch(Dispatchers.IO) {
             if (activeEngine == "rust2024") {
                 nativeResumeRustEncoding()
@@ -315,22 +357,55 @@ class ScreenRecordService : Service() {
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // Detener codificación en el motor nativo en Dispatchers.IO
+                // 1. Detener codificación en el motor nativo en Dispatchers.IO
                 if (activeEngine == "rust2024") {
                     nativeStopRustEncoding()
                 } else {
                     nativeStopCppEncoding()
                 }
 
-                // Liberar VirtualDisplay y MediaProjection
+                // 2. Detener motor de audio y generar archivo M4A/AAC
+                audioEngine?.stop()
+                audioEngine = null
+
+                // 3. Liberar VirtualDisplay y MediaProjection
                 virtualDisplay?.release()
                 virtualDisplay = null
                 mediaProjection?.stop()
                 mediaProjection = null
 
-                val outFile = lastOutputFilePath?.let { File(it) }
-                if (outFile != null && outFile.exists()) {
-                    lastFileSizeBytes = outFile.length()
+                // 4. Fusionar video y audio con FFmpeg (+faststart) sin pérdida de calidad
+                val tempVideo = tempVideoFilePath
+                val tempAudio = tempAudioFilePath
+                val finalOutput = lastOutputFilePath
+
+                if (tempVideo != null && finalOutput != null) {
+                    val mergedWithFFmpeg = FFmpegRecoveryEngine.mergeAudioVideoWithFFmpeg(
+                        videoPath = tempVideo,
+                        audioPath = tempAudio,
+                        outputPath = finalOutput
+                    )
+                    if (!mergedWithFFmpeg && tempAudio != null) {
+                        AudioMuxerHelper.mergeAudioVideo(tempVideo, tempAudio, finalOutput)
+                    }
+                }
+
+                tempVideoFilePath = null
+                tempAudioFilePath = null
+
+                // 5. Publicar en la Galería nativa del usuario ('Movies/VeloRec') para que aparezca al instante
+                val finalFile = lastOutputFilePath?.let { File(it) }
+                if (finalFile != null && finalFile.exists() && finalFile.length() > 0L) {
+                    val publishedFile = GalleryStorageManager.publishVideoToGallery(
+                        context = applicationContext,
+                        sourceFile = finalFile
+                    )
+                    if (publishedFile != null && publishedFile.exists()) {
+                        lastOutputFilePath = publishedFile.absolutePath
+                        lastFileSizeBytes = publishedFile.length()
+                    } else {
+                        lastFileSizeBytes = finalFile.length()
+                    }
                 }
 
                 stopForeground(Service.STOP_FOREGROUND_REMOVE)
@@ -347,6 +422,8 @@ class ScreenRecordService : Service() {
         timerJob = null
         _isRecordingFlow.value = false
         _isPausedFlow.value = false
+        audioEngine?.stop()
+        audioEngine = null
         serviceScope.cancel()
     }
 

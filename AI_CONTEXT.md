@@ -13,7 +13,10 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
 3. **Motores de Codificación Nativa (Hardware NDK)**:
    - **C++23**: `AMediaCodec_createInputSurface`, `std::expected`, `std::span`, `std::jthread`, `ANativeWindow`.
    - **Rust (Edition 2024)**: Crate con `crossbeam-channel`, seguridad de memoria garantizada en tiempo de compilación y enlaces JNI.
-4. **CI/CD Móvil**: Flujo de GitHub Actions con disparo **estrictamente manual (`workflow_dispatch`)** para compilar el APK Debug sin necesidad de computadora.
+4. **Motor Anticrash y Multiplexación (FFmpeg Kit LTS 16KB)**:
+   - Rescate automático de archivos truncados sin `moov atom` por apagón del smartphone o cierre de Android.
+   - Stream copy sin recodificación con `+faststart` y publicación directa en Galería (`Movies/VeloRec`).
+5. **CI/CD Móvil**: Flujo de GitHub Actions con disparo **estrictamente manual (`workflow_dispatch`)** para compilar el APK Debug sin necesidad de computadora.
 
 ---
 
@@ -43,11 +46,14 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
    - La app consulta de forma asíncrona y no bloqueante los releases en `https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases`.
    - **Resiliencia Offline Obligatoria**: La app nunca debe estar atada al 100% a la conexión ni fallar si no hay internet; siempre debe inicializarse con valores por defecto locales seguros.
    - El workflow `.github/workflows/publish-config-release.yml` debe ejecutarse **exclusivamente con `workflow_dispatch`** (nunca en `push` ni `pull_request`).
+8. **Rescate Anticrash y Almacenamiento Público en Galería**:
+   - Toda grabación completada debe guardarse o copiarse a la Galería pública del usuario (`Movies/VeloRec`) mediante Scoped Storage y `MediaScannerConnection`.
+   - Ante apagón súbito del smartphone, `FFmpegRecoveryEngine` escanea y repara los archivos incompletos al reiniciar sin intervención requerida del usuario.
 
 ---
 
 ## 📊 Estado de los Datos y Almacenamiento
 
-- Las grabaciones se almacenan localmente y en el contenedor MP4/MKV estándar.
+- Las grabaciones se guardan en el álbum público `Movies/VeloRec` (accesible desde Google Fotos, Galería Samsung, Xiaomi, etc.) y se respaldan en el almacenamiento local.
 - Las opciones de configuración persisten en `localStorage` / `SharedPreferences` con fallback automático a valores seguros por defecto (1080p @ 60 FPS, 12 Mbps, C++23).
 - El validador de resoluciones exige que ancho y alto sean números pares para compatibilidad con codificadores por hardware YUV420p (`width % 2 === 0 && height % 2 === 0`).

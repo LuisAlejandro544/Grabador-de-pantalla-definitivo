@@ -21,10 +21,14 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
   - Cero condiciones de carrera y memoria segura garantizada por el compilador.
 - [x] **Soporte Multiarquitectura (32 y 64 bits)**:
   - Generación de bibliotecas `.so` para `arm64-v8a`, `armeabi-v7a` y `x86_64`.
-- [x] **Automatización en la Nube con GitHub Actions**:
-  - Flujo manual (`workflow_dispatch`) que compila el APK Debug, descarga dependencias, genera la keystore de prueba y produce el archivo `.apk` descargable.
+- [x] **Motor FFmpeg Puro Kit LTS 16KB y Rescate Anticrash**:
+  - Recuperación atómica ante apagón inesperado del smartphone o muerte del proceso por Android OOM Killer (`-err_detect ignore_err`).
+  - Multiplexación sin pérdidas (Stream Copy) con `+faststart` para inicio instantáneo de reproducción.
+  - Compatibilidad nativa con páginas de memoria de 16KB en Android 15 (API 35+).
+- [x] **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
+  - Guardado automático mediante MediaStore API (Scoped Storage) e indexación instantánea con `MediaScannerConnection` para visibilidad inmediata en Google Fotos, Galería Samsung, Xiaomi, etc.
 - [x] **Suite de Pruebas Unitarias Deterministas**:
-  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución y métricas de motor.
+  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, comandos FFmpeg, rutas de galería y métricas de motor.
 
 ---
 

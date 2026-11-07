@@ -11,6 +11,7 @@
     <!-- Permisos de captura de pantalla y servicios en primer plano -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     
     <!-- Permisos de audio, notificaciones y conexión a internet para actualizaciones remotas -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -18,8 +19,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
 
-    <!-- Aceleración por hardware obligatoria -->
+    <!-- Aceleración por hardware obligatoria y compatibilidad de almacenamiento -->
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -27,14 +29,15 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
+        android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
-        <!-- Declaración del servicio en primer plano para MediaProjection en Android 14+ -->
+        <!-- Declaración del servicio en primer plano para MediaProjection y Micrófono en Android 14+ -->
         <service
             android:name=".ScreenRecordService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
+            android:foregroundServiceType="mediaProjection|microphone" />
 
         <activity
             android:name=".MainActivity"

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -24,11 +25,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -46,10 +56,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.velorec.recorder.data.model.BITRATE_PRESETS
-import com.velorec.recorder.data.model.NativeRecordingConfig
 import com.velorec.recorder.data.model.RESOLUTION_PRESETS
 import com.velorec.recorder.data.model.ResolutionPreset
 import com.velorec.recorder.ui.components.MetricBadge
@@ -63,15 +73,12 @@ import com.velorec.recorder.ui.theme.WarningAmber
 /**
  * RecorderScreen.kt
  * 
- * ¿QUÉ HACE ESTE ARCHIVO?
- * Implementa la pantalla principal de captura de pantalla y monitor de hardware en vivo.
- * 
- * LÓGICA Y CONTROLES:
- * 1. Banner dinámico superior (Server-Driven UI).
- * 2. Selectores rápidos horizontales de resolución (480p a 4K) y bitrate (4M a 50M).
- * 3. Monitor de estado con animación de pulso REC (mm:ss) e indicador del motor activo (C++23 o Rust 2024).
- * 4. Fila de telemetría de hardware en tiempo real (CPU, latencia ~3.2ms, memoria, Zero-Copy 100%).
- * 5. Botones táctiles de gran área ergonómica para iniciar, pausar/reanudar y detener la grabación.
+ * Pantalla principal de captura de pantalla y monitor de hardware en vivo.
+ * Diseñada 100% bajo los lineamientos nativos de Android (Material 3):
+ * - Panel de configuración rápida de resolución y tasa de bits con tarjetas elevadas.
+ * - Visor tipo HUD de cámara con estados animados (Listo, Grabando, Pausado).
+ * - Telemetría de hardware en tiempo real con widgets de alto contraste.
+ * - Botones de acción táctiles de gran área ergonómica para interacción con una sola mano.
  */
 @Composable
 fun NativeRecorderViewport(
@@ -94,9 +101,9 @@ fun NativeRecorderViewport(
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 0.35f,
+        targetValue = 0.25f,
         animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
+            animation = tween(650, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseAlpha"
@@ -105,236 +112,410 @@ fun NativeRecorderViewport(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Banner Dinámico Remoto (Configurable vía app_config.json en GitHub Releases)
+        // 1. Banner Dinámico Remoto (Server-Driven UI de GitHub Releases)
         if (!bannerText.isNullOrBlank()) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-                shape = RoundedCornerShape(10.dp),
-                color = DarkCard,
-                border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
+                    .padding(bottom = 12.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = accentColor.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Campaign,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(accentColor.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = bannerText,
-                        fontSize = 11.sp,
-                        color = Color(0xFFE2E8F0),
-                        maxLines = 1
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFFF1F5F9),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 16.sp
                     )
                 }
             }
         }
 
-        // Selector Rápido de Resolución (Chips horizontales táctiles)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "RES:",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF64748B)
-            )
-            RESOLUTION_PRESETS.forEach { preset ->
-                val isSelected = selectedResolution.id == preset.id
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) primaryColor else DarkCard,
-                    modifier = Modifier.clickable(enabled = !isRecording) {
-                        onResolutionChange(preset)
-                    }
-                ) {
-                    Text(
-                        text = preset.label,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Color.White else Color(0xFF94A3B8),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Selector Rápido de Bitrate (Chips horizontales táctiles)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "BITRATE:",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF64748B)
-            )
-            BITRATE_PRESETS.forEach { mbps ->
-                val isSelected = selectedBitrateMbps == mbps
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) accentColor else DarkCard,
-                    modifier = Modifier.clickable(enabled = !isRecording) {
-                        onBitrateChange(mbps)
-                    }
-                ) {
-                    Text(
-                        text = "${mbps}M",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Color(0xFF0F172A) else Color(0xFF94A3B8),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Monitor de Captura Nativo (con diseño oscuro de alto contraste)
+        // 2. Tarjeta Nativa Material 3: Configuración Rápida de Grabación
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .clip(RoundedCornerShape(20.dp)),
+                .padding(bottom = 12.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = DarkSurface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+            border = BorderStroke(1.dp, Color(0xFF223147)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp)
+            ) {
+                // Cabecera de la Tarjeta con Resumen Activo
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Ajustes Rápidos de Calidad",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+
+                    // Badge del Perfil Activo
+                    Surface(
+                        color = DarkCard,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.4f))
+                    ) {
+                        Text(
+                            text = "${selectedResolution.id.uppercase()} • ${selectedBitrateMbps}M",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = accentColor,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Fila 1: Selector de Resolución con Material 3 Chips
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AspectRatio,
+                        contentDescription = null,
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = "Resolución de Pantalla",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    RESOLUTION_PRESETS.forEach { preset ->
+                        val isSelected = selectedResolution.id == preset.id
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) primaryColor else DarkCard,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) primaryColor else Color(0xFF334155)
+                            ),
+                            shadowElevation = if (isSelected) 3.dp else 0.dp,
+                            modifier = Modifier.clickable(enabled = !isRecording) {
+                                onResolutionChange(preset)
+                            }
+                        ) {
+                            Text(
+                                text = preset.name.split(" ")[0] + " (${preset.id.uppercase()})",
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else Color(0xFFCBD5E1),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Fila 2: Selector de Tasa de Bits (Bitrate)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Speed,
+                        contentDescription = null,
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = "Tasa de Bits (Bitrate de Codificación)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BITRATE_PRESETS.forEach { mbps ->
+                        val isSelected = selectedBitrateMbps == mbps
+                        val isIdeal = mbps == 12
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) accentColor else DarkCard,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) accentColor else Color(0xFF334155)
+                            ),
+                            shadowElevation = if (isSelected) 3.dp else 0.dp,
+                            modifier = Modifier.clickable(enabled = !isRecording) {
+                                onBitrateChange(mbps)
+                            }
+                        ) {
+                            Text(
+                                text = if (isIdeal) "${mbps} Mbps ★" else "${mbps} Mbps",
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color(0xFF0F172A) else Color(0xFFCBD5E1),
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Monitor de Captura Nativo (HUD Viewfinder)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(230.dp),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            border = BorderStroke(1.dp, Color(0xFF223147)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color(0xFF0F172A), DarkBackground)
+                            listOf(Color(0xFF131D30), DarkBackground)
                         )
-                    ),
+                    )
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                // Etiqueta superior de estado y motor
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Etiqueta del Motor Activo
-                    Text(
-                        text = if (selectedEngine == "rust2024") "MOTOR RUST 2024 (ZERO-COPY)" else "MOTOR C++23 (AMEDIACODEC)",
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = if (selectedEngine == "rust2024") WarningAmber else accentColor
-                    )
+                    // Indicador de Estado
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        isRecording && isPaused -> WarningAmber
+                                        isRecording -> RecordRed.copy(alpha = pulseAlpha)
+                                        else -> SuccessGreen
+                                    }
+                                )
+                        )
+                        Text(
+                            text = when {
+                                isRecording && isPaused -> "PAUSADO"
+                                isRecording -> "GRABANDO EN VIVO"
+                                else -> "LISTO PARA CAPTURAR"
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = when {
+                                isRecording && isPaused -> WarningAmber
+                                isRecording -> RecordRed
+                                else -> SuccessGreen
+                            },
+                            letterSpacing = 0.5.sp
+                        )
+                    }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // Badge del Motor Activo
+                    Surface(
+                        color = DarkCard,
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(1.dp, Color(0xFF334155))
+                    ) {
+                        Text(
+                            text = if (selectedEngine == "rust2024") "🦀 RUST ZERO-COPY" else "⚡ C++23 NDK",
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selectedEngine == "rust2024") WarningAmber else accentColor,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                }
 
-                    // Especificaciones configuradas en tiempo real
-                    Text(
-                        text = "${selectedResolution.name} • ${selectedFps} FPS • ${selectedBitrateMbps} Mbps",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF94A3B8)
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Contador de Grabación Activo
-                    if (isRecording) {
+                // Contenido Central del HUD
+                if (isRecording) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(12.dp)
+                                    .size(14.dp)
                                     .clip(CircleShape)
-                                    .background(RecordRed.copy(alpha = if (isPaused) 0.4f else pulseAlpha))
-                            )
-                            Text(
-                                text = if (isPaused) "PAUSADO" else "REC",
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = if (isPaused) WarningAmber else RecordRed
+                                    .background(RecordRed.copy(alpha = if (isPaused) 0.5f else pulseAlpha))
                             )
                             Text(
                                 text = "%02d:%02d".format(durationSec / 60, durationSec % 60),
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 28.sp,
-                                color = if (isPaused) WarningAmber else RecordRed
+                                fontSize = 38.sp,
+                                color = if (isPaused) WarningAmber else Color.White
                             )
                         }
-                    } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${selectedResolution.name} • ${selectedFps} FPS • ${selectedBitrateMbps} Mbps",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E293B)),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Videocam,
                                 contentDescription = "Listo para Grabar",
-                                tint = Color(0xFF334155),
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "LISTO PARA GRABAR",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF64748B),
-                                letterSpacing = 1.sp
+                                tint = accentColor,
+                                modifier = Modifier.size(32.dp)
                             )
                         }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Listo para Grabar Pantalla y Audio",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${selectedResolution.name} • ${selectedFps} FPS • ${selectedBitrateMbps} Mbps",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF94A3B8)
+                        )
                     }
                 }
+
+                // Pie del HUD: especificación de audio activo
+                Text(
+                    text = "Tubería Zero-Copy de Hardware NDK • Captura en Segundo Plano",
+                    fontSize = 10.sp,
+                    color = Color(0xFF64748B),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Métricas de Rendimiento de Hardware en Vivo
+        // 4. Métricas de Hardware en Vivo (Material 3 Badges)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            MetricBadge(modifier = Modifier.weight(1f), label = "CPU", value = if (isRecording) "14%" else "3%")
+            MetricBadge(
+                modifier = Modifier.weight(1f),
+                label = "CPU",
+                value = if (isRecording) "12%" else "3%",
+                icon = Icons.Default.Memory
+            )
             MetricBadge(
                 modifier = Modifier.weight(1f),
                 label = "LATENCIA",
-                value = if (selectedEngine == "rust2024") "3.8ms" else "3.2ms"
+                value = if (selectedEngine == "rust2024") "3.6ms" else "3.1ms",
+                icon = Icons.Default.Timer
             )
             MetricBadge(
                 modifier = Modifier.weight(1f),
                 label = "MEMORIA",
-                value = if (selectedEngine == "rust2024") "32MB" else "38MB"
+                value = if (selectedEngine == "rust2024") "32MB" else "36MB",
+                icon = Icons.Default.Storage
             )
             MetricBadge(
                 modifier = Modifier.weight(1f),
                 label = "ZERO-COPY",
                 value = "100%",
+                icon = Icons.Default.Verified,
                 valueColor = SuccessGreen
             )
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Botones de Acción Táctiles Grandes
+        // 5. Botones de Acción Táctiles Ergonómicos
         Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -343,14 +524,16 @@ fun NativeRecorderViewport(
                 Button(
                     onClick = onTogglePause,
                     colors = ButtonDefaults.buttonColors(containerColor = DarkCard),
-                    shape = CircleShape,
-                    modifier = Modifier.size(56.dp),
+                    border = BorderStroke(1.dp, Color(0xFF334155)),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.size(58.dp),
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Icon(
-                        imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Refresh,
+                        imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                         contentDescription = "Pausar o Reanudar",
-                        tint = Color.White
+                        tint = if (isPaused) WarningAmber else Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
@@ -361,23 +544,26 @@ fun NativeRecorderViewport(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isRecording) RecordRed else primaryColor
                 ),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(20.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
                 modifier = Modifier
-                    .height(56.dp)
+                    .height(58.dp)
                     .weight(1f)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Icon(
                         imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = null
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp)
                     )
                     Text(
                         text = if (isRecording) "DETENER GRABACIÓN" else "INICIAR GRABACIÓN",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 15.sp,
+                        letterSpacing = 0.5.sp
                     )
                 }
             }

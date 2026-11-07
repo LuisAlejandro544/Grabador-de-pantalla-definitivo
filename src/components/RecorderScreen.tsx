@@ -310,49 +310,71 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
         </div>
       )}
 
-      {/* Selector Rápido de Resolución y Bitrate */}
-      <div className="mb-2.5 flex flex-col space-y-1.5 px-0.5">
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5">
-          <span className="text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">RES:</span>
-          {RESOLUTION_PRESETS.map((preset) => {
-            const isSelected = settings.resolution.id === preset.id;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                disabled={isRecording}
-                onClick={() => onUpdateSettings({ resolution: preset, bitrateMbps: preset.recommendedBitrateMbps })}
-                className={`px-2 py-0.5 rounded-lg text-xs font-semibold shrink-0 transition-colors ${
-                  isSelected
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/50'
-                    : 'bg-slate-900/90 text-slate-400 border border-slate-800 hover:text-slate-200'
-                }`}
-              >
-                {preset.name}
-              </button>
-            );
-          })}
+      {/* Tarjeta Nativa Material 3: Configuración Rápida de Grabación */}
+      <div className="mb-3 w-full bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800 shadow-md">
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center space-x-1.5">
+            <Settings2 className="w-4 h-4 text-cyan-400" />
+            <span className="text-xs font-bold text-white tracking-wide">Ajustes Rápidos de Calidad</span>
+          </div>
+          <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-800 text-cyan-300 border border-indigo-500/30">
+            {settings.resolution.id.toUpperCase()} • {settings.bitrateMbps}M
+          </span>
         </div>
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5">
-          <span className="text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">BITRATE:</span>
-          {[4, 8, 12, 16, 24, 35, 50].map((mbps) => {
-            const isSelected = settings.bitrateMbps === mbps;
-            return (
-              <button
-                key={mbps}
-                type="button"
-                disabled={isRecording}
-                onClick={() => onUpdateSettings({ bitrateMbps: mbps })}
-                className={`px-2 py-0.5 rounded-lg text-xs font-semibold shrink-0 font-mono transition-colors ${
-                  isSelected
-                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm shadow-cyan-500/50'
-                    : 'bg-slate-900/90 text-slate-400 border border-slate-800 hover:text-slate-200'
-                }`}
-              >
-                {mbps}M
-              </button>
-            );
-          })}
+
+        {/* Fila 1: Resolución con Chips táctiles */}
+        <div className="mb-2.5">
+          <div className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center space-x-1">
+            <span>Resolución de Pantalla</span>
+          </div>
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+            {RESOLUTION_PRESETS.map((preset) => {
+              const isSelected = settings.resolution.id === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  disabled={isRecording}
+                  onClick={() => onUpdateSettings({ resolution: preset, bitrateMbps: preset.recommendedBitrateMbps })}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40 border border-indigo-400'
+                      : 'bg-slate-800/80 text-slate-300 border border-slate-700/80 hover:bg-slate-750'
+                  }`}
+                >
+                  {preset.name.split(' ')[0]} ({preset.id.toUpperCase()})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Fila 2: Tasa de Bits (Bitrate) */}
+        <div>
+          <div className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center space-x-1">
+            <span>Tasa de Bits (Bitrate)</span>
+          </div>
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+            {[4, 8, 12, 16, 24, 35, 50].map((mbps) => {
+              const isSelected = settings.bitrateMbps === mbps;
+              const isIdeal = mbps === 12;
+              return (
+                <button
+                  key={mbps}
+                  type="button"
+                  disabled={isRecording}
+                  onClick={() => onUpdateSettings({ bitrateMbps: mbps })}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 font-mono transition-all ${
+                    isSelected
+                      ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/40 border border-cyan-300'
+                      : 'bg-slate-800/80 text-slate-300 border border-slate-700/80 hover:bg-slate-750'
+                  }`}
+                >
+                  {isIdeal ? `${mbps} Mbps ★` : `${mbps} Mbps`}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

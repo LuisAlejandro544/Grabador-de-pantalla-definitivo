@@ -50,7 +50,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 v1.0 Pro
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">Compose + NDK (C++ & Rust)</p>
+            <p className="text-[11px] text-slate-400">Captura HD • 60/120 FPS sin lag</p>
           </div>
         </div>
 

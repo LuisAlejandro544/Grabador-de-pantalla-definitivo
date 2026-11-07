@@ -62,4 +62,9 @@ npm run build
 - **Enlace de Firmas JNI en C++23 y Rust 2024**:
   - Las firmas nativas exportadas en `NativeRecorderEngine.cpp` y `rust/src/lib.rs` corresponden a `Java_com_velorec_recorder_ScreenRecordService_native*`. Por ello, las declaraciones `external fun` residen en `ScreenRecordService` para evitar excepciones `UnsatisfiedLinkError` en tiempo de ejecución.
 - **Arquitectura Modular en Kotlin**:
-  - La capa nativa se estructura en paquetes (`data/model`, `data/repository`, `ui/screens`, `ui/components`, `ui/theme`, `service`), manteniendo `VeloRecComposeUI.kt` como fachada modular retrocompatible.
+  - La capa nativa se estructura en paquetes (`data/model`, `data/repository`, `ui/screens`, `ui/components`, `ui/theme`, `service`, `ffmpeg`, `storage`), manteniendo `VeloRecComposeUI.kt` como fachada modular retrocompatible.
+- **FFmpeg Kit y Compatibilidad con Páginas de 16KB (Android 15+)**:
+  - `com.arthenica:ffmpeg-kit` fue retirado de Maven Central y falla en Android 15. Se utiliza `io.github.jamaismagic.ffmpeg:ffmpeg-kit-lts-16kb:6.1.7` con alineación de 16KB para evitar caídas del cargador dinámico de bibliotecas compartidas (`dlopen`).
+- **Publicación en Galería Pública del Dispositivo**:
+  - Toda grabación finalizada se publica en `Movies/VeloRec` mediante `GalleryStorageManager` (MediaStore Scoped Storage + `MediaScannerConnection.scanFile`) para garantizar que aparezca de inmediato en Google Fotos y en la galería nativa del usuario.
+

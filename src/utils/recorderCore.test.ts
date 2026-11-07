@@ -6,7 +6,13 @@ import {
   formatDuration,
   validateResolution,
   calculateEngineMetrics,
-  RESOLUTION_PRESETS
+  RESOLUTION_PRESETS,
+  validateAudioSource,
+  mixPcm16Samples,
+  getFfmpegRepairCommand,
+  getFfmpegLosslessMergeCommand,
+  getGalleryPublicAlbumPath,
+  detectVideoContainer
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -78,3 +84,74 @@ test('RESOLUTION_PRESETS contains standard mobile resolutions', () => {
   assert.equal(fhd?.width, 1080);
   assert.equal(fhd?.height, 1920);
 });
+
+test('validateAudioSource correctly identifies audio recording modes', () => {
+  const mic = validateAudioSource('mic');
+  assert.equal(mic.valid, true);
+  assert.equal(mic.mode, 'mic');
+
+  const internal = validateAudioSource('internal');
+  assert.equal(internal.valid, true);
+  assert.equal(internal.mode, 'internal');
+
+  const both = validateAudioSource('both');
+  assert.equal(both.valid, true);
+  assert.equal(both.mode, 'both');
+
+  const mute = validateAudioSource('mute');
+  assert.equal(mute.valid, true);
+  assert.equal(mute.mode, 'mute');
+
+  const invalid = validateAudioSource('invalid_mode');
+  assert.equal(invalid.valid, false);
+  assert.equal(invalid.mode, 'both'); // fallback seguro
+});
+
+test('mixPcm16Samples applies saturation clamping without digital clipping', () => {
+  // Suma normal dentro de rango
+  assert.equal(mixPcm16Samples(1000, 2000), 3000);
+  assert.equal(mixPcm16Samples(-500, -1500), -2000);
+
+  // Saturación superior (clamping a +32767)
+  assert.equal(mixPcm16Samples(30000, 10000), 32767);
+  assert.equal(mixPcm16Samples(32767, 10), 32767);
+
+  // Saturación inferior (clamping a -32768)
+  assert.equal(mixPcm16Samples(-30000, -10000), -32768);
+  assert.equal(mixPcm16Samples(-32768, -5), -32768);
+});
+
+test('getFfmpegRepairCommand generates valid ignore_err copy command', () => {
+  const cmd = getFfmpegRepairCommand('/input/corrupt.mp4', '/output/rescued.mp4');
+  assert.match(cmd, /-err_detect ignore_err/);
+  assert.match(cmd, /-c copy/);
+  assert.match(cmd, /\+faststart/);
+  assert.match(cmd, /\/output\/rescued\.mp4/);
+});
+
+test('getFfmpegLosslessMergeCommand configures faststart for mp4 and clean for mkv', () => {
+  const mp4Cmd = getFfmpegLosslessMergeCommand('v.mp4', 'a.m4a', 'out.mp4', false);
+  assert.match(mp4Cmd, /-movflags \+faststart/);
+  assert.match(mp4Cmd, /-c:v copy/);
+
+  const mkvCmd = getFfmpegLosslessMergeCommand('v.mp4', 'a.m4a', 'out.mkv', true);
+  assert.doesNotMatch(mkvCmd, /-movflags \+faststart/);
+  assert.match(mkvCmd, /out\.mkv/);
+});
+
+test('getGalleryPublicAlbumPath formats public directory path', () => {
+  const path = getGalleryPublicAlbumPath('VeloRec_12345.mp4');
+  assert.equal(path, 'Movies/VeloRec/VeloRec_12345.mp4');
+
+  const sanitized = getGalleryPublicAlbumPath('video space@#$.mp4');
+  assert.equal(sanitized, 'Movies/VeloRec/video_space___.mp4');
+});
+
+test('detectVideoContainer identifies mp4 and mkv formats', () => {
+  assert.equal(detectVideoContainer('clip.mp4'), 'mp4');
+  assert.equal(detectVideoContainer('CLIP.MP4'), 'mp4');
+  assert.equal(detectVideoContainer('record.mkv'), 'mkv');
+  assert.equal(detectVideoContainer('audio.wav'), 'unknown');
+});
+
+

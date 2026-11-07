@@ -13,7 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -49,7 +49,7 @@ fun NativeBenchmarkSection(selectedEngine: String, accentColor: Color) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Info, contentDescription = null, tint = accentColor)
+            Icon(Icons.Default.Speed, contentDescription = null, tint = accentColor)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Telemetría y Comparativa de Motores NDK",

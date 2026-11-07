@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -173,19 +176,21 @@ fun VeloRecMainScreen(
                                 }
                             }
                             Text(
-                                text = "Jetpack Compose + C++23 & Rust NDK",
-                                fontSize = 10.sp,
+                                text = "Captura HD • 60/120 FPS sin lag",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = Color(0xFF94A3B8)
                             )
                         }
                     }
                 },
                 actions = {
-                    // Badge del motor nativo con selector rápido interactivo
+                    // Badge nativo del motor con selector rápido interactivo
                     Surface(
                         color = if (selectedEngine == "rust2024") Color(0xFF451A03) else Color(0xFF083344),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
+                            .padding(end = 12.dp)
                             .clickable {
                                 if (!isRecording) {
                                     selectedEngine = if (selectedEngine == "rust2024") "cpp23" else "rust2024"
@@ -194,17 +199,28 @@ fun VeloRecMainScreen(
                             .border(
                                 width = 1.dp,
                                 color = if (selectedEngine == "rust2024") WarningAmber else dynamicAccentColor,
-                                shape = RoundedCornerShape(16.dp)
+                                shape = RoundedCornerShape(12.dp)
                             )
                     ) {
-                        Text(
-                            text = if (selectedEngine == "rust2024") "🦀 Rust 2024" else "⚡ C++23",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            color = if (selectedEngine == "rust2024") WarningAmber else dynamicAccentColor,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = if (selectedEngine == "rust2024") WarningAmber else dynamicAccentColor,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (selectedEngine == "rust2024") "Rust 2024" else "C++23 NDK",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selectedEngine == "rust2024") WarningAmber else dynamicAccentColor
+                            )
+                        }
                     }
                 }
             )
@@ -217,8 +233,8 @@ fun VeloRecMainScreen(
                 NavigationBarItem(
                     selected = activeTab == NativeTab.RECORDER,
                     onClick = { activeTab = NativeTab.RECORDER },
-                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Grabar") },
-                    label = { Text("Grabar", fontSize = 11.sp) },
+                    icon = { Icon(Icons.Default.Videocam, contentDescription = "Grabar") },
+                    label = { Text("Grabar", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = dynamicPrimaryColor,
                         selectedTextColor = dynamicPrimaryColor,
@@ -231,7 +247,7 @@ fun VeloRecMainScreen(
                     selected = activeTab == NativeTab.SETTINGS,
                     onClick = { activeTab = NativeTab.SETTINGS },
                     icon = { Icon(Icons.Default.Settings, contentDescription = "Ajustes") },
-                    label = { Text("Ajustes", fontSize = 11.sp) },
+                    label = { Text("Ajustes", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = dynamicPrimaryColor,
                         selectedTextColor = dynamicPrimaryColor,
@@ -243,8 +259,8 @@ fun VeloRecMainScreen(
                 NavigationBarItem(
                     selected = activeTab == NativeTab.GALLERY,
                     onClick = { activeTab = NativeTab.GALLERY },
-                    icon = { Icon(Icons.Default.Menu, contentDescription = "Galería") },
-                    label = { Text("Galería", fontSize = 11.sp) },
+                    icon = { Icon(Icons.Default.VideoLibrary, contentDescription = "Galería") },
+                    label = { Text("Galería", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = dynamicPrimaryColor,
                         selectedTextColor = dynamicPrimaryColor,
@@ -256,8 +272,8 @@ fun VeloRecMainScreen(
                 NavigationBarItem(
                     selected = activeTab == NativeTab.BENCHMARK,
                     onClick = { activeTab = NativeTab.BENCHMARK },
-                    icon = { Icon(Icons.Default.Info, contentDescription = "Motor") },
-                    label = { Text("Motor", fontSize = 11.sp) },
+                    icon = { Icon(Icons.Default.Speed, contentDescription = "Motor") },
+                    label = { Text("Motor", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = dynamicPrimaryColor,
                         selectedTextColor = dynamicPrimaryColor,

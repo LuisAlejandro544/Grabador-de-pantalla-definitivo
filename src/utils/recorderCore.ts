@@ -162,3 +162,97 @@ export function calculateEngineMetrics(
     };
   }
 }
+
+/**
+ * Valida y describe la fuente de captura de audio seleccionada.
+ */
+export function validateAudioSource(source: string): {
+  valid: boolean;
+  mode: 'mic' | 'internal' | 'both' | 'mute';
+  description: string;
+} {
+  switch (source) {
+    case 'mic':
+      return {
+        valid: true,
+        mode: 'mic',
+        description: 'Micrófono del dispositivo (Voz del jugador)'
+      };
+    case 'internal':
+      return {
+        valid: true,
+        mode: 'internal',
+        description: 'Audio interno del sistema y aplicaciones (YouTube/Juegos en Android 10+)'
+      };
+    case 'both':
+      return {
+        valid: true,
+        mode: 'both',
+        description: 'Mezcla estéreo dual en tiempo real (Micrófono + Audio Interno)'
+      };
+    case 'mute':
+      return {
+        valid: true,
+        mode: 'mute',
+        description: 'Sin captura de audio (Silencio)'
+      };
+    default:
+      return {
+        valid: false,
+        mode: 'both',
+        description: 'Fuente de audio desconocida, se aplica fallback a mezcla dual'
+      };
+  }
+}
+
+/**
+ * Realiza la suma de muestras PCM de 16 bits con saturación matemática (Clamping).
+ * Previene el desbordamiento digital (distorsión/clipping) entre -32768 y 32767.
+ */
+export function mixPcm16Samples(sampleA: number, sampleB: number): number {
+  const sum = sampleA + sampleB;
+  if (sum > 32767) return 32767;
+  if (sum < -32768) return -32768;
+  return sum;
+}
+
+/**
+ * Genera el comando de reparación de FFmpeg para rescatar archivos de video truncados
+ * o dañados por apagones del smartphone o terminación de proceso por Android OOM Killer.
+ */
+export function getFfmpegRepairCommand(inputPath: string, outputPath: string): string {
+  return `-y -err_detect ignore_err -i "${inputPath}" -c copy -movflags +faststart "${outputPath}"`;
+}
+
+/**
+ * Genera el comando de multiplexación sin pérdidas con FFmpeg (+faststart para reproducción instantánea).
+ */
+export function getFfmpegLosslessMergeCommand(
+  videoPath: string,
+  audioPath: string,
+  outputPath: string,
+  isMkv: boolean = false
+): string {
+  const movFlags = isMkv ? '' : '-movflags +faststart';
+  return `-y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -b:a 192k ${movFlags} "${outputPath}"`.trim();
+}
+
+/**
+ * Genera la ruta relativa estándar para el álbum público de la galería del teléfono (Movies/VeloRec).
+ */
+export function getGalleryPublicAlbumPath(fileName: string): string {
+  const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return `Movies/VeloRec/${cleanName}`;
+}
+
+/**
+ * Detecta el tipo de contenedor multimedia según la extensión del archivo.
+ */
+export function detectVideoContainer(fileName: string): 'mp4' | 'mkv' | 'unknown' {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (ext === 'mp4') return 'mp4';
+  if (ext === 'mkv') return 'mkv';
+  return 'unknown';
+}
+
+

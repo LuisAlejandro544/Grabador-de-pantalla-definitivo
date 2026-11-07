@@ -23,9 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
+import com.velorec.recorder.ffmpeg.FFmpegRecoveryEngine
+import com.velorec.recorder.storage.GalleryStorageManager
 import com.velorec.recorder.ui.theme.DarkBackground
 import com.velorec.recorder.ui.theme.DarkSurface
 import com.velorec.recorder.ui.theme.PrimaryIndigo
@@ -84,10 +86,7 @@ fun NativeGallerySection(accentColor: Color) {
     var fileToDelete by remember { mutableStateOf<File?>(null) }
 
     fun refreshVideos() {
-        val dir = context.getExternalFilesDir(null) ?: context.filesDir
-        val files = dir.listFiles { file -> file.extension.lowercase() == "mp4" }
-            ?.sortedByDescending { it.lastModified() }
-        videoFiles = files ?: emptyList()
+        videoFiles = GalleryStorageManager.getAllRecordings(context)
     }
 
     LaunchedEffect(Unit) {
@@ -101,15 +100,28 @@ fun NativeGallerySection(accentColor: Color) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Menu, contentDescription = null, tint = PrimaryIndigo)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Grabaciones en Almacenamiento Local",
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                fontSize = 16.sp
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = PrimaryIndigo)
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = "Galería del Teléfono",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = "Álbum: Movies/VeloRec • Rescate FFmpeg LTS",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 11.sp
+                    )
+                }
+            }
         }
 
         if (videoFiles.isEmpty()) {
@@ -295,7 +307,7 @@ fun NativeGallerySection(accentColor: Color) {
                 Button(
                     onClick = {
                         try {
-                            file.delete()
+                            GalleryStorageManager.deleteRecording(context, file)
                             refreshVideos()
                             Toast.makeText(context, "Video eliminado", Toast.LENGTH_SHORT).show()
                         } catch (e: Exception) {
@@ -328,8 +340,10 @@ private fun launchExternalVideoPlayer(context: Context, file: File) {
             "${context.packageName}.fileprovider",
             file
         )
+        val isMkv = file.extension.lowercase() == "mkv"
+        val mimeType = if (isMkv) "video/x-matroska" else "video/mp4"
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "video/mp4")
+            setDataAndType(uri, mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val chooser = Intent.createChooser(intent, "Reproducir con...")

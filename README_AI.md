@@ -34,6 +34,8 @@
   - `data/model/`: `RecordingConfig.kt` y `RemoteUiConfig.kt`.
   - `data/repository/RemoteConfigRepository.kt`: Sincronización asíncrona de `app_config.json` en `Dispatchers.IO`.
   - `service/RecordingNotificationHelper.kt`: Canales y construcción de notificaciones del servicio.
+  - `ffmpeg/FFmpegRecoveryEngine.kt`: Motor de recuperación ante apagones o muerte del proceso con FFmpeg Kit LTS 16KB y multiplexación `+faststart`.
+  - `storage/GalleryStorageManager.kt`: Publicación e indexación en el álbum público `Movies/VeloRec` de la galería nativa mediante MediaStore API y MediaScannerConnection.
   - `ScreenRecordService.kt`: Servicio en primer plano con `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION`, corrutinas IO y firmas JNI C++23 y Rust 2024.
   - `VeloRecComposeUI.kt`: Fachada modular que mantiene retrocompatibilidad total.
 - **`src/native_source/cpp/NativeRecorderEngine.hpp` & `.cpp`**: Motor C++23 con `AMediaCodec_createInputSurface` para codificación directa por hardware con cero copias.

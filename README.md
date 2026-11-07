@@ -33,11 +33,18 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
   - Bitrate ajustable de 2 a 50 Mbps con cálculo de almacenamiento en vivo.
   - Códecs por hardware: H.264 (AVC), H.265 (HEVC) y AV1.
   - Captura de audio: Audio Interno, Micrófono con medidor VU en decibeles, Mezcla estéreo y Silencio.
+- **Rescate Anticrash con FFmpeg Puro (Kit LTS 16KB para Android 15+)**:
+  - **Protección contra Apagones y Muerte de Proceso**: Si el teléfono se apaga de golpe por batería agotada o Android mata el proceso en segundo plano, FFmpeg analiza el flujo truncado, reconstruye el índice y recupera la grabación intacta hasta el último segundo sin archivos corruptos.
+  - **Multiplexación sin Pérdidas con `+faststart`**: Fusión ultrarrápida (Stream Copy en <400 ms) de la pista de video nativa con audio AAC, moviendo el `moov atom` al inicio del archivo para reproducción inmediata sin búfer.
+  - **Compatibilidad 16KB Memory Page Size**: Alineado con las exigencias del NDK moderno de Android 15 (API 35+).
+- **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
+  - Las grabaciones se guardan directamente en el álbum público del teléfono vía **MediaStore API** (Scoped Storage) y se indexan al instante con `MediaScannerConnection`.
+  - Aparecen inmediatamente en Google Fotos, Galería Samsung, Xiaomi, Motorola, VLC o WhatsApp.
 - **Herramientas de Superposición**:
   - Cámara flotante FaceCam ajustable.
   - Efectos visuales de toques en pantalla.
 - **Galería Integrada**:
-  - Reproductor con control de velocidad (0.5x, 1x, 1.5x, 2x) y descarga directa al almacenamiento local.
+  - Lista unificada de grabaciones públicas y privadas, reproductor nativo in-app sin bloqueos, control de velocidad y eliminación sincronizada con MediaStore.
 
 ---
 
