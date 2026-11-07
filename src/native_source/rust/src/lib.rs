@@ -10,7 +10,8 @@
 //! 4. Escribe el contenedor MP4 mediante AMediaMuxer del NDK con latencia mínima (~3 ms por cuadro).
 //! 5. Expone las firmas JNI 'Java_com_velorec_recorder_ScreenRecordService_native*Rust*' para que Kotlin
 //!    lo invoque de forma inmediata y transparente.
-//! 6. Cumple estrictamente con Rust Edition 2024 utilizando #[unsafe(no_mangle)] y punteros Send seguros (SendPtr).
+//! 6. Cumple estrictamente con Rust Edition 2024 utilizando #[unsafe(no_mangle)] y transferencia segura
+//!    entre hilos mediante direcciones escalares (usize) inmunes a restricciones de punteros crudos !Send.
 
 use std::ffi::CString;
 use std::fs::OpenOptions;
@@ -53,17 +54,13 @@ enum RecorderCommand {
     Stop,
 }
 
-/// Wrapper genérico seguro para transferir punteros nativos de hardware entre hilos
-#[derive(Clone, Copy)]
-struct SendPtr<T>(pub *mut T);
-unsafe impl<T> Send for SendPtr<T> {}
-unsafe impl<T> Sync for SendPtr<T> {}
-
-/// Estructura que encapsula los punteros opacos del hardware NDK
+/// Estructura que encapsula las direcciones de memoria de hardware NDK
+/// Se almacenan como escalares usize para garantizar compatibilidad incondicional
+/// con los rasgos Send/Sync del compilador de Rust 2024 al transferirse entre hilos.
 struct NdkHardwareHandles {
-    codec: SendPtr<ndk_sys::AMediaCodec>,
-    native_window: SendPtr<ndk_sys::ANativeWindow>,
-    muxer: SendPtr<ndk_sys::AMediaMuxer>,
+    codec_addr: usize,
+    native_window_addr: usize,
+    muxer_addr: usize,
     raw_fd: std::os::unix::io::RawFd,
 }
 
@@ -177,9 +174,9 @@ impl RustRecorderEngine {
                 cmd_sender: cmd_tx,
                 worker_handle: None,
                 hardware: Some(NdkHardwareHandles {
-                    codec: SendPtr(codec),
-                    native_window: SendPtr(native_window),
-                    muxer: SendPtr(muxer),
+                    codec_addr: codec as usize,
+                    native_window_addr: native_window as usize,
+                    muxer_addr: muxer as usize,
                     raw_fd,
                 }),
             };
@@ -199,8 +196,13 @@ impl RustRecorderEngine {
         let (cmd_tx, rx_worker) = bounded::<RecorderCommand>(16);
         self.cmd_sender = cmd_tx;
 
+        let codec_addr = hardware.codec_addr;
+        let native_window_addr = hardware.native_window_addr;
+        let muxer_addr = hardware.muxer_addr;
+        let raw_fd = hardware.raw_fd;
+
         unsafe {
-            let start_status = ndk_sys::AMediaCodec_start(hardware.codec.0);
+            let start_status = ndk_sys::AMediaCodec_start(codec_addr as *mut ndk_sys::AMediaCodec);
             if start_status != ndk_sys::media_status_t(0) {
                 return Err(format!("AMediaCodec_start falló con código: {:?}", start_status));
             }
@@ -210,14 +212,14 @@ impl RustRecorderEngine {
         is_paused.store(false, Ordering::SeqCst);
 
         // Hilo worker de codificación sin contención de cerrojos
+        // Captura únicamente tipos escalares (usize, i32) y Arcs que son intrínsecamente Send
         let handle = thread::Builder::new()
             .name("velorec_rust_worker".into())
             .spawn(move || {
                 info!("Rust 2024: Hilo de codificación activo.");
-                let codec = hardware.codec.0;
-                let muxer = hardware.muxer.0;
-                let native_window = hardware.native_window.0;
-                let raw_fd = hardware.raw_fd;
+                let codec = codec_addr as *mut ndk_sys::AMediaCodec;
+                let muxer = muxer_addr as *mut ndk_sys::AMediaMuxer;
+                let native_window = native_window_addr as *mut ndk_sys::ANativeWindow;
                 let mut muxer_started = false;
                 let mut video_track_index: isize = -1;
 
