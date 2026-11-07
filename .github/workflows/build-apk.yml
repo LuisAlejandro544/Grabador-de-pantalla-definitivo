@@ -30,7 +30,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       # 3. Configurar Java JDK 17
       - name: ☕ Configurar Java JDK 17
@@ -38,7 +37,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
       # 4. Configurar Android SDK, NDK y CMake
       - name: 🤖 Configurar Android SDK y NDK
