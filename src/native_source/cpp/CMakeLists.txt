@@ -40,6 +40,12 @@ target_link_libraries(velorec_cpp23 PRIVATE
     log
 )
 
+# Integración con Google Oboe (AAR Prefab) para captura y procesado de audio en C++23
+find_package(oboe CONFIG QUIET)
+if(oboe_FOUND)
+    target_link_libraries(velorec_cpp23 PRIVATE oboe::oboe)
+endif()
+
 # Optimización de tamaño eliminando símbolos no utilizados
 set_target_properties(velorec_cpp23 PROPERTIES
     LINK_FLAGS "-Wl,--gc-sections -Wl,--as-needed"

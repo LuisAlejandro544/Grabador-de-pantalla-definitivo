@@ -254,7 +254,7 @@ fun VeloRecMainScreen(
 }
 
 @Composable
-fun NativeRecorderViewport(
+fun ColumnScope.NativeRecorderViewport(
     selectedEngine: String,
     isRecording: Boolean,
     isPaused: Boolean,

@@ -81,6 +81,7 @@ android {
 
     buildFeatures {
         compose = true
+        prefab = true // Habilita Prefab para enlazar paquetes nativos C/C++ AAR como Google Oboe
     }
 
     composeOptions {
@@ -188,11 +189,22 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.0")
 
+    // Arquitectura de Pantallas, Navegación Táctil Móvil y Ciclo de Vida (Apache-2.0)
+    implementation("androidx.navigation:navigation-compose:2.8.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
+
+    // Reproducción de video de alto rendimiento acelerada por hardware (Apache-2.0)
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
+
+    // Captura y reproducción de audio de ultra baja latencia en C++23 (Apache-2.0)
+    implementation("com.google.oboe:oboe:1.9.0")
+
     // Kotlin y Corrutinas para evitar bloqueos en el Main Thread
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
 
-    // AndroidX y Servicios en primer plano
     // AndroidX y Servicios en primer plano
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
