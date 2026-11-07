@@ -121,7 +121,7 @@ jobs:
       - name: 🚀 Compilar APK Debug con Gradle
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --info --stacktrace
 
       # 10. Subir el APK Debug compilado como Artefacto descargable
       - name: 📤 Subir APK Debug para descarga móvil

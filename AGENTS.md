@@ -38,7 +38,7 @@ Cualquier cambio de código debe validarse ejecutando en orden:
 # 1. Pruebas Unitarias de Lógica Pura (desacoplada del DOM)
 npx --yes tsx --test src/utils/recorderCore.test.ts
 
-# 2. Verificación de Tipos TypeScript (sin compilar native_source móvil)
+# 2. Verificación de Tipos TypeScript
 npm run lint
 
 # 3. Compilación de Producción del Applet Web

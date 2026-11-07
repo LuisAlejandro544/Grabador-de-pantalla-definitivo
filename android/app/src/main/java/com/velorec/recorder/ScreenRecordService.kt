@@ -125,7 +125,7 @@ class ScreenRecordService : Service() {
         }
         // START_STICKY para asegurar que el Foreground Service no sea terminado
         // abruptamente cuando el usuario sale de la aplicación a jugar o ver videos
-        return START_STICKY
+        return Service.START_STICKY
     }
 
     private fun handleStartRecording(intent: Intent) {
@@ -333,7 +333,7 @@ class ScreenRecordService : Service() {
                     lastFileSizeBytes = outFile.length()
                 }
 
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopForeground(Service.STOP_FOREGROUND_REMOVE)
                 stopSelf()
             } catch (e: Exception) {
                 e.printStackTrace()

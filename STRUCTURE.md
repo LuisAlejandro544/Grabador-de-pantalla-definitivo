@@ -73,26 +73,6 @@
 │   │   ├── GalleryScreen.tsx           # Galería de videos grabados con reproductor modal
 │   │   └── BenchmarkScreen.tsx         # Prueba de estrés comparativa C++23 vs Rust 2024
 │   │
-│   ├── native_source/                  # Archivos nativos comentados para el catálogo
-│   │   ├── android/
-│   │   │   ├── AndroidManifest.xml
-│   │   │   ├── build.gradle.kts
-│   │   │   └── src/main/res/           # Recursos drawables, mipmaps y styles
-│   │   ├── cpp/
-│   │   │   ├── CMakeLists.txt
-│   │   │   ├── NativeRecorderEngine.hpp
-│   │   │   └── NativeRecorderEngine.cpp
-│   │   ├── kotlin/                     # Módulos Kotlin desacoplados (data, ui, screens, service)
-│   │   │   ├── MainActivity.kt
-│   │   │   ├── VeloRecComposeUI.kt
-│   │   │   ├── ScreenRecordService.kt
-│   │   │   ├── data/ (model y repository)
-│   │   │   ├── service/ (RecordingNotificationHelper)
-│   │   │   └── ui/ (ViewModel, screens, components, theme)
-│   │   └── rust/
-│   │       ├── Cargo.toml
-│   │       └── src/lib.rs
-│   │
 │   ├── types/
 │   │   └── recorder.ts                 # Tipos TypeScript, interfaces de motor y resoluciones
 │   │
