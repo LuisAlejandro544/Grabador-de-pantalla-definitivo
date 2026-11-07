@@ -58,6 +58,7 @@ struct NdkHardwareHandles {
     codec: *mut ndk_sys::AMediaCodec,
     native_window: *mut ndk_sys::ANativeWindow,
     muxer: *mut ndk_sys::AMediaMuxer,
+    raw_fd: std::os::unix::io::RawFd,
 }
 
 // Implementamos Send de forma segura ya que el worker thread tiene acceso exclusivo
@@ -145,9 +146,9 @@ impl RustRecorderEngine {
 
             let raw_fd = file.into_raw_fd();
             let muxer = ndk_sys::AMediaMuxer_new(raw_fd, ndk_sys::AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
-            libc::close(raw_fd);
 
             if muxer.is_null() {
+                libc::close(raw_fd);
                 ndk_sys::ANativeWindow_release(native_window);
                 ndk_sys::AMediaCodec_delete(codec);
                 return Err("Fallo al instanciar AMediaMuxer en Rust".into());
@@ -158,6 +159,7 @@ impl RustRecorderEngine {
             let surface_jobject = ndk_sys::ANativeWindow_toSurface(jni_raw_env as *mut _, native_window);
             if surface_jobject.is_null() {
                 ndk_sys::AMediaMuxer_delete(muxer);
+                libc::close(raw_fd);
                 ndk_sys::ANativeWindow_release(native_window);
                 ndk_sys::AMediaCodec_delete(codec);
                 return Err("Fallo al convertir ANativeWindow a android.view.Surface JNI".into());
@@ -177,6 +179,7 @@ impl RustRecorderEngine {
                     codec,
                     native_window,
                     muxer,
+                    raw_fd,
                 }),
             };
 
@@ -303,6 +306,7 @@ impl RustRecorderEngine {
                         ndk_sys::AMediaMuxer_stop(muxer);
                     }
                     ndk_sys::AMediaMuxer_delete(muxer);
+                    libc::close(hardware.raw_fd);
                 }
                 info!("Rust 2024: Codificación finalizada limpiamente.");
             })
@@ -360,9 +364,15 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
             .with_tag("VeloRec_Rust2024"),
     );
 
-    let path_str: String = env.get_string(&path).map(|s| s.into()).unwrap_or_default();
-    let codec_str: String = env.get_string(&codec).map(|s| s.into()).unwrap_or_else(|_| "H264".into());
-    let audio_str: String = env.get_string(&audio).map(|s| s.into()).unwrap_or_default();
+    let path_str: String = env.get_string(&path)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let codec_str: String = env.get_string(&codec)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| "H264".into());
+    let audio_str: String = env.get_string(&audio)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
 
     let codec_mime = match codec_str.as_str() {
         "HEVC" => "video/hevc",

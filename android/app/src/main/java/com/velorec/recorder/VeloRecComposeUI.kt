@@ -256,8 +256,8 @@ fun VeloRecMainScreen(
 @Composable
 fun NativeRecorderViewport(
     selectedEngine: String,
-    isRecording: boolean,
-    isPaused: boolean,
+    isRecording: Boolean,
+    isPaused: Boolean,
     durationSec: Int,
     onToggleRecord: () -> Unit,
     onTogglePause: () -> Unit

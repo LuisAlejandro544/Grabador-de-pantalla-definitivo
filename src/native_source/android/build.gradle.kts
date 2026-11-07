@@ -121,9 +121,14 @@ tasks.register("cargoNdkBuild") {
                 ?: System.getenv("ANDROID_HOME")?.let { "$it/ndk" }
 
             for (androidAbi in targets) {
+                val expectedSo = file("src/main/jniLibs/$androidAbi/libvelorec_rust2024.so")
+                if (expectedSo.exists() && expectedSo.length() > 0) {
+                    println("✅ Rust 2024 (.so precompilada encontrada para $androidAbi: ${expectedSo.length()} bytes)")
+                    continue
+                }
+
                 println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi...")
                 try {
-                    // Invocación a cargo-ndk SIN el separador '--' para evitar errores de argumentos en Cargo
                     val cmd = mutableListOf(
                         "cargo", "ndk",
                         "-t", androidAbi,
@@ -133,8 +138,7 @@ tasks.register("cargoNdkBuild") {
                     )
                     val pb = ProcessBuilder(cmd)
                         .directory(rustDir)
-                        .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-                        .redirectError(ProcessBuilder.Redirect.INHERIT)
+                        .redirectErrorStream(true)
 
                     if (ndkHome != null) {
                         pb.environment()["ANDROID_NDK_HOME"] = ndkHome
@@ -142,9 +146,13 @@ tasks.register("cargoNdkBuild") {
                     }
 
                     val process = pb.start()
+                    val outputText = process.inputStream.bufferedReader().use { it.readText() }
                     val exitCode = process.waitFor()
                     if (exitCode != 0) {
-                        println("⚠️ Advertencia: cargo-ndk finalizó con código de error $exitCode para $androidAbi.")
+                        println("⚠️ cargo-ndk finalizó con código $exitCode para $androidAbi:")
+                        if (outputText.isNotBlank()) {
+                            println(outputText.trim())
+                        }
                     } else {
                         println("✅ Rust 2024 compilado con éxito para $androidAbi.")
                     }
