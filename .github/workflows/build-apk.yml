@@ -1,0 +1,116 @@
+name: Compilar APK Debug (VeloRec Mobile)
+
+# DISPARADOR ESTRICTAMENTE MANUAL (workflow_dispatch)
+# No se ejecuta con push, pull_request, ni tags. Solo cuando el usuario lo activa manualmente.
+on:
+  workflow_dispatch:
+    inputs:
+      engine_preference:
+        description: 'Motor nativo preferente incluido en el APK'
+        required: true
+        default: 'Ambos (C++23 y Rust 2024)'
+        type: choice
+        options:
+          - 'Ambos (C++23 y Rust 2024)'
+          - 'Solo C++23 (AMediaCodec NDK)'
+          - 'Solo Rust (Edition 2024)'
+
+jobs:
+  build-debug-apk:
+    name: 🔨 Construir APK Debug para Android
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Clonar el repositorio
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      # 2. Configurar entorno de Node.js para React Native
+      - name: 🟢 Configurar Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # 3. Configurar Java JDK 17
+      - name: ☕ Configurar Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      # 4. Configurar Android SDK, NDK y CMake
+      - name: 🤖 Configurar Android SDK y NDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Instalar componentes de Android SDK y NDK r26c
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-35" \
+                     "build-tools;35.0.0" \
+                     "ndk;26.1.10909125" \
+                     "cmake;3.22.1"
+
+      # 5. Configurar Toolchain de Rust (Edition 2024 / 1.85+) y targets de Android
+      - name: 🦀 Instalar Rust Toolchain y Targets Móviles (32 y 64 bits)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: 🛠️ Instalar cargo-ndk
+        run: |
+          cargo install cargo-ndk
+
+      # 6. Instalar dependencias del proyecto React Native
+      - name: 📚 Instalar dependencias de npm
+        run: |
+          if [ -f "package-lock.json" ]; then
+            npm ci --legacy-peer-deps
+          else
+            npm install --legacy-peer-deps
+          fi
+
+      # 7. Generar el almacén de claves (keystore) para la firma Debug dentro del Action
+      - name: 🔑 Generar Firma Debug Automática
+        run: |
+          mkdir -p android/app
+          if [ ! -f "android/app/debug.keystore" ]; then
+            echo "Generando debug.keystore con keytool..."
+            keytool -genkey -v \
+              -keystore android/app/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      # 8. Dar permisos de ejecución a gradlew
+      - name: 🔧 Configurar permisos de gradlew
+        run: |
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          elif [ -f "gradlew" ]; then
+            chmod +x gradlew
+          fi
+
+      # 9. Compilar el APK Debug
+      # Esto compila el bundle JS de React Native, las bibliotecas C++23 con CMake/NDK,
+      # las bibliotecas Rust 2024 con Cargo NDK para 32 y 64 bits, y el código Kotlin con Corrutinas.
+      - name: 🚀 Compilar APK Debug con Gradle
+        run: |
+          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125
+          export NDK_HOME=$ANDROID_NDK_HOME
+          cd android
+          ./gradlew assembleDebug --stacktrace
+
+      # 10. Subir el APK Debug compilado como Artefacto descargable
+      - name: 📤 Subir APK Debug para descarga móvil
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeloRec-Debug-APK
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
