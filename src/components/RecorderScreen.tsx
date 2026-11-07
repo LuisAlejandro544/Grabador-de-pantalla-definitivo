@@ -132,14 +132,15 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
         ctx.stroke();
       }
 
-      // Elementos simulados de pantalla móvil (Widgets, Apps, Barra de estado)
-      // Barra superior móvil simulada
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.fillRect(0, 0, w, 28);
+      // Indicador de estado del monitor de hardware nativo
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+      ctx.fillRect(0, 0, w, 24);
+      ctx.fillStyle = settings.engine === 'rust2024' ? '#f59e0b' : '#06b6d4';
+      ctx.font = 'bold 9px "JetBrains Mono", monospace';
+      ctx.fillText('● SUPERFICIE NATIVA ACTIVA (GPU)', 14, 16);
       ctx.fillStyle = '#94a3b8';
-      ctx.font = '10px sans-serif';
-      ctx.fillText('09:41', 14, 18);
-      ctx.fillText('5G  100%', w - 58, 18);
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.fillText(`${settings.fps} FPS`, w - 50, 16);
 
       // Círculo central pulsante que representa actividad en pantalla
       const cx = w / 2;

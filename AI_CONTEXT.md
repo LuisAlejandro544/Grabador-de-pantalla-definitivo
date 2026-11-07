@@ -8,8 +8,8 @@ Este documento proporciona contexto técnico estructurado y reglas invariantes p
 
 VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendimiento diseñada para Android. Utiliza una arquitectura en cuatro capas para maximizar la tasa de cuadros por segundo (FPS) y minimizar el consumo térmico y de batería:
 
-1. **Frontend / Presentación**: React Native (TypeScript) con especificación TurboModule.
-2. **Orquestación en Android**: Kotlin con Corrutinas (`Dispatchers.IO`), gestión de permisos `MediaProjection` y Foreground Service.
+1. **Frontend / Presentación**: Aplicación móvil 100% nativa con **React Native (TypeScript TurboModules)** y vistas nativas en **Kotlin Jetpack Compose (Material 3)**.
+2. **Orquestación en Android**: Kotlin con Corrutinas (`Dispatchers.IO`), gestión de permisos `MediaProjection`, Jetpack Compose UI y Foreground Service.
 3. **Motores de Codificación Nativa (Hardware NDK)**:
    - **C++23**: `AMediaCodec_createInputSurface`, `std::expected`, `std::span`, `std::jthread`, `ANativeWindow`.
    - **Rust (Edition 2024)**: Crate con `crossbeam-channel`, seguridad de memoria garantizada en tiempo de compilación y enlaces JNI.
@@ -31,9 +31,10 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
    - Rust **debe** utilizar `edition = "2024"` (Rust 1.85+).
 4. **Soporte de Arquitecturas (32 y 64 bits)**:
    - Se deben generar siempre las bibliotecas para `arm64-v8a` (64-bit ARM), `armeabi-v7a` (32-bit ARM) y `x86_64` (emulador).
-5. **Entorno del Usuario**:
-   - El usuario opera **exclusivamente desde un teléfono móvil**, sin computadora.
-   - Las interfaces deben ser 100% touch-friendly, con botones grandes, navegación inferior fija y sin desbordamientos horizontales.
+5. **Entorno del Usuario y Diseño 100% Móvil Nativo**:
+   - La app es una aplicación para smartphone, **NO un sitio web**.
+   - No utilizar marcos o barras simuladas de teléfono (`09:41 5G 100%`) dentro de la pantalla, ya que el usuario opera directamente desde un dispositivo físico real.
+   - Las interfaces deben ser 100% touch-friendly, con botones grandes, navegación inferior fija Material 3 y sin desbordamientos horizontales.
    - No forzar herramientas que requieran línea de comandos local; el APK se compila en la nube mediante GitHub Actions.
 6. **Políticas de Propiedad Intelectual y Licenciamiento**:
    - Nunca incluir nombres de marcas comerciales protegidas en nombres de archivos.

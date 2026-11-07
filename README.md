@@ -1,14 +1,18 @@
-# 📱 VeloRec Studio — Grabador de Pantalla Móvil de Alto Rendimiento
+# 📱 VeloRec Studio — Grabador de Pantalla Móvil Nativo de Alto Rendimiento
 
-> **Arquitectura híbrida nativa**: React Native + Kotlin (Corrutinas) + C++23 (AMediaCodec NDK) + Rust (Edition 2024).
+> **Arquitectura móvil nativa**: React Native + Kotlin (Jetpack Compose Material 3 & Corrutinas) + C++23 (AMediaCodec NDK) + Rust (Edition 2024).
 
-VeloRec Studio es una solución integral y modular de captura y codificación de pantalla para dispositivos Android. Diseñada pensando en creadores de contenido, streamers y jugadores móviles, elimina por completo los cuellos de botella de la máquina virtual (JVM/ART) mediante una tubería **Zero-Copy** que transfiere directamente las superficies de hardware de la GPU al codificador nativo.
+VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificación de pantalla para Android. Diseñada con interfaz táctil ergonómica y moderna basada en **Jetpack Compose (Material 3)** y orquestada con **React Native TurboModules**, elimina por completo los cuellos de botella de la máquina virtual (JVM/ART) mediante una tubería **Zero-Copy** que transfiere directamente las superficies de hardware de la GPU a los codificadores nativos en C++23 y Rust.
 
 ---
 
 ## ⚡ Características Principales
 
-- **Doble Motor de Codificación Nativo**:
+- **Diseño 100% Móvil Nativo (Sin Emuladores ni Marcos Web)**:
+  - Interfaz táctil ergonómica adaptada para usarse con una sola mano en smartphones.
+  - Vistas nativas construidas con **Kotlin Jetpack Compose (Material 3)** integradas en la arquitectura de React Native.
+  - Paleta oscura de alto contraste, tipografía nítida y botones de gran área de toque.
+- **Doble Motor de Codificación Nativo por Hardware**:
   - **⚡ C++23 Core Engine**: Acceso directo al Android NDK con `AMediaCodec_createInputSurface`, `std::expected` (manejo de errores de coste cero), `std::span`, `std::jthread` cooperativo y multiplexor MP4 de ultra baja latencia (~3.2 ms por cuadro).
   - **🦀 Rust Core Engine (Edition 2024 / Rust 1.85+)**: Garantía matemática de seguridad en memoria sin recolector de basura (Zero GC), canales atómicos lock-free con `crossbeam-channel` y ausencia total de condiciones de carrera (*Data Races*).
   - **Alternancia Dinámica**: El usuario puede alternar entre ambos motores nativos con un toque en tiempo real.
@@ -39,10 +43,10 @@ VeloRec Studio es una solución integral y modular de captura y codificación de
 ## 🏗️ Flujo de Arquitectura
 
 ```
-[React Native UI] 
-       │ (TypeScript TurboModule Spec)
+[React Native + Kotlin Jetpack Compose UI] 
+       │ (Material 3 Dark Theme + TurboModule Spec)
        ▼
-[Kotlin ScreenRecorderModule] 
+[Kotlin ScreenRecorderModule & VeloRecComposeUI] 
        │ (Corrutinas Dispatchers.IO + MediaProjection)
        ▼
 [Android ScreenRecordService] 

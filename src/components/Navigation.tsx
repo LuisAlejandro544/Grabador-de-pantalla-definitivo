@@ -50,7 +50,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 v1.0 Pro
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">RN + Kotlin + NDK</p>
+            <p className="text-[11px] text-slate-400">RN + Compose + NDK</p>
           </div>
         </div>
 

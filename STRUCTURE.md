@@ -21,10 +21,17 @@
 │   ├── settings.gradle.kts             # Repositorios Maven y vinculación del módulo :app
 │   ├── build.gradle.kts                # Configuración raíz de Gradle Kotlin DSL
 │   └── app/
-│       ├── build.gradle.kts            # Configuración del módulo :app con CMake C++23 y Cargo NDK Rust
+│       ├── build.gradle.kts            # Configuración de :app con Jetpack Compose, CMake C++23 y Cargo NDK
 │       └── src/main/
 │           ├── AndroidManifest.xml     # Permisos MediaProjection y ForegroundService Android 14+
+│           ├── res/                    # Recursos de la aplicación (iconos adaptativos, drawables, strings, styles)
+│           │   ├── drawable/           # Vectores nativos ic_launcher_background y ic_launcher_foreground
+│           │   ├── mipmap/             # Iconos de inicio para la aplicación móvil
+│           │   ├── mipmap-anydpi-v26/  # Iconos adaptativos para Android 8.0+
+│           │   └── values/             # strings.xml, styles.xml y colors.xml
 │           ├── java/com/velorec/recorder/
+│           │   ├── MainActivity.kt          # Punto de entrada de ComponentActivity con setContent Compose
+│           │   ├── VeloRecComposeUI.kt      # Interfaz móvil 100% nativa con Jetpack Compose Material 3
 │           │   ├── ScreenRecorderModule.kt  # Módulo puente React Native con Corrutinas (Dispatchers.IO)
 │           │   └── ScreenRecordService.kt   # Foreground Service con Surface nativa Zero-Copy
 │           └── cpp/
@@ -38,23 +45,25 @@
 │       └── lib.rs                      # Hardware encoder NDK AMediaCodec, ANativeWindow y crossbeam
 │
 ├── src/                                # Código fuente de la interfaz y utilidades
-│   ├── components/                     # Componentes modulares de pantalla
-│   │   ├── Navigation.tsx              # Barra de cabecera y barra de navegación inferior
-│   │   ├── RecorderScreen.tsx          # Pantalla principal con visor, VU meter y controles
+│   ├── components/                     # Componentes modulares de pantalla táctil móvil
+│   │   ├── Navigation.tsx              # Barra de cabecera y barra de navegación inferior táctil
+│   │   ├── RecorderScreen.tsx          # Pantalla principal con monitor nativo, VU meter y controles
 │   │   ├── SettingsScreen.tsx          # Configuración de motor, resolución, FPS, códec y ABIs
 │   │   ├── GalleryScreen.tsx           # Galería de videos grabados con reproductor modal
-│   │   ├── BenchmarkScreen.tsx         # Prueba de estrés comparativa C++23 vs Rust 2024
-│   │   └── NativeCodeScreen.tsx        # Explorador de código y exportador a ZIP
+│   │   └── BenchmarkScreen.tsx         # Prueba de estrés comparativa C++23 vs Rust 2024
 │   │
 │   ├── native_source/                  # Archivos nativos comentados para el catálogo
 │   │   ├── android/
 │   │   │   ├── AndroidManifest.xml
-│   │   │   └── build.gradle.kts
+│   │   │   ├── build.gradle.kts
+│   │   │   └── src/main/res/           # Recursos drawables, mipmaps y styles
 │   │   ├── cpp/
 │   │   │   ├── CMakeLists.txt
 │   │   │   ├── NativeRecorderEngine.hpp
 │   │   │   └── NativeRecorderEngine.cpp
 │   │   ├── kotlin/
+│   │   │   ├── MainActivity.kt
+│   │   │   ├── VeloRecComposeUI.kt
 │   │   │   ├── ScreenRecorderModule.kt
 │   │   │   └── ScreenRecordService.kt
 │   │   ├── react_native/

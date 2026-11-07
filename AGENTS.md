@@ -7,8 +7,8 @@ Instrucciones de operación, comandos de prueba y protocolos de modificación pa
 ## 🎯 Protocolo de Actuación
 
 Antes de realizar cualquier cambio en el código:
-1. **Razonar antes de ejecutar**: Analizar el impacto en la arquitectura de cuatro capas (React Native -> Kotlin -> JNI -> C++23/Rust 2024).
-2. **Respetar la restricción móvil**: Recordar que el usuario final opera **desde un teléfono**. La interfaz debe ser ergonómica para interacción táctil y no se debe exigir el uso de una terminal local en el dispositivo.
+1. **Razonar antes de ejecutar**: Analizar el impacto en la arquitectura de cuatro capas (React Native + Jetpack Compose -> Kotlin Corrutinas -> JNI -> C++23/Rust 2024).
+2. **Respetar la restricción móvil y diseño nativo**: La aplicación es 100% móvil nativa (no un sitio web). La interfaz debe ser ergonómica para interacción táctil (Jetpack Compose Material 3), con controles de gran tamaño y sin simular marcos o barras de estado (`09:41 5G 100%`) dentro de la pantalla, ya que el usuario opera desde un dispositivo físico.
 3. **No alterar el diseño gráfico sin solicitud explícita**: Mantener paleta de colores, iconos, tipografía y navegación existentes.
 4. **No modificar `commit_message.txt`**: Si existe dicho archivo, no actualizarlo a menos que el usuario lo solicite expresamente.
 

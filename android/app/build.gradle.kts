@@ -86,6 +86,14 @@ android {
         }
     }
 
+    buildFeatures {
+        compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.14"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -115,23 +123,32 @@ tasks.register("cargoNdkBuild") {
 
         if (rustDir.exists()) {
             jniLibsDir.mkdirs()
+            val ndkHome = System.getenv("ANDROID_NDK_HOME")
+                ?: System.getenv("NDK_HOME")
+                ?: System.getenv("ANDROID_HOME")?.let { "$it/ndk" }
+
             for (androidAbi in targets) {
                 println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi...")
                 try {
-                    // Se utiliza ProcessBuilder con el ABI de Android ('arm64-v8a', etc.) y --platform 26
-                    val process = ProcessBuilder(
+                    // Invocación a cargo-ndk SIN el separador '--' para que no rompa el comando 'build --release'
+                    val cmd = mutableListOf(
                         "cargo", "ndk",
                         "-t", androidAbi,
                         "--platform", "26",
                         "-o", jniLibsDir.absolutePath,
-                        "--",
                         "build", "--release"
                     )
+                    val pb = ProcessBuilder(cmd)
                         .directory(rustDir)
                         .redirectOutput(ProcessBuilder.Redirect.INHERIT)
                         .redirectError(ProcessBuilder.Redirect.INHERIT)
-                        .start()
 
+                    if (ndkHome != null) {
+                        pb.environment()["ANDROID_NDK_HOME"] = ndkHome
+                        pb.environment()["NDK_HOME"] = ndkHome
+                    }
+
+                    val process = pb.start()
                     val exitCode = process.waitFor()
                     if (exitCode != 0) {
                         println("⚠️ Advertencia: cargo-ndk finalizó con código de error $exitCode para $androidAbi.")
@@ -164,6 +181,14 @@ configurations.all {
 dependencies {
     // React Native estable compatible con Android 15 (compileSdk 35)
     implementation("com.facebook.react:react-android:0.76.5")
+
+    // Jetpack Compose (Material 3 nativo para diseño móvil)
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.activity:activity-compose:1.9.0")
 
     // Kotlin Coroutines para evitar bloqueos en el hilo de la interfaz de usuario
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
