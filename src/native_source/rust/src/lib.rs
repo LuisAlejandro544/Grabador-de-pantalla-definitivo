@@ -388,8 +388,7 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
         }
         Err(err_msg) => {
             error!("Error al inicializar RustRecorderEngine: {}", err_msg);
-            let exc_class = env.find_class("java/lang/RuntimeException").unwrap();
-            env.throw_new(exc_class, &err_msg).unwrap();
+            let _ = env.throw_new("java/lang/RuntimeException", &err_msg);
             std::ptr::null_mut()
         }
     }

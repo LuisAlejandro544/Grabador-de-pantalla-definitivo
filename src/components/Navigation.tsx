@@ -1,8 +1,8 @@
 import React from 'react';
-import { Video, Sliders, Film, Activity, Code2, ShieldAlert } from 'lucide-react';
+import { Video, Sliders, Film, Activity } from 'lucide-react';
 import { NativeEngineType } from '../types/recorder';
 
-export type ActiveTab = 'recorder' | 'settings' | 'gallery' | 'benchmark' | 'code';
+export type ActiveTab = 'recorder' | 'settings' | 'gallery' | 'benchmark';
 
 interface NavigationProps {
   activeTab: ActiveTab;
@@ -164,23 +164,6 @@ export const Navigation: React.FC<NavigationProps> = ({
           <Activity className="w-5 h-5 mb-0.5" />
           <span className="text-[11px]">Motor</span>
           {activeTab === 'benchmark' && (
-            <span className="absolute -bottom-1 w-6 h-0.5 bg-indigo-500 rounded-full" />
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onTabChange('code')}
-          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all relative ${
-            activeTab === 'code'
-              ? 'text-indigo-400 font-semibold scale-105'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-          aria-label="Pantalla de Código Nativo y Descarga"
-        >
-          <Code2 className="w-5 h-5 mb-0.5" />
-          <span className="text-[11px]">Código</span>
-          {activeTab === 'code' && (
             <span className="absolute -bottom-1 w-6 h-0.5 bg-indigo-500 rounded-full" />
           )}
         </button>

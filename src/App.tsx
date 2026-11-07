@@ -16,7 +16,6 @@ import { RecorderScreen } from './components/RecorderScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { GalleryScreen } from './components/GalleryScreen';
 import { BenchmarkScreen } from './components/BenchmarkScreen';
-import { NativeCodeScreen } from './components/NativeCodeScreen';
 
 // Configuración inicial por defecto
 const DEFAULT_SETTINGS: RecorderSettings = {
@@ -308,10 +307,6 @@ export default function App() {
             currentEngine={settings.engine}
             onSelectEngine={(eng) => updateSettings({ engine: eng })}
           />
-        )}
-
-        {activeTab === 'code' && (
-          <NativeCodeScreen />
         )}
       </main>
     </div>

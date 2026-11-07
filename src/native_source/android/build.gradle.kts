@@ -115,7 +115,9 @@ tasks.register("cargoNdkBuild") {
                     val process = ProcessBuilder(
                         "cargo", "ndk",
                         "-t", rustTarget,
+                        "--platform", "26",
                         "-o", jniLibsDir.absolutePath,
+                        "--",
                         "build", "--release"
                     )
                         .directory(rustDir)
