@@ -10,18 +10,19 @@
 //! 4. Escribe el contenedor MP4 mediante AMediaMuxer del NDK con latencia mínima (~3 ms por cuadro).
 //! 5. Expone las firmas JNI 'Java_com_velorec_recorder_ScreenRecordService_native*Rust*' para que Kotlin
 //!    lo invoque de forma inmediata y transparente.
+//! 6. Cumple estrictamente con Rust Edition 2024 utilizando #[unsafe(no_mangle)] y estado estático seguro en Mutex.
 
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::fs::OpenOptions;
 use std::os::unix::io::IntoRawFd;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{bounded, Sender};
 use jni::objects::{JClass, JString};
-use jni::sys::{jint, jobject, jstring};
+use jni::sys::{jint, jobject};
 use jni::JNIEnv;
 use log::{error, info, LevelFilter};
 
@@ -47,7 +48,6 @@ pub struct RustRecorderConfig {
 /// Mensajes de control interno canalizados con crossbeam-channel
 #[derive(Debug)]
 enum RecorderCommand {
-    Start,
     Pause,
     Resume,
     Stop,
@@ -66,7 +66,6 @@ unsafe impl Send for NdkHardwareHandles {}
 
 /// Estado y ejecución del motor Rust 2024
 pub struct RustRecorderEngine {
-    config: RustRecorderConfig,
     is_recording: Arc<AtomicBool>,
     is_paused: Arc<AtomicBool>,
     frames_encoded: Arc<AtomicU64>,
@@ -118,19 +117,19 @@ impl RustRecorderEngine {
                 format,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
-                ndk_sys::AMEDIACODEC_CONFIGURE_FLAG_ENCODE,
+                ndk_sys::AMEDIACODEC_CONFIGURE_FLAG_ENCODE as u32,
             );
             ndk_sys::AMediaFormat_delete(format);
 
-            if status != 0 {
+            if status != ndk_sys::media_status_t(0) {
                 ndk_sys::AMediaCodec_delete(codec);
-                return Err(format!("Fallo al configurar AMediaCodec en Rust (status: {})", status));
+                return Err(format!("Fallo al configurar AMediaCodec en Rust (status: {:?})", status));
             }
 
             // 3. Crear Input Surface de hardware (ANativeWindow)
             let mut native_window: *mut ndk_sys::ANativeWindow = std::ptr::null_mut();
             let surface_status = ndk_sys::AMediaCodec_createInputSurface(codec, &mut native_window);
-            if surface_status != 0 || native_window.is_null() {
+            if surface_status != ndk_sys::media_status_t(0) || native_window.is_null() {
                 ndk_sys::AMediaCodec_delete(codec);
                 return Err("Fallo al crear la ANativeWindow Surface de hardware en Rust".into());
             }
@@ -145,7 +144,7 @@ impl RustRecorderEngine {
                 .map_err(|e| format!("No se pudo crear archivo MP4 {}: {}", config.output_path, e))?;
 
             let raw_fd = file.into_raw_fd();
-            let muxer = ndk_sys::AMediaMuxer_new(raw_fd, ndk_sys::AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
+            let muxer = ndk_sys::AMediaMuxer_new(raw_fd, ndk_sys::OutputFormat_AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
 
             if muxer.is_null() {
                 libc::close(raw_fd);
@@ -168,7 +167,6 @@ impl RustRecorderEngine {
             let (cmd_tx, _cmd_rx) = bounded::<RecorderCommand>(16);
 
             let engine = Self {
-                config,
                 is_recording: Arc::new(AtomicBool::new(false)),
                 is_paused: Arc::new(AtomicBool::new(false)),
                 frames_encoded: Arc::new(AtomicU64::new(0)),
@@ -200,8 +198,8 @@ impl RustRecorderEngine {
 
         unsafe {
             let start_status = ndk_sys::AMediaCodec_start(hardware.codec);
-            if start_status != 0 {
-                return Err(format!("AMediaCodec_start falló con código: {}", start_status));
+            if start_status != ndk_sys::media_status_t(0) {
+                return Err(format!("AMediaCodec_start falló con código: {:?}", start_status));
             }
         }
 
@@ -233,7 +231,6 @@ impl RustRecorderEngine {
                             RecorderCommand::Pause => is_paused.store(true, Ordering::Relaxed),
                             RecorderCommand::Resume => is_paused.store(false, Ordering::Relaxed),
                             RecorderCommand::Stop => break,
-                            _ => {}
                         }
                     }
 
@@ -339,14 +336,15 @@ impl RustRecorderEngine {
     }
 }
 
-// Instancia global del motor Rust gestionada de forma segura
-static mut GLOBAL_RUST_ENGINE: Option<RustRecorderEngine> = None;
+// Instancia global del motor Rust gestionada de forma thread-safe con Mutex
+static GLOBAL_RUST_ENGINE: Mutex<Option<RustRecorderEngine>> = Mutex::new(None);
 
 // =========================================================================
 // FIRMAS JNI PARA COMUNICACIÓN CON KOTLIN (ScreenRecordService)
+// Cumpliendo con Rust Edition 2024 (RFC 3325: unsafe(no_mangle))
 // =========================================================================
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeInitRustRecorder<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -392,7 +390,9 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
 
     match RustRecorderEngine::new_and_init(&mut env, config) {
         Ok((engine, surface_obj)) => {
-            GLOBAL_RUST_ENGINE = Some(engine);
+            if let Ok(mut lock) = GLOBAL_RUST_ENGINE.lock() {
+                *lock = Some(engine);
+            }
             surface_obj
         }
         Err(err_msg) => {
@@ -403,45 +403,52 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeStartRustEncoding(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
-    if let Some(ref mut engine) = GLOBAL_RUST_ENGINE {
-        if let Err(e) = engine.start() {
-            error!("Error al iniciar motor Rust: {}", e);
+    if let Ok(mut lock) = GLOBAL_RUST_ENGINE.lock() {
+        if let Some(ref mut engine) = *lock {
+            if let Err(e) = engine.start() {
+                error!("Error al iniciar motor Rust: {}", e);
+            }
         }
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativePauseRustEncoding(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
-    if let Some(ref engine) = GLOBAL_RUST_ENGINE {
-        engine.pause();
+    if let Ok(lock) = GLOBAL_RUST_ENGINE.lock() {
+        if let Some(ref engine) = *lock {
+            engine.pause();
+        }
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeResumeRustEncoding(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
-    if let Some(ref engine) = GLOBAL_RUST_ENGINE {
-        engine.resume();
+    if let Ok(lock) = GLOBAL_RUST_ENGINE.lock() {
+        if let Some(ref engine) = *lock {
+            engine.resume();
+        }
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeStopRustEncoding(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
-    if let Some(ref mut engine) = GLOBAL_RUST_ENGINE {
-        engine.stop();
+    if let Ok(mut lock) = GLOBAL_RUST_ENGINE.lock() {
+        if let Some(ref mut engine) = lock.take() {
+            engine.stop();
+        }
     }
-    GLOBAL_RUST_ENGINE = None;
 }
