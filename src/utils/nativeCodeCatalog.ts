@@ -450,13 +450,25 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 🤖 Configurar Android SDK y NDK
-        uses: android-actions/setup-android@v3
-
-      - name: 📦 Instalar componentes SDK y NDK r26c
+      # 4. Configurar Android SDK y NDK
+      - name: 🤖 Configurar variables de Android SDK y NDK
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
+          SDK_DIR="/usr/local/lib/android/sdk"
+          if [ ! -d "$SDK_DIR" ]; then SDK_DIR="$ANDROID_HOME"; fi
+          echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> $GITHUB_ENV
+          NDK_PATH=$(find $SDK_DIR/ndk -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$NDK_PATH" ]; then
+            yes | $SDK_DIR/cmdline-tools/latest/bin/sdkmanager --licenses || true
+            $SDK_DIR/cmdline-tools/latest/bin/sdkmanager "ndk;26.3.11579264" "cmake;3.22.1"
+            NDK_PATH="$SDK_DIR/ndk/26.3.11579264"
+          fi
+          echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+
+      - name: 📦 Aceptar licencias de Android SDK
+        run: |
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: 🦀 Instalar Rust Toolchain y Targets Móviles
         uses: dtolnay/rust-toolchain@stable
@@ -489,8 +501,6 @@ jobs:
 
       - name: 🚀 Compilar APK Debug con Gradle
         run: |
-          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125
-          export NDK_HOME=$ANDROID_NDK_HOME
           cd android
           ./gradlew assembleDebug --stacktrace
 
