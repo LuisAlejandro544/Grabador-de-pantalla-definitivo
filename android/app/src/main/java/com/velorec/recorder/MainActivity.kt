@@ -20,8 +20,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import com.velorec.recorder.data.model.NativeRecordingConfig
 import com.velorec.recorder.ui.MainViewModel
 import com.velorec.recorder.ui.VeloRecMainScreen
+import com.velorec.recorder.ui.theme.DarkBackground
+import com.velorec.recorder.ui.theme.DarkSurface
+import com.velorec.recorder.ui.theme.PrimaryIndigo
 
 /**
  * MainActivity.kt

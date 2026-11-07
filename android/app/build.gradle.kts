@@ -189,14 +189,14 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.activity:activity-ktx:1.9.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
 
     // Arquitectura de Pantallas, Navegación Táctil Móvil y Ciclo de Vida (Apache-2.0)
-    // Permite desacoplar las pantallas en módulos independientes con su propio Backstack
-    implementation("androidx.navigation:navigation-compose:2.8.3")
+    // Compatible al 100% con Kotlin 1.9.24 y Compose Extension 1.5.14 (evita conflicto de metadatos 2.0.0)
+    implementation("androidx.navigation:navigation-compose:2.7.7")
     // Mantiene el estado de la grabación y telemetría ante rotaciones del dispositivo sin reiniciar
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
     // Reproducción de video de alto rendimiento acelerada por hardware (Apache-2.0)
     // Motor oficial para reproducir MP4/MKV en H.264, HEVC y AV1 en la galería con control de velocidad
