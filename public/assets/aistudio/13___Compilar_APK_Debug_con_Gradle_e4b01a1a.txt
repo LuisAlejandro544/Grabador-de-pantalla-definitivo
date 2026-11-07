@@ -1,0 +1,520 @@
+﻿2026-11-07T13:26:04.1955657Z ##[group]Run cd android
+2026-11-07T13:26:04.1955883Z [36;1mcd android[0m
+2026-11-07T13:26:04.1956089Z [36;1m./gradlew assembleDebug --stacktrace[0m
+2026-11-07T13:26:04.2000461Z shell: /usr/bin/bash -e {0}
+2026-11-07T13:26:04.2000678Z env:
+2026-11-07T13:26:04.2000920Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-07T13:26:04.2001316Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-07T13:26:04.2001649Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-11-07T13:26:04.2001915Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-11-07T13:26:04.2002200Z   ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/30.0.16248370
+2026-11-07T13:26:04.2002503Z   NDK_HOME: /usr/local/lib/android/sdk/ndk/30.0.16248370
+2026-11-07T13:26:04.2002748Z   CARGO_HOME: /home/runner/.cargo
+2026-11-07T13:26:04.2002959Z   CARGO_INCREMENTAL: 0
+2026-11-07T13:26:04.2003136Z   CARGO_TERM_COLOR: always
+2026-11-07T13:26:04.2003512Z ##[endgroup]
+2026-11-07T13:26:04.9037059Z 
+2026-11-07T13:26:04.9038362Z Welcome to Gradle 9.8.2!
+2026-11-07T13:26:04.9038697Z 
+2026-11-07T13:26:04.9039926Z Here are the highlights of this release:
+2026-11-07T13:26:04.9040533Z  - Java 27 support
+2026-11-07T13:26:04.9041365Z  - Maven mirror settings reuse
+2026-11-07T13:26:04.9043411Z  - Linked problem locations in build output
+2026-11-07T13:26:04.9043743Z 
+2026-11-07T13:26:04.9044472Z For more details see https://docs.gradle.org/9.8.2/release-notes.html
+2026-11-07T13:26:04.9044921Z 
+2026-11-07T13:26:05.3006857Z Starting a Gradle Daemon (subsequent builds will be faster)
+2026-11-07T13:27:05.6043977Z 
+2026-11-07T13:27:05.6050616Z > Configure project :app
+2026-11-07T13:27:05.6051825Z Checking the license for package NDK (Side by side) 26.1.10909125 in /usr/local/lib/android/sdk/licenses
+2026-11-07T13:27:05.6052827Z License for package NDK (Side by side) 26.1.10909125 accepted.
+2026-11-07T13:27:05.6053858Z Preparing "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125".
+2026-11-07T13:27:25.4006381Z "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" ready.
+2026-11-07T13:27:25.4006985Z Installing NDK (Side by side) 26.1.10909125 in /usr/local/lib/android/sdk/ndk/26.1.10909125
+2026-11-07T13:27:25.4007450Z "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" complete.
+2026-11-07T13:27:25.7006396Z "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" finished.
+2026-11-07T13:27:26.6016719Z WARNING: We recommend using a newer Android Gradle plugin to use compileSdk = 35
+2026-11-07T13:27:26.6024014Z 
+2026-11-07T13:27:26.6034513Z This Android Gradle plugin (8.5.0) was tested up to compileSdk = 34.
+2026-11-07T13:27:26.6035068Z 
+2026-11-07T13:27:26.6035546Z You are strongly encouraged to update your project to use a newer
+2026-11-07T13:27:26.6036338Z Android Gradle plugin that has been tested with compileSdk = 35.
+2026-11-07T13:27:26.6036828Z 
+2026-11-07T13:27:26.6037295Z If you are already using the latest version of the Android Gradle plugin,
+2026-11-07T13:27:26.6038255Z you may need to wait until a newer version with support for compileSdk = 35 is available.
+2026-11-07T13:27:26.6038841Z 
+2026-11-07T13:27:26.6048322Z For more information refer to the compatibility table:
+2026-11-07T13:27:26.6049085Z https://d.android.com/r/tools/api-level-support
+2026-11-07T13:27:26.6049514Z 
+2026-11-07T13:27:26.6049832Z To suppress this warning, add/update
+2026-11-07T13:27:26.6050395Z     android.suppressUnsupportedCompileSdk=35
+2026-11-07T13:27:26.6050985Z to this project's gradle.properties.
+2026-11-07T13:27:27.0005775Z 
+2026-11-07T13:27:27.0006944Z > Task :app:cargoNdkBuild
+2026-11-07T13:27:27.0008608Z ✅ Rust 2024 (.so precompilada encontrada para arm64-v8a: 425376 bytes)
+2026-11-07T13:27:27.0010393Z ✅ Rust 2024 (.so precompilada encontrada para armeabi-v7a: 291344 bytes)
+2026-11-07T13:27:27.0011180Z ✅ Rust 2024 (.so precompilada encontrada para x86_64: 453648 bytes)
+2026-11-07T13:27:27.0024351Z ✅ Tarea de Rust 2024 finalizada.
+2026-11-07T13:27:27.0024738Z 
+2026-11-07T13:27:27.0025015Z > Task :app:preBuild
+2026-11-07T13:27:27.0025804Z > Task :app:preDebugBuild
+2026-11-07T13:27:27.0026422Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-11-07T13:27:27.0027197Z > Task :app:checkKotlinGradlePluginConfigurationErrors
+2026-11-07T13:27:49.1054584Z > Task :app:generateDebugResValues
+2026-11-07T13:27:49.1084099Z > Task :app:checkDebugAarMetadata
+2026-11-07T13:27:49.3024528Z > Task :app:mapDebugSourceSetPaths
+2026-11-07T13:27:49.3044088Z > Task :app:generateDebugResources
+2026-11-07T13:27:50.4024843Z > Task :app:packageDebugResources
+2026-11-07T13:27:50.9023690Z > Task :app:createDebugCompatibleScreenManifests
+2026-11-07T13:27:50.9044294Z > Task :app:extractDeepLinksDebug
+2026-11-07T13:27:51.1005779Z > Task :app:parseDebugLocalResources
+2026-11-07T13:27:51.2006832Z > Task :app:mergeDebugResources
+2026-11-07T13:27:51.4024476Z > Task :app:processDebugMainManifest
+2026-11-07T13:27:51.5034557Z > Task :app:processDebugManifest
+2026-11-07T13:27:51.5074537Z > Task :app:javaPreCompileDebug
+2026-11-07T13:27:51.5103898Z > Task :app:mergeDebugShaders
+2026-11-07T13:27:51.5134107Z > Task :app:compileDebugShaders NO-SOURCE
+2026-11-07T13:27:51.5134977Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-11-07T13:27:51.6034652Z > Task :app:mergeDebugAssets
+2026-11-07T13:27:51.6085771Z > Task :app:compressDebugAssets
+2026-11-07T13:27:51.6086281Z > Task :app:desugarDebugFileDependencies
+2026-11-07T13:27:53.0006065Z > Task :app:processDebugManifestForPackage
+2026-11-07T13:27:53.0008266Z > Task :app:checkDebugDuplicateClasses
+2026-11-07T13:27:54.3018703Z > Task :app:mergeDebugStartupProfile
+2026-11-07T13:27:55.0012241Z > Task :app:processDebugResources
+2026-11-07T13:28:24.3014917Z > Task :app:mergeExtDexDebug
+2026-11-07T13:29:11.7014545Z > Task :app:mergeLibDexDebug
+2026-11-07T13:29:13.6006830Z 
+2026-11-07T13:29:13.6054278Z > Task :app:configureCMakeDebug[arm64-v8a]
+2026-11-07T13:29:13.6055506Z Checking the license for package CMake 3.22.1 in /usr/local/lib/android/sdk/licenses
+2026-11-07T13:29:13.6083054Z License for package CMake 3.22.1 accepted.
+2026-11-07T13:29:13.6111371Z Preparing "Install CMake 3.22.1 v.3.22.1".
+2026-11-07T13:29:14.1064596Z "Install CMake 3.22.1 v.3.22.1" ready.
+2026-11-07T13:29:14.1124481Z Installing CMake 3.22.1 in /usr/local/lib/android/sdk/cmake/3.22.1
+2026-11-07T13:29:14.1164121Z "Install CMake 3.22.1 v.3.22.1" complete.
+2026-11-07T13:29:14.1264475Z "Install CMake 3.22.1 v.3.22.1" finished.
+2026-11-07T13:29:16.9019872Z 
+2026-11-07T13:29:16.9055495Z > Task :app:buildCMakeDebug[arm64-v8a] FAILED
+2026-11-07T13:29:16.9085101Z C/C++: ninja: Entering directory `/home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/.cxx/Debug/10571si3/arm64-v8a'
+2026-11-07T13:29:16.9093528Z C/C++: /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dvelorec_cpp23_EXPORTS -I/home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp -isystem /home/runner/.gradle/caches/9.8.2/transforms/6e463de650bd2610afceb945431568fc/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++23 -O3 -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -O3 -fvisibility=hidden -ffunction-sections -fdata-sections -std=c++2b -MD -MT CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o -MF CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o.d -o CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o -c /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp
+2026-11-07T13:29:16.9124953Z C/C++: In file included from /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:15:
+2026-11-07T13:29:16.9154999Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.hpp:75:34: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:16.9184111Z C/C++:     void encodingWorkerLoop(std::stop_token stopToken);
+2026-11-07T13:29:16.9214167Z C/C++:                             ~~~~~^
+2026-11-07T13:29:16.9215957Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.hpp:90:10: error: no type named 'jthread' in namespace 'std'; did you mean 'thread'?
+2026-11-07T13:29:16.9230035Z C/C++:     std::jthread m_workerThread;
+2026-11-07T13:29:16.9230712Z C/C++:     ~~~~~^~~~~~~
+2026-11-07T13:29:16.9231147Z C/C++:          thread
+2026-11-07T13:29:16.9232307Z C/C++: /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1/thread:222:24: note: 'thread' declared here
+2026-11-07T13:29:16.9233483Z C/C++: class _LIBCPP_TYPE_VIS thread
+2026-11-07T13:29:16.9234014Z C/C++:                        ^
+2026-11-07T13:29:16.9235451Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:56:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:16.9237096Z C/C++:         return std::unexpected(std::format("No se pudo crear AMediaCodec para el codec {}", m_config.codecMime));
+2026-11-07T13:29:16.9237945Z C/C++:                                ~~~~~^
+2026-11-07T13:29:16.9239377Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:68:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:16.9240962Z C/C++:         return std::unexpected(std::format("Error al configurar AMediaCodec: {}", static_cast<int>(status)));
+2026-11-07T13:29:16.9241781Z C/C++:                                ~~~~~^
+2026-11-07T13:29:16.9243338Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:80:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:16.9244919Z C/C++:         return std::unexpected(std::format("No se pudo abrir el archivo de salida: {}", m_config.outputPath));
+2026-11-07T13:29:16.9245716Z C/C++:                                ~~~~~^
+2026-11-07T13:29:16.9247090Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:105:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:16.9248659Z C/C++:         return std::unexpected(std::format("Fallo al iniciar AMediaCodec: {}", static_cast<int>(status)));
+2026-11-07T13:29:16.9261039Z C/C++:                                ~~~~~^
+2026-11-07T13:29:16.9262681Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:47: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:16.9264221Z C/C++:     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:16.9264950Z C/C++:                                          ~~~~~^
+2026-11-07T13:29:16.9266378Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:58: warning: unused parameter 'st' [-Wunused-parameter]
+2026-11-07T13:29:16.9267700Z C/C++:     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:16.9268725Z C/C++:                                                          ^
+2026-11-07T13:29:16.9270287Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:27: error: no member named 'jthread' in namespace 'std'
+2026-11-07T13:29:16.9271808Z C/C++:     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:16.9272645Z C/C++:                      ~~~~~^
+2026-11-07T13:29:16.9274281Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:58: warning: unused parameter 'st' [-Wunused-parameter]
+2026-11-07T13:29:16.9275751Z C/C++:     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:16.9276480Z C/C++:                                                          ^
+2026-11-07T13:29:16.9277977Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:135:24: error: no member named 'request_stop' in 'std::thread'
+2026-11-07T13:29:16.9279351Z C/C++:         m_workerThread.request_stop();
+2026-11-07T13:29:16.9279945Z C/C++:         ~~~~~~~~~~~~~~ ^
+2026-11-07T13:29:16.9281478Z C/C++: /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:174:52: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:16.9283145Z C/C++: void NativeRecorderEngine::encodingWorkerLoop(std::stop_token stopToken) {
+2026-11-07T13:29:16.9284109Z C/C++:                                               ~~~~~^
+2026-11-07T13:29:16.9284736Z C/C++: 2 warnings and 10 errors generated.
+2026-11-07T13:29:23.7008231Z 
+2026-11-07T13:29:23.7034095Z > Task :app:compileDebugKotlin
+2026-11-07T13:29:23.7055540Z w: file:///home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/java/com/velorec/recorder/MainActivity.kt:34:42 Parameter 'engine' is never used, could be renamed to _
+2026-11-07T13:29:23.7062512Z 
+2026-11-07T13:29:23.7065121Z w: file:///home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/java/com/velorec/recorder/ScreenRecorderModule.kt:198:15 'onCatalystInstanceDestroy(): Unit' is deprecated. Deprecated in Java
+2026-11-07T13:29:23.7067842Z w: file:///home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/java/com/velorec/recorder/VeloRecComposeUI.kt:447:28 Parameter 'selectedEngine' is never used
+2026-11-07T13:29:23.7068956Z 
+2026-11-07T13:29:23.7070101Z [Incubating] Problems report is available at: file:///home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/build/reports/problems/problems-report.html
+2026-11-07T13:29:23.7072709Z FAILURE: Build failed with an exception.
+2026-11-07T13:29:23.7073069Z 
+2026-11-07T13:29:23.7073428Z * What went wrong:
+2026-11-07T13:29:23.7074363Z Execution failed for task ':app:buildCMakeDebug[arm64-v8a]' (registered by plugin 'com.android.internal.application').
+2026-11-07T13:29:23.7076280Z > com.android.ide.common.process.ProcessException: ninja: Entering directory `/home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/.cxx/Debug/10571si3/arm64-v8a'
+2026-11-07T13:29:23.7077788Z   [1/2] Building CXX object CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o
+2026-11-07T13:29:23.7078601Z   FAILED: CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o 
+2026-11-07T13:29:23.7085454Z   /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dvelorec_cpp23_EXPORTS -I/home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp -isystem /home/runner/.gradle/caches/9.8.2/transforms/6e463de650bd2610afceb945431568fc/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++23 -O3 -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -O3 -fvisibility=hidden -ffunction-sections -fdata-sections -std=c++2b -MD -MT CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o -MF CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o.d -o CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o -c /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp
+2026-11-07T13:29:23.7092733Z   In file included from /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:15:
+2026-11-07T13:29:23.7094831Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.hpp:75:34: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7096196Z       void encodingWorkerLoop(std::stop_token stopToken);
+2026-11-07T13:29:23.7096747Z                               ~~~~~^
+2026-11-07T13:29:23.7101216Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.hpp:90:10: error: no type named 'jthread' in namespace 'std'; did you mean 'thread'?
+2026-11-07T13:29:23.7133818Z       std::jthread m_workerThread;
+2026-11-07T13:29:23.7134193Z       ~~~~~^~~~~~~
+2026-11-07T13:29:23.7134468Z            thread
+2026-11-07T13:29:23.7135380Z   /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1/thread:222:24: note: 'thread' declared here
+2026-11-07T13:29:23.7136263Z   class _LIBCPP_TYPE_VIS thread
+2026-11-07T13:29:23.7136603Z                          ^
+2026-11-07T13:29:23.7137804Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:56:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7139312Z           return std::unexpected(std::format("No se pudo crear AMediaCodec para el codec {}", m_config.codecMime));
+2026-11-07T13:29:23.7139985Z                                  ~~~~~^
+2026-11-07T13:29:23.7141164Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:68:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7142534Z           return std::unexpected(std::format("Error al configurar AMediaCodec: {}", static_cast<int>(status)));
+2026-11-07T13:29:23.7143200Z                                  ~~~~~^
+2026-11-07T13:29:23.7144594Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:80:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7146051Z           return std::unexpected(std::format("No se pudo abrir el archivo de salida: {}", m_config.outputPath));
+2026-11-07T13:29:23.7146667Z                                  ~~~~~^
+2026-11-07T13:29:23.7147884Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:105:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7149271Z           return std::unexpected(std::format("Fallo al iniciar AMediaCodec: {}", static_cast<int>(status)));
+2026-11-07T13:29:23.7149893Z                                  ~~~~~^
+2026-11-07T13:29:23.7151053Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:47: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7163885Z       m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7164558Z                                            ~~~~~^
+2026-11-07T13:29:23.7194590Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:58: warning: unused parameter 'st' [-Wunused-parameter]
+2026-11-07T13:29:23.7195526Z 
+2026-11-07T13:29:23.7210009Z Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+2026-11-07T13:29:23.7216578Z       m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7224145Z                                                            ^
+2026-11-07T13:29:23.7225621Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:27: error: no member named 'jthread' in namespace 'std'
+2026-11-07T13:29:23.7227102Z       m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7227674Z                        ~~~~~^
+2026-11-07T13:29:23.7229000Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:58: warning: unused parameter 'st' [-Wunused-parameter]
+2026-11-07T13:29:23.7230387Z       m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7231029Z                                                            ^
+2026-11-07T13:29:23.7232452Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:135:24: error: no member named 'request_stop' in 'std::thread'
+2026-11-07T13:29:23.7233966Z           m_workerThread.request_stop();
+2026-11-07T13:29:23.7234230Z 
+2026-11-07T13:29:23.7235044Z You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+2026-11-07T13:29:23.7235800Z 
+2026-11-07T13:29:23.7236142Z           ~~~~~~~~~~~~~~ ^
+2026-11-07T13:29:23.7237202Z For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+2026-11-07T13:29:23.7239187Z   /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:174:52: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7240346Z 27 actionable tasks: 27 executed
+2026-11-07T13:29:23.7241113Z   void NativeRecorderEngine::encodingWorkerLoop(std::stop_token stopToken) {
+2026-11-07T13:29:23.7241800Z                                                 ~~~~~^
+2026-11-07T13:29:23.7242357Z   2 warnings and 10 errors generated.
+2026-11-07T13:29:23.7242910Z   ninja: build stopped: subcommand failed.
+2026-11-07T13:29:23.7243547Z   
+2026-11-07T13:29:23.7244008Z   C++ build system [build] failed while executing:
+2026-11-07T13:29:23.7244634Z       /usr/local/lib/android/sdk/cmake/3.22.1/bin/ninja \
+2026-11-07T13:29:23.7245164Z         -C \
+2026-11-07T13:29:23.7246108Z         /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/.cxx/Debug/10571si3/arm64-v8a \
+2026-11-07T13:29:23.7247068Z         velorec_cpp23
+2026-11-07T13:29:23.7247873Z     from /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app
+2026-11-07T13:29:23.7248562Z 
+2026-11-07T13:29:23.7248791Z * Try:
+2026-11-07T13:29:23.7249356Z > Run with --info or --debug option to get more log output.
+2026-11-07T13:29:23.7250224Z > Run with --scan to get full insights from a Build Scan (powered by Develocity).
+2026-11-07T13:29:23.7250996Z > Get more help at https://help.gradle.org.
+2026-11-07T13:29:23.7251414Z 
+2026-11-07T13:29:23.7251647Z * Exception is:
+2026-11-07T13:29:23.7252916Z org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:buildCMakeDebug[arm64-v8a]' (registered by plugin 'com.android.internal.application').
+2026-11-07T13:29:23.7254691Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.lambda$doExecute$1(DefaultTaskNodeExecutor.java:367)
+2026-11-07T13:29:23.7256078Z 	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:288)
+2026-11-07T13:29:23.7257198Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.doExecute(DefaultTaskNodeExecutor.java:365)
+2026-11-07T13:29:23.7258725Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeTrackingTaskIdentity(DefaultTaskNodeExecutor.java:332)
+2026-11-07T13:29:23.7260520Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeFinalizingProperties(DefaultTaskNodeExecutor.java:318)
+2026-11-07T13:29:23.7262143Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeSkippingWithNoActions(DefaultTaskNodeExecutor.java:289)
+2026-11-07T13:29:23.7263649Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeSkippingOnlyIf(DefaultTaskNodeExecutor.java:272)
+2026-11-07T13:29:23.7264996Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeCatchingFailures(DefaultTaskNodeExecutor.java:228)
+2026-11-07T13:29:23.7266422Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeWithFallbackOperationId(DefaultTaskNodeExecutor.java:197)
+2026-11-07T13:29:23.7267793Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeWithLifecycle(DefaultTaskNodeExecutor.java:171)
+2026-11-07T13:29:23.7268990Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.access$000(DefaultTaskNodeExecutor.java:67)
+2026-11-07T13:29:23.7270078Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor$1.run(DefaultTaskNodeExecutor.java:136)
+2026-11-07T13:29:23.7271061Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:30)
+2026-11-07T13:29:23.7271741Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:27)
+2026-11-07T13:29:23.7272397Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+2026-11-07T13:29:23.7273050Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+2026-11-07T13:29:23.7274175Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+2026-11-07T13:29:23.7274991Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+2026-11-07T13:29:23.7275639Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:48)
+2026-11-07T13:29:23.7276293Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.execute(DefaultTaskNodeExecutor.java:133)
+2026-11-07T13:29:23.7276837Z 	at org.gradle.execution.plan.LocalTaskNode.execute(LocalTaskNode.java:229)
+2026-11-07T13:29:23.7277377Z 	at org.gradle.execution.DefaultBuildWorkExecutor.lambda$executePlan$0(DefaultBuildWorkExecutor.java:153)
+2026-11-07T13:29:23.7278009Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.lambda$execute$0(DefaultPlanExecutor.java:476)
+2026-11-07T13:29:23.7278633Z 	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:85)
+2026-11-07T13:29:23.7279222Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:475)
+2026-11-07T13:29:23.7279797Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:392)
+2026-11-07T13:29:23.7280337Z 	at org.gradle.execution.plan.DefaultPlanExecutor.process(DefaultPlanExecutor.java:118)
+2026-11-07T13:29:23.7280897Z 	at org.gradle.execution.DefaultBuildWorkExecutor.executePlan(DefaultBuildWorkExecutor.java:143)
+2026-11-07T13:29:23.7281505Z 	at org.gradle.execution.DefaultBuildWorkExecutor.displayOrExecutePlan(DefaultBuildWorkExecutor.java:128)
+2026-11-07T13:29:23.7282117Z 	at org.gradle.execution.DefaultBuildWorkExecutor$1.call(DefaultBuildWorkExecutor.java:79)
+2026-11-07T13:29:23.7282641Z 	at org.gradle.execution.DefaultBuildWorkExecutor$1.call(DefaultBuildWorkExecutor.java:75)
+2026-11-07T13:29:23.7283720Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+2026-11-07T13:29:23.7284572Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+2026-11-07T13:29:23.7285323Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+2026-11-07T13:29:23.7286082Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+2026-11-07T13:29:23.7286747Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+2026-11-07T13:29:23.7287398Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+2026-11-07T13:29:23.7288048Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+2026-11-07T13:29:23.7288642Z 	at org.gradle.execution.DefaultBuildWorkExecutor.execute(DefaultBuildWorkExecutor.java:75)
+2026-11-07T13:29:23.7289299Z 	at org.gradle.internal.build.DefaultBuildLifecycleController.lambda$executeTasks$0(DefaultBuildLifecycleController.java:323)
+2026-11-07T13:29:23.7289987Z 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:324)
+2026-11-07T13:29:23.7290642Z 	at org.gradle.internal.model.StateTransitionController.lambda$tryTransition$0(StateTransitionController.java:235)
+2026-11-07T13:29:23.7291256Z 	at org.gradle.internal.work.DefaultSynchronizer.withLock(DefaultSynchronizer.java:45)
+2026-11-07T13:29:23.7291861Z 	at org.gradle.internal.model.StateTransitionController.tryTransition(StateTransitionController.java:235)
+2026-11-07T13:29:23.7292544Z 	at org.gradle.internal.build.DefaultBuildLifecycleController.executeTasks(DefaultBuildLifecycleController.java:314)
+2026-11-07T13:29:23.7293528Z 	at org.gradle.internal.build.DefaultBuildWorkGraphController$DefaultBuildWorkGraph.runWork(DefaultBuildWorkGraphController.java:207)
+2026-11-07T13:29:23.7294318Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$runAndReleaseLocks$0(DefaultWorkerLeaseService.java:296)
+2026-11-07T13:29:23.7294945Z 	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:43)
+2026-11-07T13:29:23.7295555Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.runAndReleaseLocks(DefaultWorkerLeaseService.java:294)
+2026-11-07T13:29:23.7296224Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocksAcquired(DefaultWorkerLeaseService.java:290)
+2026-11-07T13:29:23.7296848Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:282)
+2026-11-07T13:29:23.7297474Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:132)
+2026-11-07T13:29:23.7298080Z 	at org.gradle.composite.internal.DefaultBuildController.doRun(DefaultBuildController.java:182)
+2026-11-07T13:29:23.7298724Z 	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.lambda$run$0(DefaultBuildController.java:199)
+2026-11-07T13:29:23.7299356Z 	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:85)
+2026-11-07T13:29:23.7299979Z 	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.run(DefaultBuildController.java:199)
+2026-11-07T13:29:23.7300607Z 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:65)
+2026-11-07T13:29:23.7301200Z 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+2026-11-07T13:29:23.7302382Z Caused by: org.gradle.internal.UncheckedException: com.android.ide.common.process.ProcessException: ninja: Entering directory `/home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/.cxx/Debug/10571si3/arm64-v8a'
+2026-11-07T13:29:23.7303609Z [1/2] Building CXX object CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o
+2026-11-07T13:29:23.7304201Z FAILED: CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o 
+2026-11-07T13:29:23.7308231Z /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dvelorec_cpp23_EXPORTS -I/home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp -isystem /home/runner/.gradle/caches/9.8.2/transforms/6e463de650bd2610afceb945431568fc/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++23 -O3 -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -O3 -fvisibility=hidden -ffunction-sections -fdata-sections -std=c++2b -MD -MT CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o -MF CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o.d -o CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o -c /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp
+2026-11-07T13:29:23.7312023Z In file included from /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:15:
+2026-11-07T13:29:23.7313148Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.hpp:75:34: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7314037Z     void encodingWorkerLoop(std::stop_token stopToken);
+2026-11-07T13:29:23.7314312Z                             ~~~~~^
+2026-11-07T13:29:23.7315130Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.hpp:90:10: error: no type named 'jthread' in namespace 'std'; did you mean 'thread'?
+2026-11-07T13:29:23.7315824Z     std::jthread m_workerThread;
+2026-11-07T13:29:23.7316031Z     ~~~~~^~~~~~~
+2026-11-07T13:29:23.7316199Z          thread
+2026-11-07T13:29:23.7316776Z /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1/thread:222:24: note: 'thread' declared here
+2026-11-07T13:29:23.7317298Z class _LIBCPP_TYPE_VIS thread
+2026-11-07T13:29:23.7317505Z                        ^
+2026-11-07T13:29:23.7318232Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:56:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7319065Z         return std::unexpected(std::format("No se pudo crear AMediaCodec para el codec {}", m_config.codecMime));
+2026-11-07T13:29:23.7319458Z                                ~~~~~^
+2026-11-07T13:29:23.7320201Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:68:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7321034Z         return std::unexpected(std::format("Error al configurar AMediaCodec: {}", static_cast<int>(status)));
+2026-11-07T13:29:23.7321404Z                                ~~~~~^
+2026-11-07T13:29:23.7322134Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:80:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7322944Z         return std::unexpected(std::format("No se pudo abrir el archivo de salida: {}", m_config.outputPath));
+2026-11-07T13:29:23.7323476Z                                ~~~~~^
+2026-11-07T13:29:23.7324225Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:105:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7326996Z         return std::unexpected(std::format("Fallo al iniciar AMediaCodec: {}", static_cast<int>(status)));
+2026-11-07T13:29:23.7327859Z                                ~~~~~^
+2026-11-07T13:29:23.7329721Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:47: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7331009Z     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7331664Z                                          ~~~~~^
+2026-11-07T13:29:23.7333066Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:58: warning: unused parameter 'st' [-Wunused-parameter]
+2026-11-07T13:29:23.7334488Z     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7335000Z                                                          ^
+2026-11-07T13:29:23.7336397Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:27: error: no member named 'jthread' in namespace 'std'
+2026-11-07T13:29:23.7337663Z     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7338104Z                      ~~~~~^
+2026-11-07T13:29:23.7339417Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:58: warning: unused parameter 'st' [-Wunused-parameter]
+2026-11-07T13:29:23.7340678Z     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7341182Z                                                          ^
+2026-11-07T13:29:23.7342634Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:135:24: error: no member named 'request_stop' in 'std::thread'
+2026-11-07T13:29:23.7343926Z         m_workerThread.request_stop();
+2026-11-07T13:29:23.7344292Z         ~~~~~~~~~~~~~~ ^
+2026-11-07T13:29:23.7345619Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:174:52: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7347051Z void NativeRecorderEngine::encodingWorkerLoop(std::stop_token stopToken) {
+2026-11-07T13:29:23.7347666Z                                               ~~~~~^
+2026-11-07T13:29:23.7348106Z 2 warnings and 10 errors generated.
+2026-11-07T13:29:23.7348557Z ninja: build stopped: subcommand failed.
+2026-11-07T13:29:23.7348818Z 
+2026-11-07T13:29:23.7349052Z C++ build system [build] failed while executing:
+2026-11-07T13:29:23.7349550Z     /usr/local/lib/android/sdk/cmake/3.22.1/bin/ninja \
+2026-11-07T13:29:23.7349964Z       -C \
+2026-11-07T13:29:23.7350777Z       /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/.cxx/Debug/10571si3/arm64-v8a \
+2026-11-07T13:29:23.7351524Z       velorec_cpp23
+2026-11-07T13:29:23.7352189Z   from /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app
+2026-11-07T13:29:23.7359407Z 	at org.gradle.internal.UncheckedException.throwAsUncheckedException(UncheckedException.java:69)
+2026-11-07T13:29:23.7360618Z 	at org.gradle.internal.UncheckedException.throwAsUncheckedException(UncheckedException.java:42)
+2026-11-07T13:29:23.7361525Z 	at org.gradle.internal.reflect.JavaMethod.invoke(JavaMethod.java:129)
+2026-11-07T13:29:23.7362497Z 	at org.gradle.api.internal.project.taskfactory.StandardTaskAction.doExecute(StandardTaskAction.java:58)
+2026-11-07T13:29:23.7363797Z 	at org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(StandardTaskAction.java:51)
+2026-11-07T13:29:23.7364936Z 	at org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(StandardTaskAction.java:29)
+2026-11-07T13:29:23.7365914Z 	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:268)
+2026-11-07T13:29:23.7366965Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:30)
+2026-11-07T13:29:23.7368361Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:27)
+2026-11-07T13:29:23.7369562Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+2026-11-07T13:29:23.7370733Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+2026-11-07T13:29:23.7372060Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+2026-11-07T13:29:23.7373376Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+2026-11-07T13:29:23.7374612Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:48)
+2026-11-07T13:29:23.7375705Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:253)
+2026-11-07T13:29:23.7376714Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:236)
+2026-11-07T13:29:23.7377865Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:219)
+2026-11-07T13:29:23.7378965Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:185)
+2026-11-07T13:29:23.7379896Z 	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:167)
+2026-11-07T13:29:23.7380806Z 	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:47)
+2026-11-07T13:29:23.7381650Z 	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:137)
+2026-11-07T13:29:23.7382449Z 	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:134)
+2026-11-07T13:29:23.7383785Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+2026-11-07T13:29:23.7385259Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+2026-11-07T13:29:23.7386615Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+2026-11-07T13:29:23.7387800Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+2026-11-07T13:29:23.7388991Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+2026-11-07T13:29:23.7390134Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+2026-11-07T13:29:23.7391174Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+2026-11-07T13:29:23.7392100Z 	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:134)
+2026-11-07T13:29:23.7392904Z 	at org.gradle.internal.execution.steps.ExecuteStep$Mutable.execute(ExecuteStep.java:80)
+2026-11-07T13:29:23.7393993Z 	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:42)
+2026-11-07T13:29:23.7394986Z 	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:75)
+2026-11-07T13:29:23.7395889Z 	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+2026-11-07T13:29:23.7396919Z 	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:51)
+2026-11-07T13:29:23.7398113Z 	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:29)
+2026-11-07T13:29:23.7399301Z 	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:67)
+2026-11-07T13:29:23.7400560Z 	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:39)
+2026-11-07T13:29:23.7401918Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+2026-11-07T13:29:23.7402996Z 	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:42)
+2026-11-07T13:29:23.7404444Z 	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:24)
+2026-11-07T13:29:23.7405757Z 	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:69)
+2026-11-07T13:29:23.7407336Z 	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:46)
+2026-11-07T13:29:23.7408648Z 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:39)
+2026-11-07T13:29:23.7409877Z 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:28)
+2026-11-07T13:29:23.7410911Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+2026-11-07T13:29:23.7411896Z 	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:189)
+2026-11-07T13:29:23.7412949Z 	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(BuildCacheStep.java:76)
+2026-11-07T13:29:23.7413900Z 	at org.gradle.internal.Either$Right.fold(Either.java:176)
+2026-11-07T13:29:23.7414629Z 	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+2026-11-07T13:29:23.7415501Z 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:74)
+2026-11-07T13:29:23.7416403Z 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:49)
+2026-11-07T13:29:23.7417462Z 	at org.gradle.internal.execution.steps.StoreExecutionStateStep.executeMutable(StoreExecutionStateStep.java:46)
+2026-11-07T13:29:23.7418705Z 	at org.gradle.internal.execution.steps.StoreExecutionStateStep.executeMutable(StoreExecutionStateStep.java:35)
+2026-11-07T13:29:23.7419739Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+2026-11-07T13:29:23.7420696Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:75)
+2026-11-07T13:29:23.7421715Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:53)
+2026-11-07T13:29:23.7422707Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:53)
+2026-11-07T13:29:23.7423840Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:35)
+2026-11-07T13:29:23.7425120Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+2026-11-07T13:29:23.7426616Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+2026-11-07T13:29:23.7428063Z 	at org.gradle.internal.execution.steps.ResolveMutableCachingStateStep.executeDelegate(ResolveMutableCachingStateStep.java:70)
+2026-11-07T13:29:23.7429854Z 	at org.gradle.internal.execution.steps.ResolveMutableCachingStateStep.executeDelegate(ResolveMutableCachingStateStep.java:32)
+2026-11-07T13:29:23.7431277Z 	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:69)
+2026-11-07T13:29:23.7432640Z 	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:37)
+2026-11-07T13:29:23.7434030Z 	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:63)
+2026-11-07T13:29:23.7435151Z 	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:34)
+2026-11-07T13:29:23.7436126Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+2026-11-07T13:29:23.7437054Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.executeDelegate(ValidateStep.java:79)
+2026-11-07T13:29:23.7438285Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.executeDelegate(ValidateStep.java:65)
+2026-11-07T13:29:23.7439240Z 	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:105)
+2026-11-07T13:29:23.7440159Z 	at org.gradle.internal.execution.steps.ValidateStep$Mutable.execute(ValidateStep.java:65)
+2026-11-07T13:29:23.7441479Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.executeMutable(CaptureMutableStateBeforeExecutionStep.java:86)
+2026-11-07T13:29:23.7443361Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:65)
+2026-11-07T13:29:23.7444893Z 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:45)
+2026-11-07T13:29:23.7446437Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeWithNonEmptySources(SkipEmptyMutableWorkStep.java:210)
+2026-11-07T13:29:23.7447837Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:85)
+2026-11-07T13:29:23.7449108Z 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:53)
+2026-11-07T13:29:23.7450161Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+2026-11-07T13:29:23.7451368Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+2026-11-07T13:29:23.7452882Z 	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:36)
+2026-11-07T13:29:23.7454464Z 	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:23)
+2026-11-07T13:29:23.7455581Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+2026-11-07T13:29:23.7456599Z 	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:77)
+2026-11-07T13:29:23.7457815Z 	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:43)
+2026-11-07T13:29:23.7458844Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+2026-11-07T13:29:23.7459990Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$executeMutable$0(AssignMutableWorkspaceStep.java:34)
+2026-11-07T13:29:23.7461186Z 	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:314)
+2026-11-07T13:29:23.7462347Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:30)
+2026-11-07T13:29:23.7463819Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:21)
+2026-11-07T13:29:23.7464891Z 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+2026-11-07T13:29:23.7465813Z 	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+2026-11-07T13:29:23.7466805Z 	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+2026-11-07T13:29:23.7468112Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+2026-11-07T13:29:23.7469627Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+2026-11-07T13:29:23.7471083Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+2026-11-07T13:29:23.7472273Z 	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+2026-11-07T13:29:23.7473347Z 	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+2026-11-07T13:29:23.7474339Z 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:56)
+2026-11-07T13:29:23.7475626Z 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:38)
+2026-11-07T13:29:23.7476634Z 	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
+2026-11-07T13:29:23.7477803Z 	at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.doExecute(DefaultTaskNodeExecutor.java:364)
+2026-11-07T13:29:23.7478526Z 	... 55 more
+2026-11-07T13:29:23.7480044Z Caused by: com.android.ide.common.process.ProcessException: ninja: Entering directory `/home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/.cxx/Debug/10571si3/arm64-v8a'
+2026-11-07T13:29:23.7481504Z [1/2] Building CXX object CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o
+2026-11-07T13:29:23.7482261Z FAILED: CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o 
+2026-11-07T13:29:23.7489784Z /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dvelorec_cpp23_EXPORTS -I/home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp -isystem /home/runner/.gradle/caches/9.8.2/transforms/6e463de650bd2610afceb945431568fc/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++23 -O3 -fno-limit-debug-info  -fPIC -Wall -Wextra -Wpedantic -O3 -fvisibility=hidden -ffunction-sections -fdata-sections -std=c++2b -MD -MT CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o -MF CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o.d -o CMakeFiles/velorec_cpp23.dir/NativeRecorderEngine.cpp.o -c /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp
+2026-11-07T13:29:23.7496520Z In file included from /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:15:
+2026-11-07T13:29:23.7498525Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.hpp:75:34: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7500026Z     void encodingWorkerLoop(std::stop_token stopToken);
+2026-11-07T13:29:23.7500464Z                             ~~~~~^
+2026-11-07T13:29:23.7501945Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.hpp:90:10: error: no type named 'jthread' in namespace 'std'; did you mean 'thread'?
+2026-11-07T13:29:23.7503188Z     std::jthread m_workerThread;
+2026-11-07T13:29:23.7503669Z     ~~~~~^~~~~~~
+2026-11-07T13:29:23.7503923Z          thread
+2026-11-07T13:29:23.7504929Z /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1/thread:222:24: note: 'thread' declared here
+2026-11-07T13:29:23.7505842Z class _LIBCPP_TYPE_VIS thread
+2026-11-07T13:29:23.7506182Z                        ^
+2026-11-07T13:29:23.7507495Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:56:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7508996Z         return std::unexpected(std::format("No se pudo crear AMediaCodec para el codec {}", m_config.codecMime));
+2026-11-07T13:29:23.7509673Z                                ~~~~~^
+2026-11-07T13:29:23.7510993Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:68:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7512458Z         return std::unexpected(std::format("Error al configurar AMediaCodec: {}", static_cast<int>(status)));
+2026-11-07T13:29:23.7513449Z                                ~~~~~^
+2026-11-07T13:29:23.7514796Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:80:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7516265Z         return std::unexpected(std::format("No se pudo abrir el archivo de salida: {}", m_config.outputPath));
+2026-11-07T13:29:23.7516916Z                                ~~~~~^
+2026-11-07T13:29:23.7518393Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:105:37: error: no member named 'format' in namespace 'std'
+2026-11-07T13:29:23.7519838Z         return std::unexpected(std::format("Fallo al iniciar AMediaCodec: {}", static_cast<int>(status)));
+2026-11-07T13:29:23.7520502Z                                ~~~~~^
+2026-11-07T13:29:23.7521865Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:47: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7523123Z     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7523738Z                                          ~~~~~^
+2026-11-07T13:29:23.7525117Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:58: warning: unused parameter 'st' [-Wunused-parameter]
+2026-11-07T13:29:23.7526406Z     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7526908Z                                                          ^
+2026-11-07T13:29:23.7528286Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:27: error: no member named 'jthread' in namespace 'std'
+2026-11-07T13:29:23.7531728Z     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7532211Z                      ~~~~~^
+2026-11-07T13:29:23.7533722Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:112:58: warning: unused parameter 'st' [-Wunused-parameter]
+2026-11-07T13:29:23.7535015Z     m_workerThread = std::jthread([this](std::stop_token st) {
+2026-11-07T13:29:23.7535525Z                                                          ^
+2026-11-07T13:29:23.7536951Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:135:24: error: no member named 'request_stop' in 'std::thread'
+2026-11-07T13:29:23.7538137Z         m_workerThread.request_stop();
+2026-11-07T13:29:23.7538492Z         ~~~~~~~~~~~~~~ ^
+2026-11-07T13:29:23.7539808Z /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/src/main/cpp/NativeRecorderEngine.cpp:174:52: error: no type named 'stop_token' in namespace 'std'
+2026-11-07T13:29:23.7541221Z void NativeRecorderEngine::encodingWorkerLoop(std::stop_token stopToken) {
+2026-11-07T13:29:23.7541820Z                                               ~~~~~^
+2026-11-07T13:29:23.7542255Z 2 warnings and 10 errors generated.
+2026-11-07T13:29:23.7542690Z ninja: build stopped: subcommand failed.
+2026-11-07T13:29:23.7542946Z 
+2026-11-07T13:29:23.7543175Z C++ build system [build] failed while executing:
+2026-11-07T13:29:23.7543798Z     /usr/local/lib/android/sdk/cmake/3.22.1/bin/ninja \
+2026-11-07T13:29:23.7544213Z       -C \
+2026-11-07T13:29:23.7545014Z       /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/.cxx/Debug/10571si3/arm64-v8a \
+2026-11-07T13:29:23.7545819Z       velorec_cpp23
+2026-11-07T13:29:23.7546474Z   from /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app
+2026-11-07T13:29:23.7547534Z 	at com.android.build.gradle.internal.cxx.process.ExecuteProcessKt.execute(ExecuteProcess.kt:288)
+2026-11-07T13:29:23.7548891Z 	at com.android.build.gradle.internal.cxx.process.ExecuteProcessKt$executeProcess$1.invoke(ExecuteProcess.kt:108)
+2026-11-07T13:29:23.7550083Z 	at com.android.build.gradle.internal.cxx.process.ExecuteProcessKt$executeProcess$1.invoke(ExecuteProcess.kt:106)
+2026-11-07T13:29:23.7551208Z 	at com.android.build.gradle.internal.cxx.timing.TimingEnvironmentKt.time(TimingEnvironment.kt:32)
+2026-11-07T13:29:23.7552297Z 	at com.android.build.gradle.internal.cxx.process.ExecuteProcessKt.executeProcess(ExecuteProcess.kt:106)
+2026-11-07T13:29:23.7553763Z 	at com.android.build.gradle.internal.cxx.process.ExecuteProcessKt.executeProcess$default(ExecuteProcess.kt:85)
+2026-11-07T13:29:23.7555007Z 	at com.android.build.gradle.internal.cxx.build.CxxRegularBuilder.executeProcessBatch(CxxRegularBuilder.kt:332)
+2026-11-07T13:29:23.7556150Z 	at com.android.build.gradle.internal.cxx.build.CxxRegularBuilder.build(CxxRegularBuilder.kt:129)
+2026-11-07T13:29:23.7557356Z 	at com.android.build.gradle.tasks.ExternalNativeBuildTask$doTaskAction$$inlined$recordTaskAction$1.invoke(BaseTask.kt:70)
+2026-11-07T13:29:23.7558402Z 	at com.android.build.gradle.internal.tasks.Blocks.recordSpan(Blocks.java:51)
+2026-11-07T13:29:23.7559375Z 	at com.android.build.gradle.tasks.ExternalNativeBuildTask.doTaskAction(ExternalNativeBuildTask.kt:145)
+2026-11-07T13:29:23.7560581Z 	at com.android.build.gradle.internal.tasks.UnsafeOutputsTask$taskAction$$inlined$recordTaskAction$1.invoke(BaseTask.kt:65)
+2026-11-07T13:29:23.7561613Z 	at com.android.build.gradle.internal.tasks.Blocks.recordSpan(Blocks.java:51)
+2026-11-07T13:29:23.7562553Z 	at com.android.build.gradle.internal.tasks.UnsafeOutputsTask.taskAction(UnsafeOutputsTask.kt:63)
+2026-11-07T13:29:23.7563495Z 	at org.gradle.internal.reflect.JavaMethod.invoke(JavaMethod.java:125)
+2026-11-07T13:29:23.7563970Z 	... 154 more
+2026-11-07T13:29:23.7565890Z Caused by: com.android.ide.common.process.ProcessException: Error while executing process /usr/local/lib/android/sdk/cmake/3.22.1/bin/ninja with arguments {-C /home/runner/work/Grabador-de-pantalla-definitivo/Grabador-de-pantalla-definitivo/android/app/.cxx/Debug/10571si3/arm64-v8a velorec_cpp23}
+2026-11-07T13:29:23.7567975Z 	at com.android.build.gradle.internal.process.GradleProcessResult.buildProcessException(GradleProcessResult.java:73)
+2026-11-07T13:29:23.7569239Z 	at com.android.build.gradle.internal.process.GradleProcessResult.assertNormalExitValue(GradleProcessResult.java:48)
+2026-11-07T13:29:23.7570328Z 	at com.android.build.gradle.internal.cxx.process.ExecuteProcessKt.execute(ExecuteProcess.kt:277)
+2026-11-07T13:29:23.7570949Z 	... 168 more
+2026-11-07T13:29:23.7571993Z Caused by: org.gradle.process.ProcessExecutionException: Process 'command '/usr/local/lib/android/sdk/cmake/3.22.1/bin/ninja'' finished with non-zero exit value 1
+2026-11-07T13:29:23.7573581Z 	at org.gradle.process.internal.DefaultExecHandle$ExecResultImpl.assertNormalExitValue(DefaultExecHandle.java:461)
+2026-11-07T13:29:23.7574845Z 	at com.android.build.gradle.internal.process.GradleProcessResult.assertNormalExitValue(GradleProcessResult.java:46)
+2026-11-07T13:29:23.7575641Z 	... 169 more
+2026-11-07T13:29:23.7575803Z 
+2026-11-07T13:29:23.7575813Z 
+2026-11-07T13:29:23.7575952Z BUILD FAILED in 3m 19s
+2026-11-07T13:29:24.1917325Z ##[error]Process completed with exit code 1.

@@ -6,7 +6,7 @@
  * 1. Configura el codificador por hardware H.264 / HEVC / AV1 en el Android NDK mediante AMediaCodec.
  * 2. Invoca AMediaCodec_createInputSurface() para generar una ANativeWindow de hardware:
  *    Esta superficie recibe directamente los frames del GPU/Display sin intermediación de Java.
- * 3. Ejecuta un hilo de trabajo con std::jthread que lee los buffers de salida (AMediaCodec_dequeueOutputBuffer)
+ * 3. Ejecuta un hilo de trabajo con std::thread que lee los buffers de salida (AMediaCodec_dequeueOutputBuffer)
  *    y los escribe en el archivo contenedor MP4 con AMediaMuxer_writeSampleData.
  * 4. Exporta las funciones JNI 'Java_com_velorec_recorder_ScreenRecordService_native*'
  *    para que Kotlin pueda controlarlo instantáneamente.
@@ -14,7 +14,6 @@
 
 #include "NativeRecorderEngine.hpp"
 #include <chrono>
-#include <format>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -53,7 +52,7 @@ std::expected<jobject, std::string> NativeRecorderEngine::initialize(JNIEnv* env
     // 2. Crear codificador por hardware según el MIME especificado
     m_codec = AMediaCodec_createEncoderByType(m_config.codecMime.c_str());
     if (!m_codec) {
-        return std::unexpected(std::format("No se pudo crear AMediaCodec para el codec {}", m_config.codecMime));
+        return std::unexpected(std::string("No se pudo crear AMediaCodec para el codec ") + m_config.codecMime);
     }
 
     media_status_t status = AMediaCodec_configure(
@@ -65,7 +64,7 @@ std::expected<jobject, std::string> NativeRecorderEngine::initialize(JNIEnv* env
     );
 
     if (status != AMEDIA_OK) {
-        return std::unexpected(std::format("Error al configurar AMediaCodec: {}", static_cast<int>(status)));
+        return std::unexpected(std::string("Error al configurar AMediaCodec: ") + std::to_string(static_cast<int>(status)));
     }
 
     // 3. Crear Input Surface de hardware
@@ -77,7 +76,7 @@ std::expected<jobject, std::string> NativeRecorderEngine::initialize(JNIEnv* env
     // 4. Crear Muxer MP4 de salida
     int fd = open(m_config.outputPath.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0644);
     if (fd < 0) {
-        return std::unexpected(std::format("No se pudo abrir el archivo de salida: {}", m_config.outputPath));
+        return std::unexpected(std::string("No se pudo abrir el archivo de salida: ") + m_config.outputPath);
     }
 
     m_muxer = AMediaMuxer_new(fd, AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
@@ -102,15 +101,16 @@ std::expected<void, std::string> NativeRecorderEngine::start() {
     
     media_status_t status = AMediaCodec_start(m_codec);
     if (status != AMEDIA_OK) {
-        return std::unexpected(std::format("Fallo al iniciar AMediaCodec: {}", static_cast<int>(status)));
+        return std::unexpected(std::string("Fallo al iniciar AMediaCodec: ") + std::to_string(static_cast<int>(status)));
     }
 
     m_isRecording.store(true);
     m_isPaused.store(false);
+    m_stopRequested.store(false);
 
-    // Iniciar hilo worker con std::jthread cooperativo de C++23
-    m_workerThread = std::jthread([this](std::stop_token st) {
-        this->encodingWorkerLoop(st);
+    // Iniciar hilo worker con std::thread compatible con NDK libc++
+    m_workerThread = std::thread([this]() {
+        this->encodingWorkerLoop();
     });
 
     LOGI("Grabación C++23 iniciada en segundo plano.");
@@ -131,8 +131,8 @@ std::expected<void, std::string> NativeRecorderEngine::stop() {
     if (!m_isRecording.load()) return {};
 
     m_isRecording.store(false);
+    m_stopRequested.store(true);
     if (m_workerThread.joinable()) {
-        m_workerThread.request_stop();
         m_workerThread.join();
     }
 
@@ -171,11 +171,11 @@ EngineStats NativeRecorderEngine::getStats() const noexcept {
     };
 }
 
-void NativeRecorderEngine::encodingWorkerLoop(std::stop_token stopToken) {
+void NativeRecorderEngine::encodingWorkerLoop() {
     AMediaCodecBufferInfo info;
     constexpr int64_t TIMEOUT_US = 10'000; // 10ms
 
-    while (!stopToken.stop_requested() && m_isRecording.load()) {
+    while (!m_stopRequested.load() && m_isRecording.load()) {
         if (m_isPaused.load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
             continue;

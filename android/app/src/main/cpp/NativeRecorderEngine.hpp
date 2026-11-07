@@ -7,8 +7,7 @@
  * Utiliza características modernas de C++23:
  * - std::expected para manejo de errores sin excepciones (zero-cost error handling).
  * - std::span para vistas contiguas de memoria sin copia.
- * - std::jthread con std::stop_token para gestión cooperativa de hilos.
- * - std::format para formateo seguro de cadenas y telemetría.
+ * - std::thread con std::atomic<bool> para gestión concurrente compatible con NDK libc++.
  * - Interfaz directa con AMediaCodec y AMediaMuxer del Android NDK.
  */
 
@@ -72,11 +71,12 @@ public:
     [[nodiscard]] EngineStats getStats() const noexcept;
 
 private:
-    void encodingWorkerLoop(std::stop_token stopToken);
+    void encodingWorkerLoop();
 
     RecorderConfig m_config;
     std::atomic<bool> m_isRecording{false};
     std::atomic<bool> m_isPaused{false};
+    std::atomic<bool> m_stopRequested{false};
 
     AMediaCodec* m_codec{nullptr};
     AMediaMuxer* m_muxer{nullptr};
@@ -87,7 +87,7 @@ private:
     ssize_t m_videoTrackIndex{-1};
     std::atomic<bool> m_isMuxerStarted{false};
 
-    std::jthread m_workerThread;
+    std::thread m_workerThread;
     std::atomic<uint64_t> m_frameCount{0};
     std::atomic<uint64_t> m_droppedCount{0};
     std::atomic<double> m_lastLatencyMs{0.0};
