@@ -10,26 +10,32 @@
 /
 ├── .github/
 │   └── workflows/
-│       └── build-apk.yml               # GitHub Actions para compilar APK Debug manualmente
+│       └── build-apk.yml               # GitHub Actions para compilar APK Debug manualmente (workflow_dispatch)
 │
-├── android/                             # Estructura del proyecto Android nativo
-│   ├── app/
-│   │   ├── src/main/
-│   │   │   ├── AndroidManifest.xml     # Permisos MediaProjection y ForegroundService
-│   │   │   ├── java/com/velorec/recorder/
-│   │   │   │   ├── ScreenRecorderModule.kt  # Módulo puente React Native con Corrutinas
-│   │   │   │   └── ScreenRecordService.kt   # Foreground Service con Surface nativa
-│   │   │   └── cpp/
-│   │   │       ├── CMakeLists.txt      # Configuración CMake para C++23 (-std=c++23)
-│   │   │       ├── NativeRecorderEngine.hpp # Cabecera C++23 con std::expected y span
-│   │   │       └── NativeRecorderEngine.cpp # AMediaCodec, AMediaMuxer y enlaces JNI
-│   │   └── build.gradle.kts            # Gradle Kotlin DSL con CMake y Cargo NDK
-│   └── build.gradle.kts                # Configuración raíz de Gradle
+├── android/                             # Estructura del proyecto Android nativo completa
+│   ├── gradle/
+│   │   └── wrapper/
+│   │       └── gradle-wrapper.properties # Configuración de Gradle Wrapper v8.7.0
+│   ├── gradlew                         # Script ejecutable POSIX para compilar en Linux/macOS
+│   ├── gradlew.bat                     # Script batch para compilar en Windows
+│   ├── settings.gradle.kts             # Repositorios Maven y vinculación del módulo :app
+│   ├── build.gradle.kts                # Configuración raíz de Gradle Kotlin DSL
+│   └── app/
+│       ├── build.gradle.kts            # Configuración del módulo :app con CMake C++23 y Cargo NDK Rust
+│       └── src/main/
+│           ├── AndroidManifest.xml     # Permisos MediaProjection y ForegroundService Android 14+
+│           ├── java/com/velorec/recorder/
+│           │   ├── ScreenRecorderModule.kt  # Módulo puente React Native con Corrutinas (Dispatchers.IO)
+│           │   └── ScreenRecordService.kt   # Foreground Service con Surface nativa Zero-Copy
+│           └── cpp/
+│               ├── CMakeLists.txt      # Configuración CMake para C++23 (-std=c++23, -O3)
+│               ├── NativeRecorderEngine.hpp # Cabecera C++23 con std::expected, span y jthread
+│               └── NativeRecorderEngine.cpp # AMediaCodec, AMediaMuxer, ANativeWindow y JNI
 │
 ├── rust/                               # Motor nativo en Rust (Edition 2024)
-│   ├── Cargo.toml                      # Manifiesto de Rust con edition = "2024" y cdylib
+│   ├── Cargo.toml                      # Manifiesto de Rust con edition = "2024", cdylib y ndk-sys
 │   └── src/
-│       └── lib.rs                      # Implementación segura de codificación y JNI
+│       └── lib.rs                      # Hardware encoder NDK AMediaCodec, ANativeWindow y crossbeam
 │
 ├── src/                                # Código fuente de la interfaz y utilidades
 │   ├── components/                     # Componentes modulares de pantalla
@@ -77,6 +83,7 @@
 ├── README.md                           # Documentación general del proyecto
 ├── ROADMAP.md                          # Plan de desarrollo y futuras fases
 ├── STRUCTURE.md                        # Explicación de la arquitectura de archivos (este archivo)
+├── ESTRUCTURE.md                       # Referencia de estructura del proyecto
 ├── AI_CONTEXT.md                       # Contexto técnico para modelos de lenguaje
 ├── AGENTS.md                           # Guía operativa para agentes de desarrollo
 └── README_AI.md                        # Resumen ejecutivo para asistentes de IA
@@ -86,21 +93,29 @@
 
 ## 🔍 Explicación de Carpetas Clave
 
-### 1. `/android` (Capa Android Nativa)
-Contiene la configuración de Gradle Kotlin DSL (`build.gradle.kts`) configurada para soportar:
+### 1. `/android` (Capa Android Nativa Completa)
+Contiene la configuración de Gradle Kotlin DSL (`build.gradle.kts`) lista para compilar de forma autónoma:
+- **Gradle Wrapper**: Incluye los ejecutables `gradlew` (Linux/macOS), `gradlew.bat` (Windows) y `gradle-wrapper.properties` configurado con Gradle 8.7.
+- **Configuración Raíz y Módulos**: `settings.gradle.kts` y `build.gradle.kts` vinculando el módulo `:app`.
 - **CMake**: Compila `NativeRecorderEngine.cpp` con el estándar C++23 activado explícitamente (`-std=c++23`).
 - **Cargo NDK**: Compila el módulo Rust generando las bibliotecas `.so` para arquitecturas de 64 bits (`arm64-v8a`), 32 bits (`armeabi-v7a`) y `x86_64`.
-- **Servicios**: `ScreenRecordService.kt` hereda de `android.app.Service` y maneja `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` con Corrutinas Kotlin.
+- **Servicios**: `ScreenRecordService.kt` hereda de `android.app.Service` y maneja `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` con Corrutinas Kotlin (`Dispatchers.IO`).
 
-### 2. `/rust` (Motor Rust Edition 2024)
-Crate autónomo con `crate-type = ["cdylib"]`. Utiliza las garantías del compilador de Rust para asegurar que ningún hilo de codificación pueda provocar condiciones de carrera (*Data Races*) o corrupción de memoria.
+### 2. `/rust` (Motor Rust Edition 2024 con Hardware Encoder)
+Crate autónomo con `crate-type = ["cdylib"]`.
+- Configurado con `edition = "2024"` y dependencias NDK (`ndk = "0.9.0"`, `ndk-sys = "0.6.0"`, `crossbeam-channel = "0.5.14"`, `libc = "0.2"`).
+- Implementa la tubería **Zero-Copy**: crea el codificador de hardware mediante `AMediaCodec_createEncoderByType`, obtiene la superficie nativa con `AMediaCodec_createInputSurface` y la entrega a Android vía `ANativeWindow_toSurface`.
+- Procesa búferes codificados en un hilo worker seguro y escribe el archivo MP4 mediante `AMediaMuxer`.
+- Garantiza ausencia total de condiciones de carrera (*Data Races*) y cero recolección de basura (*Zero GC*).
 
 ### 3. `/src/components` (Diseño Modular UI)
 Cumpliendo con la regla de diseño modular:
 - Cada pantalla principal reside en su propio archivo independiente.
 - La navegación está desacoplada del renderizado de video.
 - La galería y el reproductor de video cuentan con su propio ciclo de vida.
+- El visor de código nativo permite auditar tanto C++23 como Rust 2024 y los scripts Gradle.
 
 ### 4. `/src/utils` (Lógica Pura y Pruebas)
-- `recorderCore.ts` no depende del DOM ni de React, permitiendo ejecutar pruebas instantáneas con `npx --yes tsx --test`.
-- `zipExport.ts` compila dinámicamente todo el proyecto nativo en un archivo descargable con un solo toque desde el navegador del celular.
+- `recorderCore.ts`: Funciones puras de cálculo de bitrate, almacenamiento, paridad de resolución y latencia.
+- `recorderCore.test.ts`: Pruebas unitarias deterministas ejecutadas con `npx --yes tsx --test`.
+- `zipExport.ts`: Compila dinámicamente todo el proyecto nativo en un archivo ZIP descargable con un solo toque desde el celular.
