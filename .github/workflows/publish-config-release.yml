@@ -1,0 +1,69 @@
+name: Publicar Configuración y Diseño a GitHub Releases
+
+# DISPARADOR ESTRICTAMENTE MANUAL (workflow_dispatch)
+# NO se ejecuta con push, pull_request, ni tags. Solo cuando el usuario lo activa manualmente desde su celular.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Etiqueta de versión (ej. v1.0.1 o config-v1)'
+        required: true
+        default: 'v1.0.1'
+        type: string
+      release_title:
+        description: 'Título de la actualización de diseño'
+        required: true
+        default: 'Actualización de Diseño y Opciones de Grabación'
+        type: string
+      release_notes:
+        description: 'Notas o descripción de los cambios de diseño'
+        required: false
+        default: 'Actualización dinámica de paleta de colores, banner informativo y parámetros del grabador.'
+        type: string
+
+jobs:
+  publish-config:
+    name: 🚀 Publicar app_config.json en GitHub Releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # 1. Clonar el repositorio
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      # 2. Validar sintaxis de app_config.json
+      - name: 🔍 Validar integridad de app_config.json
+        run: |
+          if [ ! -f "app_config.json" ]; then
+            echo "❌ Error: El archivo app_config.json no existe en la raíz."
+            exit 1
+          fi
+          # Validar que sea un JSON válido con jq
+          python3 -m json.tool app_config.json > /dev/null
+          echo "✅ app_config.json es un JSON sintácticamente correcto."
+
+      # 3. Crear o actualizar el GitHub Release y adjuntar app_config.json
+      - name: 🏷️ Publicar Release en GitHub con app_config.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ inputs.release_tag }}
+          TITLE: ${{ inputs.release_title }}
+          NOTES: ${{ inputs.release_notes }}
+        run: |
+          echo "Publicando en repositorio: LuisAlejandro544/Grabador-de-pantalla-definitivo"
+          
+          # Verificar si el release ya existe para editarlo o crearlo nuevo
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "El release $TAG_NAME ya existe. Actualizando archivo adjunto app_config.json..."
+            gh release upload "$TAG_NAME" app_config.json --clobber
+            gh release edit "$TAG_NAME" --title "$TITLE" --notes "$NOTES"
+          else
+            echo "Creando nuevo release $TAG_NAME..."
+            gh release create "$TAG_NAME" app_config.json \
+              --title "$TITLE" \
+              --notes "$NOTES" \
+              --latest
+          fi
+          echo "✅ Release publicado exitosamente en: https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases"

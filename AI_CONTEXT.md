@@ -39,6 +39,10 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
 6. **Políticas de Propiedad Intelectual y Licenciamiento**:
    - Nunca incluir nombres de marcas comerciales protegidas en nombres de archivos.
    - Solo usar dependencias con licencias permisivas (MIT, Apache-2.0, BSD). Prohibido introducir librerías GPL o copyleft que obliguen a abrir el código.
+7. **Configuración Remota Dinámica y Releases de GitHub**:
+   - La app consulta de forma asíncrona y no bloqueante los releases en `https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases`.
+   - **Resiliencia Offline Obligatoria**: La app nunca debe estar atada al 100% a la conexión ni fallar si no hay internet; siempre debe inicializarse con valores por defecto locales seguros.
+   - El workflow `.github/workflows/publish-config-release.yml` debe ejecutarse **exclusivamente con `workflow_dispatch`** (nunca en `push` ni `pull_request`).
 
 ---
 

@@ -16,7 +16,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import { RecorderSettings, RecordedVideoItem, NativeEngineType } from '../types/recorder';
-import { formatDuration, calculateEngineMetrics, formatBytes } from '../utils/recorderCore';
+import { formatDuration, calculateEngineMetrics, formatBytes, RESOLUTION_PRESETS } from '../utils/recorderCore';
 
 interface RecorderScreenProps {
   settings: RecorderSettings;
@@ -276,6 +276,52 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
           <span className="font-medium">{savedNotification}</span>
         </div>
       )}
+
+      {/* Selector Rápido de Resolución y Bitrate */}
+      <div className="mb-2.5 flex flex-col space-y-1.5 px-0.5">
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5">
+          <span className="text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">RES:</span>
+          {RESOLUTION_PRESETS.map((preset) => {
+            const isSelected = settings.resolution.id === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                disabled={isRecording}
+                onClick={() => onUpdateSettings({ resolution: preset, bitrateMbps: preset.recommendedBitrateMbps })}
+                className={`px-2 py-0.5 rounded-lg text-xs font-semibold shrink-0 transition-colors ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/50'
+                    : 'bg-slate-900/90 text-slate-400 border border-slate-800 hover:text-slate-200'
+                }`}
+              >
+                {preset.name}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5">
+          <span className="text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">BITRATE:</span>
+          {[4, 8, 12, 16, 24, 35, 50].map((mbps) => {
+            const isSelected = settings.bitrateMbps === mbps;
+            return (
+              <button
+                key={mbps}
+                type="button"
+                disabled={isRecording}
+                onClick={() => onUpdateSettings({ bitrateMbps: mbps })}
+                className={`px-2 py-0.5 rounded-lg text-xs font-semibold shrink-0 font-mono transition-colors ${
+                  isSelected
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm shadow-cyan-500/50'
+                    : 'bg-slate-900/90 text-slate-400 border border-slate-800 hover:text-slate-200'
+                }`}
+              >
+                {mbps}M
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Visor de Grabación Móvil (Viewport) */}
       <div className="relative w-full aspect-[9/13] max-h-[460px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col justify-between">

@@ -10,7 +10,8 @@
 /
 ├── .github/
 │   └── workflows/
-│       └── build-apk.yml               # GitHub Actions para compilar APK Debug manualmente (workflow_dispatch)
+│       ├── build-apk.yml               # GitHub Actions para compilar APK Debug manualmente (workflow_dispatch)
+│       └── publish-config-release.yml  # GitHub Actions para publicar app_config.json en GitHub Releases (workflow_dispatch)
 │
 ├── android/                             # Estructura del proyecto Android nativo completa
 │   ├── gradle/
@@ -86,6 +87,7 @@
 │   └── main.tsx                        # Punto de entrada de React 19
 │
 ├── index.html                          # HTML con viewport optimizado para móviles
+├── app_config.json                     # Configuración remota dinámica Server-Driven UI (GitHub Releases)
 ├── metadata.json                       # Metadatos del applet en Google AI Studio
 ├── package.json                        # Dependencias de React, Vite, Motion, JSZip y Tailwind
 ├── tsconfig.json                       # Configuración de TypeScript ES2022

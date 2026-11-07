@@ -82,6 +82,23 @@ Este proyecto incluye un flujo de **GitHub Actions** configurado con activación
 
 ---
 
+## 🎨 Actualizaciones Dinámicas de Diseño (Sin Reinstalar APK)
+
+Para evitar la molestia de tener que reinstalar un nuevo APK cada vez que cambias un color, un texto, un aviso o una opción de grabación, VeloRec Studio implementa un sistema **Server-Driven UI (Configuración Remota)**:
+
+1. **Lectura Inteligente desde GitHub Releases**:
+   - Al abrirse, la aplicación consulta asíncronamente en segundo plano los últimos releases de tu repositorio:  
+     [`https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases`](https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases)
+   - Si detecta un archivo `app_config.json` actualizado, aplica dinámicamente el color de acento, banners informativos, anuncios emergentes y parámetros de grabación sin tocar el APK instalado.
+2. **Resiliencia Total (La app NO está atada al JSON)**:
+   - Si el dispositivo está sin conexión a internet, en modo avión o GitHub tiene problemas de red, la app **funciona al 100% de inmediato con sus valores por defecto nativos**, sin esperas ni bloqueos.
+3. **Flujo Manual de Publicación con GitHub Actions**:
+   - Dispones del flujo manual **"Publicar Configuración y Diseño a GitHub Releases"** (`.github/workflows/publish-config-release.yml`).
+   - **Disparo 100% manual (`workflow_dispatch`)**: No se activa con commits, push ni pull requests para no consumir cuotas de GitHub.
+   - Valida el JSON y lo adjunta automáticamente al último release de GitHub para que todos los usuarios de la app reciban los cambios de diseño.
+
+---
+
 ## 💻 Compilación Local (Para Desarrolladores)
 
 Si cuentas con Android Studio y las herramientas NDK en tu entorno local:

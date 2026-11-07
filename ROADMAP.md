@@ -60,4 +60,6 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
 
 - [ ] **Publicación Automática en Uptodown**: Integración de scripts para actualizar versiones APK directamente en el catálogo de Uptodown.
 - [ ] **Soporte para F-Droid**: Empaquetado reproducible compatible con los estándares de compilación de F-Droid.
-- [ ] **Sistema de Actualizaciones In-App Sin Google Play**: Comprobación de nuevas versiones con descargas de paquetes `.apk` con verificación de hash SHA-256.
+- [x] **Configuración Remota Dinámica (Server-Driven UI sin reinstalar APK)**: La app consulta asíncronamente `app_config.json` en los releases de GitHub (`https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases`) con resiliencia offline para cambiar acentos, banners, anuncios y opciones en caliente.
+- [x] **Flujo de Publicación Manual en GitHub Actions**: Action `publish-config-release.yml` con activación estricta manual (`workflow_dispatch`) para publicar el JSON a GitHub Releases.
+- [ ] **Sistema de Actualizaciones In-App de APK Sin Google Play**: Comprobación de nuevas versiones con descargas de paquetes `.apk` con verificación de hash SHA-256.
