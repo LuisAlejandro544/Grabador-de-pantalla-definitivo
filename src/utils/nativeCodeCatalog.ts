@@ -513,10 +513,12 @@ tasks.register("cargoNdkBuild") {
         val rustDir = rootProject.projectDir.resolve("../rust").normalize()
         val jniLibsDir = file("src/main/jniLibs")
         jniLibsDir.mkdirs()
-        project.exec {
-            workingDir = rustDir
-            commandLine("cargo", "ndk", "-t", "arm64-v8a", "-o", jniLibsDir.absolutePath, "build", "--release")
-        }
+        ProcessBuilder("cargo", "ndk", "-t", "arm64-v8a", "-o", jniLibsDir.absolutePath, "build", "--release")
+            .directory(rustDir)
+            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+            .redirectError(ProcessBuilder.Redirect.INHERIT)
+            .start()
+            .waitFor()
     }
 }`
   },

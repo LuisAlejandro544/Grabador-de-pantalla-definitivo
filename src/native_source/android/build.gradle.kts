@@ -111,15 +111,23 @@ tasks.register("cargoNdkBuild") {
             for ((rustTarget, androidAbi) in targets) {
                 println("🔨 Compilando Rust 2024 para arquitectura: $androidAbi ($rustTarget)...")
                 try {
-                    // En Gradle Kotlin DSL, se debe usar project.exec dentro de doLast
-                    project.exec {
-                        workingDir = rustDir
-                        commandLine(
-                            "cargo", "ndk",
-                            "-t", rustTarget,
-                            "-o", jniLibsDir.absolutePath,
-                            "build", "--release"
-                        )
+                    // Se utiliza ProcessBuilder estándar de la JVM para evitar problemas de resolución de DSL en Gradle Kotlin
+                    val process = ProcessBuilder(
+                        "cargo", "ndk",
+                        "-t", rustTarget,
+                        "-o", jniLibsDir.absolutePath,
+                        "build", "--release"
+                    )
+                        .directory(rustDir)
+                        .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                        .redirectError(ProcessBuilder.Redirect.INHERIT)
+                        .start()
+
+                    val exitCode = process.waitFor()
+                    if (exitCode != 0) {
+                        println("⚠️ Advertencia: cargo-ndk finalizó con código de error $exitCode para $androidAbi.")
+                    } else {
+                        println("✅ Rust 2024 compilado con éxito para $androidAbi.")
                     }
                 } catch (e: Exception) {
                     println("⚠️ Advertencia en cargo-ndk ($androidAbi): ${e.message}")
