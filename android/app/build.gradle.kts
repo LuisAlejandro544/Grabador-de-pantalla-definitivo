@@ -188,6 +188,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.activity:activity-ktx:1.9.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")
 
     // Arquitectura de Pantallas, Navegación Táctil Móvil y Ciclo de Vida (Apache-2.0)
     // Permite desacoplar las pantallas en módulos independientes con su propio Backstack

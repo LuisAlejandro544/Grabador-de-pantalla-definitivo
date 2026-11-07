@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.view.Surface
+import androidx.core.content.IntentCompat
 import com.velorec.recorder.service.RecordingNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -130,12 +131,7 @@ class ScreenRecordService : Service() {
 
     private fun handleStartRecording(intent: Intent) {
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
-        val resultData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(EXTRA_RESULT_DATA) as? Intent
-        } ?: return
+        val resultData = IntentCompat.getParcelableExtra(intent, EXTRA_RESULT_DATA, Intent::class.java) ?: return
 
         val engine = intent.getStringExtra(EXTRA_ENGINE) ?: "cpp23"
         val width = intent.getIntExtra(EXTRA_WIDTH, 1080)
@@ -214,6 +210,10 @@ class ScreenRecordService : Service() {
                 val projectionManager =
                     getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                 val projection = projectionManager.getMediaProjection(resultCode, resultData)
+                if (projection == null) {
+                    handleStopRecording()
+                    return@launch
+                }
                 mediaProjection = projection
 
                 // =========================================================================
