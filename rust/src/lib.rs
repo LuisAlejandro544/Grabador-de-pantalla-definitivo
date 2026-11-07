@@ -10,7 +10,7 @@
 //! 4. Escribe el contenedor MP4 mediante AMediaMuxer del NDK con latencia mínima (~3 ms por cuadro).
 //! 5. Expone las firmas JNI 'Java_com_velorec_recorder_ScreenRecordService_native*Rust*' para que Kotlin
 //!    lo invoque de forma inmediata y transparente.
-//! 6. Cumple estrictamente con Rust Edition 2024 utilizando #[unsafe(no_mangle)] y estado estático seguro en Mutex.
+//! 6. Cumple estrictamente con Rust Edition 2024 utilizando #[unsafe(no_mangle)] y punteros Send seguros (SendPtr).
 
 use std::ffi::CString;
 use std::fs::OpenOptions;
@@ -53,16 +53,19 @@ enum RecorderCommand {
     Stop,
 }
 
+/// Wrapper genérico seguro para transferir punteros nativos de hardware entre hilos
+#[derive(Clone, Copy)]
+struct SendPtr<T>(pub *mut T);
+unsafe impl<T> Send for SendPtr<T> {}
+unsafe impl<T> Sync for SendPtr<T> {}
+
 /// Estructura que encapsula los punteros opacos del hardware NDK
 struct NdkHardwareHandles {
-    codec: *mut ndk_sys::AMediaCodec,
-    native_window: *mut ndk_sys::ANativeWindow,
-    muxer: *mut ndk_sys::AMediaMuxer,
+    codec: SendPtr<ndk_sys::AMediaCodec>,
+    native_window: SendPtr<ndk_sys::ANativeWindow>,
+    muxer: SendPtr<ndk_sys::AMediaMuxer>,
     raw_fd: std::os::unix::io::RawFd,
 }
-
-// Implementamos Send de forma segura ya que el worker thread tiene acceso exclusivo
-unsafe impl Send for NdkHardwareHandles {}
 
 /// Estado y ejecución del motor Rust 2024
 pub struct RustRecorderEngine {
@@ -144,7 +147,7 @@ impl RustRecorderEngine {
                 .map_err(|e| format!("No se pudo crear archivo MP4 {}: {}", config.output_path, e))?;
 
             let raw_fd = file.into_raw_fd();
-            let muxer = ndk_sys::AMediaMuxer_new(raw_fd, ndk_sys::OutputFormat_AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
+            let muxer = ndk_sys::AMediaMuxer_new(raw_fd, ndk_sys::OutputFormat::AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
 
             if muxer.is_null() {
                 libc::close(raw_fd);
@@ -174,9 +177,9 @@ impl RustRecorderEngine {
                 cmd_sender: cmd_tx,
                 worker_handle: None,
                 hardware: Some(NdkHardwareHandles {
-                    codec,
-                    native_window,
-                    muxer,
+                    codec: SendPtr(codec),
+                    native_window: SendPtr(native_window),
+                    muxer: SendPtr(muxer),
                     raw_fd,
                 }),
             };
@@ -197,7 +200,7 @@ impl RustRecorderEngine {
         self.cmd_sender = cmd_tx;
 
         unsafe {
-            let start_status = ndk_sys::AMediaCodec_start(hardware.codec);
+            let start_status = ndk_sys::AMediaCodec_start(hardware.codec.0);
             if start_status != ndk_sys::media_status_t(0) {
                 return Err(format!("AMediaCodec_start falló con código: {:?}", start_status));
             }
@@ -211,9 +214,10 @@ impl RustRecorderEngine {
             .name("velorec_rust_worker".into())
             .spawn(move || {
                 info!("Rust 2024: Hilo de codificación activo.");
-                let codec = hardware.codec;
-                let muxer = hardware.muxer;
-                let native_window = hardware.native_window;
+                let codec = hardware.codec.0;
+                let muxer = hardware.muxer.0;
+                let native_window = hardware.native_window.0;
+                let raw_fd = hardware.raw_fd;
                 let mut muxer_started = false;
                 let mut video_track_index: isize = -1;
 
@@ -303,7 +307,7 @@ impl RustRecorderEngine {
                         ndk_sys::AMediaMuxer_stop(muxer);
                     }
                     ndk_sys::AMediaMuxer_delete(muxer);
-                    libc::close(hardware.raw_fd);
+                    libc::close(raw_fd);
                 }
                 info!("Rust 2024: Codificación finalizada limpiamente.");
             })
