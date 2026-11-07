@@ -210,7 +210,7 @@ fun VeloRecMainScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(16.dp),
-            horizontalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when (activeTab) {
                 NativeTab.RECORDER -> {
