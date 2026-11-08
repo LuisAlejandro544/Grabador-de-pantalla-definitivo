@@ -175,8 +175,9 @@ std::expected<GLuint, std::string> GpuShaderPipeline::compileGlslShader(GLenum t
     if (!compiled) {
         GLint infoLen = 0;
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLen);
-        std::string infoLog(infoLen, '\0');
-        if (infoLen > 0) {
+        std::string infoLog;
+        if (infoLen > 1) {
+            infoLog.resize(static_cast<size_t>(infoLen));
             glGetShaderInfoLog(shader, infoLen, nullptr, infoLog.data());
         }
         glDeleteShader(shader);
@@ -252,8 +253,9 @@ std::expected<void, std::string> GpuShaderPipeline::initialize(ShaderFormat form
     if (!linked) {
         GLint infoLen = 0;
         glGetProgramiv(programHandle_, GL_INFO_LOG_LENGTH, &infoLen);
-        std::string infoLog(infoLen, '\0');
-        if (infoLen > 0) {
+        std::string infoLog;
+        if (infoLen > 1) {
+            infoLog.resize(static_cast<size_t>(infoLen));
             glGetProgramInfoLog(programHandle_, infoLen, nullptr, infoLog.data());
         }
         return std::unexpected("Error enlazando programa GPU: " + infoLog);

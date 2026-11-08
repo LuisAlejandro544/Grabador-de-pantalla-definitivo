@@ -110,6 +110,9 @@ jobs:
           cargo clippy --target aarch64-linux-android -- -W clippy::all 2>&1 | tee ../audit_output/rust_clippy_report.txt || true
 
           echo "=== 3. Verificación de Pruebas Unitarias de Rust (cargo test) ==="
+          NDK_TOOLCHAIN_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_TOOLCHAIN_BIN/aarch64-linux-android26-clang"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_AR="$NDK_TOOLCHAIN_BIN/llvm-ar"
           cargo test --target aarch64-linux-android --no-run 2>&1 | tee ../audit_output/rust_test_report.txt || true
           cd ..
 
@@ -132,10 +135,14 @@ jobs:
                      android/app/src/main/cpp/GpuShaderPipeline.cpp \
                      android/app/src/main/cpp/libyuv_bridge.cpp \
                      --checks='-*,bugprone-*,clang-analyzer-*,performance-*,portability-*' \
-                     -- -std=c++23 \
+                     -- --target=aarch64-linux-android26 \
+                        --sysroot="$SYSROOT" \
+                        -isystem "$SYSROOT/usr/include/c++/v1" \
+                        -isystem "$SYSROOT/usr/include" \
+                        -isystem "$SYSROOT/usr/include/aarch64-linux-android" \
+                        -D__ANDROID_API__=26 \
+                        -std=c++23 \
                         -I android/app/src/main/cpp \
-                        -I $SYSROOT/usr/include \
-                        -I $SYSROOT/usr/include/android \
                         2>&1 | tee audit_output/clang_tidy_report.txt || true
 
       # 10. Auditoría de Android y Kotlin (Android Lint y Verificación AAPT2)
@@ -166,6 +173,8 @@ jobs:
           mkdir -p ../audit_output
           if [ -f "app/build/reports/lint-results-debug.txt" ]; then
             cp app/build/reports/lint-results-debug.txt ../audit_output/android_lint_report.txt
+          elif [ -f "app/build/reports/lint-results-debug.xml" ]; then
+            cp app/build/reports/lint-results-debug.xml ../audit_output/android_lint_report.txt
           fi
 
           echo "=== 2. Compilando APK Debug para Verificación de Binarios con AAPT2 ==="
@@ -175,9 +184,10 @@ jobs:
           echo "=== 3. Extrayendo Metadatos de Binarios y Permisos con AAPT2 ==="
           BUILD_TOOLS_DIR=$(find $ANDROID_HOME/build-tools -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -n 1)
           AAPT2="$BUILD_TOOLS_DIR/aapt2"
-          APK_FILE="android/app/build/outputs/apk/debug/app-debug.apk"
-          if [ -f "$AAPT2" ] && [ -f "$APK_FILE" ]; then
-            echo "AAPT2 detectado en: $AAPT2"
+          APK_FILE=$(find android/app/build/outputs/apk -name "*.apk" 2>/dev/null | head -n 1)
+          if [ -f "$AAPT2" ] && [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
+            echo "AAPT2 detectado en: $AAPT2, APK: $APK_FILE"
+            chmod +x "$AAPT2" || true
             $AAPT2 dump badging "$APK_FILE" > audit_output/aapt2_badging_report.txt 2>&1 || true
             $AAPT2 dump permissions "$APK_FILE" > audit_output/aapt2_permissions_report.txt 2>&1 || true
             echo "✅ Análisis de AAPT2 completado con éxito."

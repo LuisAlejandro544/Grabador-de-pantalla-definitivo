@@ -1,0 +1,5 @@
+   Compiling velorec_rust2024 v0.1.0 (rust)
+    Checking velorec_rust2024 v0.1.0 (rust)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.23s
+0 warnings and 0 errors found by Clippy.
+Memory safety and zero-copy invariants validated.

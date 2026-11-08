@@ -7,7 +7,7 @@ description = "Motor de grabación de pantalla de alto rendimiento en Rust (Edit
 
 [lib]
 name = "velorec_rust2024"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Enlace con la JVM de Android

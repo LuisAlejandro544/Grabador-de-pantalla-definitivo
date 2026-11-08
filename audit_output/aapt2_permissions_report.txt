@@ -1,0 +1,10 @@
+package: com.velorec.recorder
+uses-permission: name='android.permission.RECORD_AUDIO'
+uses-permission: name='android.permission.FOREGROUND_SERVICE'
+uses-permission: name='android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION'
+uses-permission: name='android.permission.POST_NOTIFICATIONS'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+uses-permission: name='android.permission.VIBRATE'
+uses-permission: name='android.permission.SYSTEM_ALERT_WINDOW'
+permission: com.velorec.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION

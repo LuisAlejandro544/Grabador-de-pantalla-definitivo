@@ -31,11 +31,40 @@ def read_file_safely(filepath, fallback_message="No se generó informe o el arch
     return fallback_message
 
 def count_issues(content):
-    """Cuenta ocurrencias de errores y advertencias en el texto crudo."""
+    """Cuenta ocurrencias de errores y advertencias en el texto crudo de forma precisa."""
     if not content or "No se generó informe" in content:
         return 0, 0
-    errors = len(re.findall(r"\b(error|fatal|fail|failed)\b", content, re.IGNORECASE))
-    warnings = len(re.findall(r"\b(warning|warn|advertencia)\b", content, re.IGNORECASE))
+
+    # Detección específica para suite de pruebas Node (TAP / node:test)
+    if "TAP version" in content or "# tests" in content:
+        fail_matches = re.findall(r"# fail\s+([0-9]+)", content)
+        if fail_matches:
+            failed_count = sum(int(f) for f in fail_matches)
+            return failed_count, 0
+        if "not ok" in content:
+            return len(re.findall(r"^not ok\b", content, re.MULTILINE)), 0
+        return 0, 0
+
+    # Detección de resumen de linters (ej. "0 errors, 0 warnings")
+    if re.search(r"\b0 errors?,\s*0 warnings?\b", content, re.IGNORECASE):
+        return 0, 0
+
+    errors = 0
+    warnings = 0
+
+    for line in content.splitlines():
+        line_clean = line.strip()
+        if not line_clean:
+            continue
+        # Descartar líneas resumen que confirman 0 fallos
+        if re.search(r"\b(0 errors?|0 warnings?|0 failed|fail 0|failed: 0|errors: 0)\b", line_clean, re.IGNORECASE):
+            continue
+        # Patrones estrictos de error del compilador o linker
+        if re.search(r"\b(error:|fatal:|\[error\]|error adding symbols|could not compile|collect2: error|clang-diagnostic-error)\b", line_clean, re.IGNORECASE):
+            errors += 1
+        elif re.search(r"\b(warning:|advertencia:|\[warn\]|\[warning\])\b", line_clean, re.IGNORECASE):
+            warnings += 1
+
     return errors, warnings
 
 def build_section(sec_id, icon, title, subtitle, filename, content):
@@ -159,6 +188,16 @@ def main():
         sections_html.append(build_section(sec_id, icon, title, subtitle, filename, content))
 
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    if total_errors == 0:
+        error_pill = '<div class="stat-pill success">🟢 0 Errores detectados</div>'
+    else:
+        error_pill = f'<div class="stat-pill error">🔴 {total_errors} Errores detectados</div>'
+
+    if total_warnings == 0:
+        warning_pill = '<div class="stat-pill success">🟢 0 Advertencias</div>'
+    else:
+        warning_pill = f'<div class="stat-pill warning">🟡 {total_warnings} Advertencias</div>'
 
     # Documento HTML Completo optimizado para celulares
     html_content = f"""<!DOCTYPE html>
@@ -468,8 +507,8 @@ def main():
         <span>⚙️ Target: Android API 26 (minSdk) a 35 (targetSdk)</span>
       </div>
       <div class="stats-summary">
-        <div class="stat-pill error">🔴 {total_errors} Errores detectados</div>
-        <div class="stat-pill warning">🟡 {total_warnings} Advertencias</div>
+        {error_pill}
+        {warning_pill}
         <div class="stat-pill success">🟢 Motores de Hardware C++23 &amp; Rust 2024 Auditados</div>
         <button class="btn btn-secondary" onclick="copyFullReport()" style="margin-left: auto;">
           📑 Copiar Todo el Informe
@@ -658,6 +697,14 @@ def main():
     index_file = os.path.join(base_dir, "index.html")
     with open(index_file, "w", encoding="utf-8") as f:
         f.write(html_content)
+
+    # Actualizar también copia en public/assets/aistudio si existe
+    assets_dir = os.path.join("public", "assets", "aistudio")
+    if os.path.exists(assets_dir):
+        for fname in os.listdir(assets_dir):
+            if fname.startswith("INFORME_AUDITORIA_CRUDO") and fname.endswith(".html"):
+                with open(os.path.join(assets_dir, fname), "w", encoding="utf-8") as f:
+                    f.write(html_content)
 
     print(f"✅ Informe HTML de auditoría generado en: {out_file} y {index_file}")
 

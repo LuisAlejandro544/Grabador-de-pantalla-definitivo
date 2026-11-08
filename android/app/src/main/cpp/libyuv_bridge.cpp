@@ -116,12 +116,12 @@ std::expected<void, YuvError> LibYuvBridge::scalePlaneBilinear(
     const float yRatio = static_cast<float>(srcDims.height) / static_cast<float>(dstDims.height);
 
     for (int32_t i = 0; i < dstDims.height; ++i) {
-        const int32_t srcY = static_cast<int32_t>(i * yRatio);
+        const int32_t srcY = static_cast<int32_t>(static_cast<float>(i) * yRatio);
         const uint8_t* srcRow = srcPlane.data() + (srcY * srcStride);
         uint8_t* dstRow = dstPlane.data() + (i * dstStride);
 
         for (int32_t j = 0; j < dstDims.width; ++j) {
-            const int32_t srcX = static_cast<int32_t>(j * xRatio);
+            const int32_t srcX = static_cast<int32_t>(static_cast<float>(j) * xRatio);
             dstRow[j] = srcRow[srcX];
         }
     }

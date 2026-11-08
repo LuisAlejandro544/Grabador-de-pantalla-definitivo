@@ -122,6 +122,10 @@ android {
         // En Android Gradle Plugin (Kotlin DSL), las propiedades de configuración son abortOnError y checkReleaseBuilds
         abortOnError = false
         checkReleaseBuilds = false
+        textReport = true
+        textOutput = file("build/reports/lint-results-debug.txt")
+        htmlReport = true
+        xmlReport = true
         // Activa la auditoría estricta de retrocompatibilidad para todas las versiones soportadas (API 26 a 35)
         enable.addAll(listOf(
             "NewApi",

@@ -1,0 +1,3 @@
+    Updating crates.io index
+    Checking velorec_rust2024 v0.1.0 (rust)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.45s
