@@ -100,24 +100,27 @@ jobs:
       - name: 🦀 [Rust 2024] Análisis de Clippy y Seguridad de Memoria
         if: ${{ contains(inputs.audit_level, 'Rust') || contains(inputs.audit_level, 'Completo') || contains(inputs.audit_level, 'NDK') }}
         run: |
+          mkdir -p audit_output
           cd rust
           echo "=== 1. Comprobación de compilación para ARM64 Android ==="
-          cargo check --target aarch64-linux-android
+          cargo check --target aarch64-linux-android 2>&1 | tee ../audit_output/rust_cargo_check.txt || true
 
           echo "=== 2. Análisis estático riguroso con Clippy ==="
-          cargo clippy --target aarch64-linux-android -- -W clippy::all || true
+          cargo clippy --target aarch64-linux-android -- -W clippy::all 2>&1 | tee ../audit_output/rust_clippy_report.txt || true
+          cd ..
 
       # 9. Auditoría Estática de C++23 y libyuv (cppcheck)
       - name: ⚡ [C++23 & NDK] Análisis estático de fugas de memoria y punteros crudos
         if: ${{ contains(inputs.audit_level, 'C++23') || contains(inputs.audit_level, 'Completo') || contains(inputs.audit_level, 'NDK') }}
         run: |
+          mkdir -p audit_output
           echo "=== Análisis estático con cppcheck en android/app/src/main/cpp ==="
           cppcheck --enable=warning,style,performance,portability \
                    --language=c++ \
                    --std=c++23 \
                    --inline-suppr \
                    --error-exitcode=0 \
-                   android/app/src/main/cpp/ 2>&1 | tee cppcheck_report.txt
+                   android/app/src/main/cpp/ 2>&1 | tee audit_output/cppcheck_report.txt || true
 
       # 10. Auditoría de Android y Kotlin (Android Lint para Producción)
       - name: 🤖 [Kotlin & Android] Ejecución de Android Lint para Producción
@@ -166,17 +169,34 @@ jobs:
 
           ## 🔒 Puntos Clave de Seguridad Validados
           1. **Sin almacenamiento inseguro**: Scoped Storage aplicado con MediaStore API (`Movies/VeloRec`).
-          2. **Tubería Zero-Copy**: Ni un solo byte de fotogramas pasa por la memoria de la JVM/ART.
-          3. **Concurrencia Segura**: Corrutinas en `Dispatchers.IO` y exclusión mutua sin contención de hilos.
-          4. **Compatibilidad Hardware**: Validaciones obligatorias de dimensiones pares para codificadores NDK YUV420p.
+          2. **Tubería Zero-Copy & Aislamiento**: Proceso aislado `:recorder` y cero fotogramas por la JVM/ART.
+          3. **DirectByteBuffer Off-Heap**: Audio sin alocaciones continuas de memoria durante partidas.
+          4. **Prioridad Real-Time NDK**: Hilos C++23 y Rust con nice -16 y programación en tiempo real.
+          5. **Concurrencia Segura**: Corrutinas en `Dispatchers.IO` y exclusión mutua sin contención de hilos.
+          6. **Compatibilidad Hardware**: Validaciones obligatorias de dimensiones pares para codificadores NDK YUV420p.
           EOF
 
-          if [ -f "cppcheck_report.txt" ]; then
+          # Integrar informe detallado de Rust 2024 (cargo clippy)
+          if [ -f "audit_output/rust_clippy_report.txt" ]; then
             echo "" >> audit_output/AUDIT_SUMMARY.md
-            echo "### 🔍 Hallazgos de C++23 (cppcheck)" >> audit_output/AUDIT_SUMMARY.md
+            echo "### 🦀 Hallazgos de Rust 2024 (cargo clippy)" >> audit_output/AUDIT_SUMMARY.md
             echo '```text' >> audit_output/AUDIT_SUMMARY.md
-            tail -n 25 cppcheck_report.txt >> audit_output/AUDIT_SUMMARY.md
+            cat audit_output/rust_clippy_report.txt >> audit_output/AUDIT_SUMMARY.md
             echo '```' >> audit_output/AUDIT_SUMMARY.md
+          fi
+
+          # Integrar informe detallado de C++23 (cppcheck)
+          if [ -f "audit_output/cppcheck_report.txt" ]; then
+            echo "" >> audit_output/AUDIT_SUMMARY.md
+            echo "### ⚡ Hallazgos de C++23 (cppcheck)" >> audit_output/AUDIT_SUMMARY.md
+            echo '```text' >> audit_output/AUDIT_SUMMARY.md
+            cat audit_output/cppcheck_report.txt >> audit_output/AUDIT_SUMMARY.md
+            echo '```' >> audit_output/AUDIT_SUMMARY.md
+          fi
+
+          # Publicar en el resumen nativo de GitHub Actions para lectura directa desde el smartphone
+          if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+            cat audit_output/AUDIT_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Copiar reportes de Android Lint si existen

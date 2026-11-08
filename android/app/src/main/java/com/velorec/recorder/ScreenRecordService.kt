@@ -86,6 +86,14 @@ class ScreenRecordService : Service() {
         const val ACTION_PAUSE = "com.velorec.ACTION_PAUSE"
         const val ACTION_RESUME = "com.velorec.ACTION_RESUME"
         const val ACTION_STOP = "com.velorec.ACTION_STOP"
+        const val ACTION_QUERY_STATUS = "com.velorec.ACTION_QUERY_STATUS"
+        const val ACTION_STATE_CHANGED = "com.velorec.ACTION_STATE_CHANGED"
+
+        const val EXTRA_STATE_IS_RECORDING = "extra_is_recording"
+        const val EXTRA_STATE_IS_PAUSED = "extra_is_paused"
+        const val EXTRA_STATE_DURATION_SEC = "extra_duration_sec"
+        const val EXTRA_STATE_IS_COUNTING_DOWN = "extra_is_counting_down"
+        const val EXTRA_STATE_COUNTDOWN_REMAINING = "extra_countdown_remaining"
 
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
@@ -119,6 +127,24 @@ class ScreenRecordService : Service() {
         private val _countdownRemainingFlow = MutableStateFlow(0)
         val countdownRemainingFlow: StateFlow<Int> = _countdownRemainingFlow.asStateFlow()
 
+        /**
+         * Actualiza los flujos de estado en el proceso de la UI cuando se reciben broadcasts
+         * desde el proceso aislado de grabación (:recorder).
+         */
+        fun updateStateFromBroadcast(
+            isRecording: Boolean,
+            isPaused: Boolean,
+            durationSec: Int,
+            isCountingDown: Boolean,
+            countdownRemaining: Int
+        ) {
+            _isRecordingFlow.value = isRecording
+            _isPausedFlow.value = isPaused
+            _durationSecFlow.value = durationSec
+            _isCountingDownFlow.value = isCountingDown
+            _countdownRemainingFlow.value = countdownRemaining
+        }
+
         // Carga dinámica de las bibliotecas nativas C++23 y Rust 2024
         init {
             try {
@@ -131,6 +157,25 @@ class ScreenRecordService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    /**
+     * Emite un broadcast explícito con el estado actual del servicio para que
+     * el proceso principal de la UI (MainActivity) se sincronice reactivamente sin importar
+     * que el servicio corra en un proceso separado (:recorder).
+     */
+    private fun notifyStateChanged() {
+        try {
+            val broadcastIntent = Intent(ACTION_STATE_CHANGED).apply {
+                setPackage(packageName)
+                putExtra(EXTRA_STATE_IS_RECORDING, _isRecordingFlow.value)
+                putExtra(EXTRA_STATE_IS_PAUSED, _isPausedFlow.value)
+                putExtra(EXTRA_STATE_DURATION_SEC, _durationSecFlow.value)
+                putExtra(EXTRA_STATE_IS_COUNTING_DOWN, _isCountingDownFlow.value)
+                putExtra(EXTRA_STATE_COUNTDOWN_REMAINING, _countdownRemainingFlow.value)
+            }
+            sendBroadcast(broadcastIntent)
+        } catch (_: Exception) {}
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -150,6 +195,7 @@ class ScreenRecordService : Service() {
             ACTION_PAUSE -> handlePauseRecording()
             ACTION_RESUME -> handleResumeRecording()
             ACTION_STOP -> handleStopRecording()
+            ACTION_QUERY_STATUS -> notifyStateChanged()
         }
         // START_STICKY para asegurar que el Foreground Service no sea terminado
         // abruptamente cuando el usuario sale de la aplicación a jugar o ver videos
@@ -180,6 +226,7 @@ class ScreenRecordService : Service() {
         _isRecordingFlow.value = true
         _isPausedFlow.value = false
         _durationSecFlow.value = 0
+        notifyStateChanged()
 
         val isMute = audio == "mute"
 
@@ -222,6 +269,7 @@ class ScreenRecordService : Service() {
 
                     while (remaining > 0 && isActive && _isRecordingFlow.value) {
                         _countdownRemainingFlow.value = remaining
+                        notifyStateChanged()
                         notificationManager?.notify(
                             RecordingNotificationHelper.NOTIFICATION_ID,
                             RecordingNotificationHelper.buildRecordingNotification(
@@ -239,9 +287,11 @@ class ScreenRecordService : Service() {
                     }
                     _isCountingDownFlow.value = false
                     _countdownRemainingFlow.value = 0
+                    notifyStateChanged()
 
                     if (!isActive || !_isRecordingFlow.value) {
                         // Fue cancelado por el usuario durante la cuenta atrás
+                        notifyStateChanged()
                         return@launch
                     }
                 }
@@ -388,6 +438,7 @@ class ScreenRecordService : Service() {
                 delay(1000L)
                 if (_isRecordingFlow.value && !_isPausedFlow.value) {
                     _durationSecFlow.value += 1
+                    notifyStateChanged()
                 }
             }
         }
@@ -395,6 +446,7 @@ class ScreenRecordService : Service() {
 
     private fun handlePauseRecording() {
         _isPausedFlow.value = true
+        notifyStateChanged()
         updateNotification(isPaused = true)
         audioEngine?.pause()
         serviceScope.launch(Dispatchers.IO) {
@@ -408,6 +460,7 @@ class ScreenRecordService : Service() {
 
     private fun handleResumeRecording() {
         _isPausedFlow.value = false
+        notifyStateChanged()
         updateNotification(isPaused = false)
         audioEngine?.resume()
         serviceScope.launch(Dispatchers.IO) {
@@ -446,6 +499,7 @@ class ScreenRecordService : Service() {
         _countdownRemainingFlow.value = 0
         _isRecordingFlow.value = false
         _isPausedFlow.value = false
+        notifyStateChanged()
 
         // Notificación visual de guardado en la barra de estado para evitar que el sistema operativo
         // descarte el servicio en primer plano por baja prioridad durante el procesamiento en disco

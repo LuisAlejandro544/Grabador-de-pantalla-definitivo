@@ -51,6 +51,51 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    // Receptor de broadcasts para sincronizar estado con el proceso :recorder
+    private val serviceStateReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ScreenRecordService.ACTION_STATE_CHANGED) {
+                val isRecording = intent.getBooleanExtra(ScreenRecordService.EXTRA_STATE_IS_RECORDING, false)
+                val isPaused = intent.getBooleanExtra(ScreenRecordService.EXTRA_STATE_IS_PAUSED, false)
+                val durationSec = intent.getIntExtra(ScreenRecordService.EXTRA_STATE_DURATION_SEC, 0)
+                val isCountingDown = intent.getBooleanExtra(ScreenRecordService.EXTRA_STATE_IS_COUNTING_DOWN, false)
+                val countdownRemaining = intent.getIntExtra(ScreenRecordService.EXTRA_STATE_COUNTDOWN_REMAINING, 0)
+
+                ScreenRecordService.updateStateFromBroadcast(
+                    isRecording = isRecording,
+                    isPaused = isPaused,
+                    durationSec = durationSec,
+                    isCountingDown = isCountingDown,
+                    countdownRemaining = countdownRemaining
+                )
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = android.content.IntentFilter(ScreenRecordService.ACTION_STATE_CHANGED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(serviceStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(serviceStateReceiver, filter)
+        }
+        // Consultar estado actual del servicio en el proceso aislado :recorder
+        try {
+            val queryIntent = Intent(this, ScreenRecordService::class.java).apply {
+                action = ScreenRecordService.ACTION_QUERY_STATUS
+            }
+            startService(queryIntent)
+        } catch (_: Exception) {}
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            unregisterReceiver(serviceStateReceiver)
+        } catch (_: Exception) {}
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {

@@ -16,6 +16,8 @@
 #include <chrono>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/resource.h>
+#include <pthread.h>
 
 #define LOG_TAG "VeloRec_CPP23"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -182,6 +184,15 @@ EngineStats NativeRecorderEngine::getStats() const noexcept {
 }
 
 void NativeRecorderEngine::encodingWorkerLoop() {
+    // Configurar prioridad de tiempo real para el hilo de codificación NDK en Linux/Android:
+    // 1. Nice value -16 (ultra-alta prioridad para impedir que el planificador pause el hilo ante GC o LMK)
+    setpriority(PRIO_PROCESS, 0, -16);
+
+    // 2. Intentar asignar política de tiempo real Round-Robin (SCHED_RR) si las capacidades del sistema lo permiten
+    struct sched_param schedParam{};
+    schedParam.sched_priority = sched_get_priority_max(SCHED_RR);
+    pthread_setschedparam(pthread_self(), SCHED_RR, &schedParam);
+
     AMediaCodecBufferInfo info;
     constexpr int64_t TIMEOUT_US = 10'000; // 10ms
     int drainRetries = 0;

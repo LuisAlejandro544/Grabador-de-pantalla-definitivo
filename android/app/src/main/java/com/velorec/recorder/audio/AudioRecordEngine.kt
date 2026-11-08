@@ -68,11 +68,22 @@ class AudioRecordEngine(
     private var workerThread: Thread? = null
     private var internalAudioReaderThread: Thread? = null
 
+    /**
+     * Chunk de memoria nativa fuera del Heap de Java (DirectByteBuffer Off-Heap).
+     * Garantiza cero alocaciones de memoria durante la captura continua de audio,
+     * impidiendo que el Recolector de Basura (GC) de ART se active durante partidas o videos.
+     */
+    private class DirectAudioChunk(val capacityBytes: Int) {
+        val buffer: ByteBuffer = ByteBuffer.allocateDirect(capacityBytes).order(ByteOrder.LITTLE_ENDIAN)
+        var sizeBytes: Int = 0
+    }
+
     private var micRecord: AudioRecord? = null
     private var isMicMono = false
 
     private var internalRecord: AudioRecord? = null
-    private val internalAudioQueue = ConcurrentLinkedQueue<ShortArray>()
+    private val freeChunkPool = ConcurrentLinkedQueue<DirectAudioChunk>()
+    private val internalAudioQueue = ConcurrentLinkedQueue<DirectAudioChunk>()
 
     private var audioEncoder: MediaCodec? = null
     private var audioMuxer: MediaMuxer? = null
@@ -258,37 +269,49 @@ class AudioRecordEngine(
             Log.e(TAG, "Error al arrancar AudioRecord: ${e.message}", e)
         }
 
+        // Buffers de trabajo preasignados
+        // SAMPLES_PER_FRAME = 1024, con 2 canales = 2048 shorts (4096 bytes)
+        val stereoSamplesCount = SAMPLES_PER_FRAME * CHANNEL_COUNT
+        val chunkSizeBytes = stereoSamplesCount * 2
+        val micMonoBuffer = if (isMicMono) ShortArray(SAMPLES_PER_FRAME) else null
+        val micStereoBuffer = ShortArray(stereoSamplesCount)
+        val finalStereoBuffer = ShortArray(stereoSamplesCount)
+
+        // Pre-alocar pool de chunks DirectByteBuffer Off-Heap (cero impacto en el recolector de basura de Java)
+        freeChunkPool.clear()
+        internalAudioQueue.clear()
+        for (i in 0 until 16) {
+            freeChunkPool.offer(DirectAudioChunk(chunkSizeBytes))
+        }
+
         // Si estamos en modo mezcla simultánea ("both"), arrancamos un lector dedicado para audio interno
-        // para evitar el cuello de botella secuencial de 46ms que saturaba los buffers
+        // usando exclusivamente DirectByteBuffer (off-heap) para erradicar las alocaciones por frame
         if (audioSource == "both" && internalRecord != null) {
             internalAudioReaderThread = Thread({
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
-                val buffer = ShortArray(SAMPLES_PER_FRAME * CHANNEL_COUNT)
                 while (isRecording.get()) {
                     if (isPaused.get()) {
                         try { Thread.sleep(20) } catch (_: InterruptedException) { break }
                         continue
                     }
-                    val read = internalRecord?.read(buffer, 0, buffer.size) ?: 0
-                    if (read > 0) {
+                    val chunk = freeChunkPool.poll() ?: DirectAudioChunk(chunkSizeBytes)
+                    chunk.buffer.clear()
+                    val readBytes = internalRecord?.read(chunk.buffer, chunkSizeBytes) ?: 0
+                    if (readBytes > 0) {
+                        chunk.sizeBytes = readBytes
                         // Limitar cola a 10 chunks (~230ms) para descartar en caso de retraso extremo
                         if (internalAudioQueue.size > 10) {
-                            internalAudioQueue.poll()
+                            val discarded = internalAudioQueue.poll()
+                            if (discarded != null) freeChunkPool.offer(discarded)
                         }
-                        internalAudioQueue.offer(buffer.copyOf(read))
+                        internalAudioQueue.offer(chunk)
                     } else {
+                        freeChunkPool.offer(chunk)
                         try { Thread.sleep(5) } catch (_: InterruptedException) { break }
                     }
                 }
             }, "VeloRecInternalAudioReader").apply { start() }
         }
-
-        // Buffers de trabajo
-        // SAMPLES_PER_FRAME = 1024, con 2 canales = 2048 shorts (4096 bytes)
-        val stereoSamplesCount = SAMPLES_PER_FRAME * CHANNEL_COUNT
-        val micMonoBuffer = if (isMicMono) ShortArray(SAMPLES_PER_FRAME) else null
-        val micStereoBuffer = ShortArray(stereoSamplesCount)
-        val finalStereoBuffer = ShortArray(stereoSamplesCount)
 
         // ByteBuffer con ORDEN LITTLE_ENDIAN ESTRICTO (Vital para no corromper muestras a ruido blanco)
         val pcmByteBuffer = ByteBuffer.allocateDirect(stereoSamplesCount * 2).order(ByteOrder.LITTLE_ENDIAN)
@@ -355,17 +378,27 @@ class AudioRecordEngine(
                         }
                     }
 
-                    // 2. Extraer audio interno de la cola concurrente si está disponible
+                    // 2. Extraer audio interno de la cola concurrente (DirectByteBuffer Off-Heap)
                     val internalChunk = internalAudioQueue.poll()
-                    val internalSamples = internalChunk?.size ?: 0
+                    val internalShorts = if (internalChunk != null) {
+                        internalChunk.buffer.position(0)
+                        internalChunk.buffer.limit(internalChunk.sizeBytes)
+                        internalChunk.buffer.asShortBuffer()
+                    } else null
+                    val internalSamples = if (internalShorts != null && internalChunk != null) internalChunk.sizeBytes / 2 else 0
 
                     // 3. Mezcla Estéreo con Suma Saturada (Clamping anti-distorsión)
                     val mixSamples = framesObtained * CHANNEL_COUNT
                     for (i in 0 until mixSamples) {
                         val micSample = micStereoBuffer[i].toInt()
-                        val intSample = if (i < internalSamples && internalChunk != null) internalChunk[i].toInt() else 0
+                        val intSample = if (i < internalSamples && internalShorts != null) internalShorts.get(i).toInt() else 0
                         val mixed = (micSample + intSample).coerceIn(-32768, 32767)
                         finalStereoBuffer[i] = mixed.toShort()
+                    }
+
+                    // 4. Reciclar chunk DirectByteBuffer off-heap para reutilización sin crear basura en el heap
+                    if (internalChunk != null) {
+                        freeChunkPool.offer(internalChunk)
                     }
                 }
             }

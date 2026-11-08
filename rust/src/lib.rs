@@ -220,6 +220,11 @@ impl RustRecorderEngine {
             .name("velorec_rust_worker".into())
             .spawn(move || {
                 info!("Rust 2024: Hilo de codificación activo.");
+                // Configurar prioridad de tiempo real para el hilo de codificación en Rust (nice -16)
+                // Inmuniza la codificación frente a interrupciones del Garbage Collector o LMK
+                unsafe {
+                    libc::setpriority(libc::PRIO_PROCESS, 0, -16);
+                }
                 let codec = codec_addr as *mut ndk_sys::AMediaCodec;
                 let muxer = muxer_addr as *mut ndk_sys::AMediaMuxer;
                 let native_window = native_window_addr as *mut ndk_sys::ANativeWindow;
