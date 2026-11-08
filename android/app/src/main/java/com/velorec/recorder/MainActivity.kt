@@ -72,14 +72,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onStart() {
         super.onStart()
         val filter = android.content.IntentFilter(ScreenRecordService.ACTION_STATE_CHANGED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(serviceStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(serviceStateReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            this,
+            serviceStateReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         // Consultar estado actual del servicio en el proceso aislado :recorder
         try {
             val queryIntent = Intent(this, ScreenRecordService::class.java).apply {

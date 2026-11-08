@@ -13,6 +13,8 @@
 //! 6. Cumple estrictamente con Rust Edition 2024 utilizando #[unsafe(no_mangle)] y transferencia segura
 //!    entre hilos mediante direcciones escalares (usize) inmunes a restricciones de punteros crudos !Send.
 
+#![allow(clippy::collapsible_if, clippy::missing_safety_doc, clippy::let_unit_value)]
+
 use std::ffi::CString;
 use std::fs::OpenOptions;
 use std::os::unix::io::IntoRawFd;
@@ -335,13 +337,11 @@ impl RustRecorderEngine {
                             muxer_started = true;
                             ndk_sys::AMediaFormat_delete(new_format);
                             info!("Rust 2024: Muxer iniciado con pista de video {}", video_track_index);
-                        } else if out_idx == AMEDIACODEC_INFO_TRY_AGAIN_LATER {
-                            if stop_requested {
-                                drain_retries += 1;
-                                if drain_retries >= MAX_DRAIN_RETRIES {
-                                    info!("Rust 2024: Drenado completado tras stop ({} reintentos)", drain_retries);
-                                    break;
-                                }
+                        } else if out_idx == AMEDIACODEC_INFO_TRY_AGAIN_LATER && stop_requested {
+                            drain_retries += 1;
+                            if drain_retries >= MAX_DRAIN_RETRIES {
+                                info!("Rust 2024: Drenado completado tras stop ({} reintentos)", drain_retries);
+                                break;
                             }
                         }
                     }
@@ -414,7 +414,7 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     codec: JString<'local>,
     audio: JString<'local>,
 ) -> jobject {
-    let _ = android_logger::init_once(
+    android_logger::init_once(
         android_logger::Config::default()
             .with_max_level(LevelFilter::Info)
             .with_tag("VeloRec_Rust2024"),
@@ -510,3 +510,39 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rust_recorder_config_defaults() {
+        let config = RustRecorderConfig {
+            output_path: "/data/local/tmp/test.mp4".into(),
+            width: 1080,
+            height: 1920,
+            fps: 60,
+            bitrate_bps: 12_000_000,
+            codec_mime: "video/avc".into(),
+            audio_source: "both".into(),
+        };
+
+        assert_eq!(config.width % 2, 0);
+        assert_eq!(config.height % 2, 0);
+        assert_eq!(config.fps, 60);
+        assert_eq!(config.codec_mime, "video/avc");
+    }
+
+    #[test]
+    fn test_recorder_command_channel_delivery() {
+        let (tx, rx) = bounded::<RecorderCommand>(4);
+        assert!(tx.send(RecorderCommand::Pause).is_ok());
+        assert!(tx.send(RecorderCommand::Resume).is_ok());
+        assert!(tx.send(RecorderCommand::Stop).is_ok());
+
+        assert!(matches!(rx.recv().unwrap(), RecorderCommand::Pause));
+        assert!(matches!(rx.recv().unwrap(), RecorderCommand::Resume));
+        assert!(matches!(rx.recv().unwrap(), RecorderCommand::Stop));
+    }
+}
+

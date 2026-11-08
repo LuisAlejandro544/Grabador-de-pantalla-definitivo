@@ -83,15 +83,15 @@ public:
      * Aplica el programa de sombreado a la superficie gráfica actual
      */
     void bind();
-    void unbind();
+    static void unbind();
 
     [[nodiscard]] bool isReady() const noexcept { return isInitialized_; }
     [[nodiscard]] GLuint getProgramHandle() const noexcept { return programHandle_; }
     [[nodiscard]] ShaderFormat getActiveFormat() const noexcept { return activeFormat_; }
 
 private:
-    std::expected<GLuint, std::string> compileGlslShader(GLenum type, std::string_view source);
-    std::expected<GLuint, std::string> loadSpirvShader(GLenum type, std::span<const uint32_t> bytecode);
+    static std::expected<GLuint, std::string> compileGlslShader(GLenum type, std::string_view source);
+    static std::expected<GLuint, std::string> loadSpirvShader(GLenum type, std::span<const uint32_t> bytecode);
 
     GLuint programHandle_ = 0;
     GLuint vertexShaderHandle_ = 0;
