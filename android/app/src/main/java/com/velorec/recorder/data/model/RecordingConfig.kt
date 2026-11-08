@@ -40,22 +40,27 @@ data class ResolutionPreset(
     val height: Int,
     val label: String,
     val recommendedBitrateMbps: Int,
-    val isNative: Boolean = false
+    val isNative: Boolean = false,
+    val scalePercent: Int = 100
 )
 
 val RESOLUTION_PRESETS = listOf(
-    ResolutionPreset("native", "Nativa (Pantalla)", 1080, 2400, "Real", 12, isNative = true),
-    ResolutionPreset("1080p", "1080p FHD", 1080, 1920, "FHD", 12),
-    ResolutionPreset("720p", "720p HD", 720, 1280, "HD", 8),
-    ResolutionPreset("480p", "480p SD", 480, 854, "SD", 4),
-    ResolutionPreset("1440p", "1440p 2K", 1440, 2560, "2K", 24),
-    ResolutionPreset("4k", "4K UHD", 2160, 3840, "4K", 35)
+    ResolutionPreset("native_100", "Nativa 100% (Pantalla)", 1080, 2400, "Real", 14, isNative = true, scalePercent = 100),
+    ResolutionPreset("native_fhd", "Nativa FHD Adaptada", 1080, 2400, "FHD", 12, isNative = true, scalePercent = 100),
+    ResolutionPreset("native_hd", "Nativa HD Adaptada", 720, 1600, "HD", 8, isNative = true, scalePercent = 67),
+    ResolutionPreset("native_sd", "Nativa Ahorro (Gaming)", 540, 1200, "SD", 4, isNative = true, scalePercent = 50),
+    ResolutionPreset("1080p", "1080p FHD (9:16)", 1080, 1920, "FHD", 12),
+    ResolutionPreset("720p", "720p HD (9:16)", 720, 1280, "HD", 8),
+    ResolutionPreset("480p", "480p SD (9:16)", 480, 854, "SD", 4),
+    ResolutionPreset("1440p", "1440p 2K (9:16)", 1440, 2560, "2K", 24),
+    ResolutionPreset("4k", "4K UHD (9:16)", 2160, 3840, "4K", 35)
 )
 
 /**
  * Genera resoluciones adaptadas a la relación de aspecto real de la pantalla del smartphone del usuario.
  * Garantiza que ancho y alto sean números pares (múltiplos de 2) y previene barras verdes
  * por desajuste entre VirtualDisplay y la superficie física del dispositivo.
+ * Permite seleccionar diferentes resoluciones y calidades conservando el aspect ratio nativo de la pantalla.
  */
 fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
     val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
@@ -72,7 +77,7 @@ fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
         val h = maxOf(metrics.widthPixels, metrics.heightPixels)
         Pair(if (w % 2 == 0) w else w - 1, if (h % 2 == 0) h else h - 1)
     } else {
-        Pair(1080, 1920)
+        Pair(1080, 2400)
     }
 
     val aspect = screenHeight.toDouble() / screenWidth.toDouble().coerceAtLeast(1.0)
@@ -82,47 +87,82 @@ fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
         return if (calculated % 2 == 0) calculated else calculated + 1
     }
 
+    val screenScaleBase = screenWidth.coerceAtLeast(1)
+
     return listOf(
         ResolutionPreset(
-            id = "native",
-            name = "Nativa (${screenWidth}p)",
+            id = "native_100",
+            name = "Nativa 100% (${screenWidth}x${screenHeight})",
             width = screenWidth,
             height = screenHeight,
             label = "Pantalla",
-            recommendedBitrateMbps = if (screenWidth >= 1080) 12 else 8,
-            isNative = true
+            recommendedBitrateMbps = if (screenWidth >= 1080) 14 else 8,
+            isNative = true,
+            scalePercent = 100
+        ),
+        ResolutionPreset(
+            id = "native_fhd",
+            name = "Nativa FHD Adaptada",
+            width = 1080,
+            height = calculateHeight(1080),
+            label = "FHD",
+            recommendedBitrateMbps = 12,
+            isNative = true,
+            scalePercent = minOf(100, (1080 * 100 / screenScaleBase))
+        ),
+        ResolutionPreset(
+            id = "native_hd",
+            name = "Nativa HD Adaptada",
+            width = 720,
+            height = calculateHeight(720),
+            label = "HD",
+            recommendedBitrateMbps = 8,
+            isNative = true,
+            scalePercent = minOf(100, (720 * 100 / screenScaleBase))
+        ),
+        ResolutionPreset(
+            id = "native_sd",
+            name = "Nativa Ahorro (Gaming)",
+            width = 540,
+            height = calculateHeight(540),
+            label = "SD",
+            recommendedBitrateMbps = 4,
+            isNative = true,
+            scalePercent = minOf(100, (540 * 100 / screenScaleBase))
+        ),
+        ResolutionPreset(
+            id = "native_2k",
+            name = "Nativa 2K Ultra",
+            width = 1440,
+            height = calculateHeight(1440),
+            label = "2K",
+            recommendedBitrateMbps = 24,
+            isNative = true,
+            scalePercent = (1440 * 100 / screenScaleBase)
         ),
         ResolutionPreset(
             id = "1080p",
-            name = "1080p FHD",
+            name = "1080p FHD (Estándar 9:16)",
             width = 1080,
-            height = calculateHeight(1080),
+            height = 1920,
             label = "FHD",
             recommendedBitrateMbps = 12
         ),
         ResolutionPreset(
             id = "720p",
-            name = "720p HD",
+            name = "720p HD (Estándar 9:16)",
             width = 720,
-            height = calculateHeight(720),
+            height = 1280,
             label = "HD",
             recommendedBitrateMbps = 8
         ),
         ResolutionPreset(
             id = "480p",
-            name = "480p SD",
+            name = "480p SD (Estándar 9:16)",
             width = 480,
-            height = calculateHeight(480),
+            height = 854,
             label = "SD",
             recommendedBitrateMbps = 4
-        ),
-        ResolutionPreset(
-            id = "1440p",
-            name = "1440p 2K",
-            width = 1440,
-            height = calculateHeight(1440),
-            label = "2K",
-            recommendedBitrateMbps = 24
         )
     )
 }

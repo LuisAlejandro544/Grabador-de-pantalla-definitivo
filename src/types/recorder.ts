@@ -18,7 +18,10 @@ export interface ResolutionConfig {
   height: number;
   aspectRatio: string;
   recommendedBitrateMbps: number;
-  category: 'SD' | 'HD' | 'FHD' | '2K' | '4K';
+  category: 'SD' | 'HD' | 'FHD' | '2K' | '4K' | 'NATIVE';
+  isNative?: boolean;
+  scalePercent?: number;
+  scaleLabel?: string;
 }
 
 export interface RecorderSettings {

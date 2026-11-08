@@ -7,19 +7,71 @@
 import { ResolutionConfig, NativeEngineType, EngineLiveMetrics } from '../types/recorder';
 
 /**
- * Presets estándar de resoluciones optimizadas para pantallas móviles
- * (Modo vertical típico 9:16 o modo horizontal 16:9).
+/**
+ * Genera preajustes de resolución escalados proporcionalmente a la pantalla nativa del dispositivo.
+ * Garantiza que todas las dimensiones sean números pares (% 2 === 0) requeridos por codificadores
+ * YUV420p de hardware y conserven exactamente la relación de aspecto del teléfono (evitando barras negras).
+ */
+export function generateNativeResolutionPresets(
+  screenWidth: number = 1080,
+  screenHeight: number = 2400
+): ResolutionConfig[] {
+  const cleanW = screenWidth % 2 === 0 ? screenWidth : screenWidth - 1;
+  const cleanH = screenHeight % 2 === 0 ? screenHeight : screenHeight - 1;
+  const aspect = cleanH / Math.max(1, cleanW);
+  const ratioLabel = `Nativa (${aspect.toFixed(2)}:1)`;
+
+  const makePreset = (
+    id: string,
+    name: string,
+    targetW: number,
+    scalePercent: number,
+    recommendedBitrateMbps: number,
+    category: 'SD' | 'HD' | 'FHD' | '2K' | '4K' | 'NATIVE'
+  ): ResolutionConfig => {
+    const rawH = Math.round(targetW * aspect);
+    const evenW = targetW % 2 === 0 ? targetW : targetW - 1;
+    const evenH = rawH % 2 === 0 ? rawH : rawH + 1;
+
+    return {
+      id,
+      name,
+      width: evenW,
+      height: evenH,
+      aspectRatio: ratioLabel,
+      recommendedBitrateMbps,
+      category,
+      isNative: true,
+      scalePercent,
+      scaleLabel: `${scalePercent}%`
+    };
+  };
+
+  return [
+    makePreset('native-100', `Nativa 100% (${cleanW}x${cleanH})`, cleanW, 100, cleanW >= 1440 ? 24 : cleanW >= 1080 ? 14 : 8, 'NATIVE'),
+    makePreset('native-fhd', 'Nativa FHD Adaptada (1080p)', 1080, Math.min(100, Math.round((1080 / cleanW) * 100)), 12, 'FHD'),
+    makePreset('native-hd', 'Nativa HD Adaptada (720p)', 720, Math.min(100, Math.round((720 / cleanW) * 100)), 8, 'HD'),
+    makePreset('native-sd', 'Nativa Ahorro / Gaming (540p)', 540, Math.min(100, Math.round((540 / cleanW) * 100)), 4, 'SD'),
+    makePreset('native-2k', 'Nativa 2K Ultra (1440p)', 1440, Math.round((1440 / cleanW) * 100), 24, '2K')
+  ];
+}
+
+export const NATIVE_DEFAULT_PRESETS = generateNativeResolutionPresets(1080, 2400);
+
+/**
+ * Presets estándar de resoluciones optimizadas para pantallas móviles.
  * Se aseguran dimensiones pares requeridas por codificadores de hardware YUV420p.
  */
 export const RESOLUTION_PRESETS: ResolutionConfig[] = [
+  NATIVE_DEFAULT_PRESETS[0], // Nativa 100% (Pantalla Completa)
   {
-    id: '480p',
-    name: '480p SD (Ahorro de batería)',
-    width: 480,
-    height: 854,
+    id: '1080p',
+    name: '1080p Full HD (Recomendado)',
+    width: 1080,
+    height: 1920,
     aspectRatio: '9:16',
-    recommendedBitrateMbps: 3,
-    category: 'SD'
+    recommendedBitrateMbps: 12,
+    category: 'FHD'
   },
   {
     id: '720p',
@@ -31,13 +83,13 @@ export const RESOLUTION_PRESETS: ResolutionConfig[] = [
     category: 'HD'
   },
   {
-    id: '1080p',
-    name: '1080p Full HD (Recomendado)',
-    width: 1080,
-    height: 1920,
+    id: '480p',
+    name: '480p SD (Ahorro de batería)',
+    width: 480,
+    height: 854,
     aspectRatio: '9:16',
-    recommendedBitrateMbps: 12,
-    category: 'FHD'
+    recommendedBitrateMbps: 3,
+    category: 'SD'
   },
   {
     id: '1440p',

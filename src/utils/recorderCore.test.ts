@@ -14,7 +14,8 @@ import {
   getGalleryPublicAlbumPath,
   detectVideoContainer,
   COUNTDOWN_PRESETS,
-  validateCountdownSeconds
+  validateCountdownSeconds,
+  generateNativeResolutionPresets
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -181,6 +182,34 @@ test('validateCountdownSeconds validates delays and provides safe fallback', () 
   const invalid = validateCountdownSeconds(99);
   assert.equal(invalid.valid, false);
   assert.equal(invalid.seconds, 3);
+});
+
+test('generateNativeResolutionPresets creates proportional even resolutions for mobile aspect ratios', () => {
+  // Test with typical 20:9 smartphone screen (1080 x 2400)
+  const presets20x9 = generateNativeResolutionPresets(1080, 2400);
+  assert.equal(presets20x9.length, 5);
+
+  // All presets must have even dimensions for YUV420p hardware codecs
+  for (const preset of presets20x9) {
+    assert.equal(preset.width % 2, 0, `Width ${preset.width} must be even`);
+    assert.equal(preset.height % 2, 0, `Height ${preset.height} must be even`);
+    assert.ok(preset.width >= 240 && preset.height >= 240);
+    assert.equal(preset.isNative, true);
+    assert.ok(preset.recommendedBitrateMbps >= 4);
+  }
+
+  // Native 100% should match screen
+  const native100 = presets20x9.find(p => p.id === 'native-100');
+  assert.ok(native100 !== undefined);
+  assert.equal(native100?.width, 1080);
+  assert.equal(native100?.height, 2400);
+
+  // Test with non-even screen input to ensure normalization
+  const oddPresets = generateNativeResolutionPresets(1081, 2399);
+  for (const preset of oddPresets) {
+    assert.equal(preset.width % 2, 0);
+    assert.equal(preset.height % 2, 0);
+  }
 });
 
 

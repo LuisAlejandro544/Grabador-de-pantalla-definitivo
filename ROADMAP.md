@@ -24,8 +24,13 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
   - Selector en GitHub Actions (`build-apk.yml`) para compilar APK Universal o APK individual por arquitectura reduciendo el tamaño de descarga.
 - [x] **Temporizador de Cuenta Regresiva de Inicio (0s, 3s, 5s, 10s)**:
   - Retardo táctil antes de comenzar la captura de pantalla con contador animado y botón de cancelación inmediata.
-- [x] **Resoluciones Proporcionales Adaptativas Antideformación**:
+- [x] **Resoluciones Proporcionales Adaptativas Antideformación con Selector de Escala Nativa**:
   - Detección del aspect ratio del smartphone (20:9, 19.5:9, 18:9) con ajuste par YUV420p que erradica por completo barras verdes en pantalla.
+  - Soporte para 5 calidades en proporción nativa: 100% Pantalla Completa (1:1), FHD Adaptada (1080p), HD Adaptada (720p), Ahorro Gaming (540p) y 2K Ultra (1440p).
+- [x] **Integración de Biblioteca Google libyuv (C++23 & SIMD ARM NEON)**:
+  - Enlace de la biblioteca estándar de Google (Licencia BSD) con soporte de vectorización NEON para 32 bits (`armeabi-v7a`) y 64 bits (`arm64-v8a`), acelerando conversiones de color y escalado bilineal.
+- [x] **Flujo de Auditoría de Código para Producción en GitHub Actions (`code-analysis-audit.yml`)**:
+  - Automatización de análisis estático integral ejecutado en la nube con `workflow_dispatch`: Android Lint (Kotlin), Cppcheck (C++23/libyuv), Clippy (Rust 2024) y verificación de tipos/tests en TypeScript.
 - [x] **Grabación Directa NDK C++23 / Rust 2024 sin Recolector de Basura (GC-Free)**:
   - Canalización directa de cuadros de hardware a `ANativeWindow` y empaquetado en C++23 y Rust con `AMediaMuxer`.
   - Cero pausas del Garbage Collector de Android (JVM/ART) durante la captura de pantalla a 60/120 FPS.
@@ -34,7 +39,7 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
 - [x] **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
   - Guardado automático mediante MediaStore API (Scoped Storage) e indexación instantánea con `MediaScannerConnection` para visibilidad inmediata en Google Fotos, Galería Samsung, Xiaomi, etc.
 - [x] **Suite de Pruebas Unitarias Deterministas**:
-  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, temporizador de cuenta regresiva, comandos FFmpeg, rutas de galería y métricas de motor.
+  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, temporizador de cuenta regresiva, resoluciones nativas proporcionales, comandos FFmpeg, rutas de galería y métricas de motor.
 
 ---
 

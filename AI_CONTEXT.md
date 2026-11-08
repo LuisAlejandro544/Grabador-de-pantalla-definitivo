@@ -43,6 +43,7 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
 6. **Cuenta Regresiva y Presets Adaptativos a la Pantalla**:
    - Toda inicialización de grabación debe respetar la cuenta regresiva seleccionada (0s / desactivada, 3s, 5s o 10s) con interfaz táctil de cancelación inmediata.
    - Las resoluciones ofrecidas deben adaptarse al aspect ratio físico del teléfono (ej. 20:9 o 19.5:9) y garantizar dimensiones pares para evitar desbordamientos y barras verdes en codificadores de hardware.
+   - **Múltiples Escalas Nativas**: Permite seleccionar variantes en la misma relación de aspecto: 100% Nativa (1:1), FHD Adaptada, HD Adaptada, Ahorro Gaming (540p) y 2K Ultra.
 7. **Políticas de Propiedad Intelectual y Licenciamiento**:
    - Nunca incluir nombres de marcas comerciales protegidas en nombres de archivos.
    - Solo usar dependencias con licencias permisivas (MIT, Apache-2.0, BSD). Prohibido introducir librerías GPL o copyleft que obliguen a abrir el código.
@@ -53,6 +54,11 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
 9. **Grabación NDK Pura y Almacenamiento Público en Galería**:
    - Toda grabación completada se publica directamente en la Galería del usuario (`Movies/VeloRec`) mediante Scoped Storage y `MediaScannerConnection`.
    - Limpieza automática de archivos temporales al iniciar el servicio, garantizando que el almacenamiento del dispositivo se mantenga optimizado.
+10. **Auditoría de Calidad y Seguridad para Producción en CI (`code-analysis-audit.yml`)**:
+   - Workflow activado **estrictamente por `workflow_dispatch`**.
+   - Ejecuta análisis estático multinivel: Android Lint (Kotlin API 35 / fugas de memoria), Cppcheck (C++23 y libyuv), Clippy (Rust 2024 / memory safety sin GC) y comprobación TypeScript/node:test.
+11. **Biblioteca Google libyuv (C++23 & SIMD NEON)**:
+   - Integrada en CMake con `libyuv_bridge.hpp` y `libyuv_bridge.cpp`. Proporciona la base para conversiones YUV420 y escalado bilineal acelerado por hardware para 32 y 64 bits.
 
 ---
 

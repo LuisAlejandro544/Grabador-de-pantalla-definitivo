@@ -244,25 +244,43 @@ fun NativeRecorderViewport(
                 ) {
                     availableResolutions.forEach { preset ->
                         val isSelected = selectedResolution.id == preset.id
+                        val chipColor = if (isSelected) {
+                            if (preset.isNative) Color(0xFF059669) else primaryColor
+                        } else {
+                            if (preset.isNative) Color(0xFF064E3B).copy(alpha = 0.35f) else DarkCard
+                        }
+                        val borderColor = if (isSelected) {
+                            if (preset.isNative) Color(0xFF34D399) else primaryColor
+                        } else {
+                            if (preset.isNative) Color(0xFF059669).copy(alpha = 0.5f) else Color(0xFF334155)
+                        }
+
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) primaryColor else DarkCard,
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) primaryColor else Color(0xFF334155)
-                            ),
+                            color = chipColor,
+                            border = BorderStroke(1.dp, borderColor),
                             shadowElevation = if (isSelected) 3.dp else 0.dp,
                             modifier = Modifier.clickable(enabled = !isRecording) {
                                 onResolutionChange(preset)
                             }
                         ) {
-                            Text(
-                                text = preset.name.split(" ")[0] + " (${preset.id.uppercase()})",
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else Color(0xFFCBD5E1),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp)
+                            ) {
+                                if (preset.isNative) {
+                                    Text(
+                                        text = "📱 ",
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Text(
+                                    text = preset.name.split(" ")[0] + " (${preset.label})",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else if (preset.isNative) Color(0xFF6EE7B7) else Color(0xFFCBD5E1)
+                                )
+                            }
                         }
                     }
                 }

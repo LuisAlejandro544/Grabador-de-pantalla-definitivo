@@ -31,10 +31,18 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
 - **Temporizador de Cuenta Regresiva de Inicio**:
   - Configurable en 0s (inmediata), 3s (ideal/recomendada), 5s y 10s.
   - Overlay visual táctil de cuenta atrás con botón de cancelación instantánea para dar tiempo al usuario de cambiar a la app o juego antes de grabar.
-- **Resoluciones Proporcionales Adaptadas al Smartphone**:
+- **Resoluciones Proporcionales Adaptadas al Smartphone con Selector de Escala Nativa**:
   - Detección en vivo de la relación de aspecto nativa del dispositivo (ej. 20:9, 19.5:9, 18:9) con cálculo automático de paridad de píxeles (`width % 2 == 0 && height % 2 == 0`) eliminando desajustes de pantalla y barras verdes en codificadores de hardware.
+  - **Múltiples Resoluciones en Proporción Nativa**: Permite al usuario elegir diferentes calidades ocupando el 100% de la pantalla sin deformación:
+    - **Nativa 100% (Pantalla Completa 1:1)**: Resolución nativa total del panel táctil (ej. 1080x2400 px).
+    - **Nativa FHD Adaptada (1080p)**: Nitidez excelente con menor temperatura.
+    - **Nativa HD Adaptada (720p)**: Equilibrada para partidas largas y tutoriales.
+    - **Nativa Ahorro / Gaming (540p)**: Máxima fluidez sin calentamiento en celulares de gama media y baja.
+    - **Nativa 2K Ultra (1440p)**: Máxima nitidez para pantallas Quad HD+.
+- **Integración Nativa con Google libyuv (C++23 & SIMD ARM NEON)**:
+  - Infraestructura lista con la biblioteca oficial **`libyuv` de Google (Licencia BSD)** acelerada por hardware SIMD (ARM NEON para 32 bits `armeabi-v7a` y 64 bits `arm64-v8a`) para conversiones de color ultrarrápidas (RGBA a YUV420 Planar / NV12) y escalado bilineal continuo.
 - **Control Total de Video y Audio**:
-  - Resoluciones predefinidas (Nativa de pantalla, 1080p FHD, 720p HD, 480p SD, 1440p 2K, 4K UHD) y resolución personalizada con comprobación de paridad YUV420p.
+  - Resoluciones predefinidas (Modo Nativo de Pantalla con escalas y Estándar 9:16: 1080p FHD, 720p HD, 480p SD, 1440p 2K, 4K UHD) y resolución personalizada con comprobación de paridad YUV420p.
   - Tasas de cuadro: 24, 30, 60, 90 y 120 FPS.
   - Bitrate ajustable de 2 a 50 Mbps con cálculo de almacenamiento en vivo.
   - Códecs por hardware: H.264 (AVC), H.265 (HEVC) y AV1.
@@ -99,6 +107,20 @@ Este proyecto incluye un flujo de **GitHub Actions** configurado con activación
 4. **Descarga el APK**:
    - En 3-4 minutos, GitHub Actions terminará la compilación.
    - En la sección **Artifacts** descarga el archivo resultante (`VeloRec-Debug-APK-Universal`, `VeloRec-Debug-APK-arm64-v8a`, etc.) e instálalo de inmediato en tu celular o súbelo a Uptodown.
+
+---
+
+## 🛡️ Auditoría y Análisis de Código para Producción (Lint & Seguridad)
+
+Para garantizar la estabilidad del APK en tiendas de terceros como Uptodown y prevenir crasheos inesperados en celulares de usuarios, dispones del flujo de GitHub Actions **"Auditoría y Análisis de Código para Producción"** (`.github/workflows/code-analysis-audit.yml`), ejecutable manualmente (`workflow_dispatch`) desde tu teléfono:
+
+1. **Análisis Estático Multilenguaje**:
+   - **Kotlin & Android Lint**: Analiza fugas de memoria, llamadas bloqueantes en el hilo principal de la UI, cumplimiento estricto de permisos en Android 14/15 (`FOREGROUND_SERVICE_MEDIA_PROJECTION`) y compatibilidad con `minSdk 26`.
+   - **C++23 & libyuv (`cppcheck`)**: Inspección de punteros crudos, desbordamientos de buffer (*buffer overflow*) y fugas de memoria en la tubería `ANativeWindow`.
+   - **Rust Edition 2024 (`cargo clippy` & `cargo check`)**: Detección de anti-patrones, posibles pánicos (`unwrap` inseguros) y validación de seguridad de memoria concurrente para ARM64.
+   - **TypeScript & Lógica Pura**: Comprobación de tipos estrictos (`tsc --noEmit`) y suite de tests unitarios matemáticos (`recorderCore.test.ts`).
+2. **Reporte Ejecutivo para Descarga Móvil**:
+   - Genera el artefacto `Reporte-Auditoria-Produccion-VeloRec` con un informe legible en formato Markdown (`AUDIT_SUMMARY.md`) y los reportes detallados de Android Lint en HTML para inspeccionarlos directamente desde el smartphone.
 
 ---
 

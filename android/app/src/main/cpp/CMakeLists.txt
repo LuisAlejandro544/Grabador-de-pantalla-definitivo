@@ -23,6 +23,7 @@ add_compile_options(
 # Definir biblioteca compartida .so
 add_library(velorec_cpp23 SHARED
     NativeRecorderEngine.cpp
+    libyuv_bridge.cpp
 )
 
 # Inclusiones de encabezados
@@ -44,6 +45,13 @@ target_link_libraries(velorec_cpp23 PRIVATE
 find_package(oboe CONFIG QUIET)
 if(oboe_FOUND)
     target_link_libraries(velorec_cpp23 PRIVATE oboe::oboe)
+endif()
+
+# Integración con Google libyuv (Licencia BSD) para transformaciones de color aceleradas por hardware
+find_package(libyuv CONFIG QUIET)
+if(libyuv_FOUND)
+    target_link_libraries(velorec_cpp23 PRIVATE libyuv::yuv)
+    target_compile_definitions(velorec_cpp23 PRIVATE HAS_LIBYUV=1)
 endif()
 
 # Optimización de tamaño eliminando símbolos no utilizados

@@ -286,7 +286,7 @@ fun NativeSettingsSection(
                                     color = if (isSelected) accentColor else Color.White
                                 )
                                 Text(
-                                    text = "${preset.width} x ${preset.height} px (${if (preset.isNative) "Nativa 1:1" else "Proporcional"})",
+                                    text = "${preset.width} x ${preset.height} px • ${if (preset.isNative) "📱 Nativa (${preset.scalePercent}%)" else "📺 Estándar 9:16"}",
                                     fontSize = 11.sp,
                                     color = Color(0xFF94A3B8)
                                 )

@@ -1,6 +1,6 @@
 {
   "name": "VeloRec Studio - Mobile Screen Recorder",
   "description": "Grabador de pantalla móvil de alto rendimiento con arquitectura 100% nativa en Kotlin (Jetpack Compose Material 3), C++23 y Rust (Edition 2024).",
-  "requestFramePermissions": ["display-capture", "camera", "microphone"],
+  "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

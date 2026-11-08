@@ -226,6 +226,10 @@ dependencies {
     // Conmuta automáticamente entre AAudio (API 26+) y OpenSL ES para micrófono y audio interno
     implementation("com.google.oboe:oboe:1.9.0")
 
+    // Nota de Bibliotecas Nativas NDK (C++23):
+    // Google libyuv (Licencia BSD) y Oboe se integran a través de CMake (src/main/cpp/CMakeLists.txt)
+    // para aceleración vectorial SIMD ARM NEON en conversiones de color YUV420/NV12 y escalado de pantalla.
+
     // Kotlin Coroutines para evitar bloqueos en el hilo de la interfaz de usuario
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")

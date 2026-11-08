@@ -69,4 +69,9 @@ npm run build
   - Cuando se graba con audio, la fusión se realiza de forma instantánea (<200 ms) mediante `AudioMuxerHelper` utilizando el subsistema oficial de Android (`MediaExtractor` y `MediaMuxer`), prescindiendo de binarios externos pesados o incompatibles como FFmpeg.
 - **Publicación en Galería Pública del Dispositivo**:
   - Toda grabación finalizada se publica en `Movies/VeloRec` mediante `GalleryStorageManager` (MediaStore Scoped Storage + `MediaScannerConnection.scanFile`) para garantizar que aparezca de inmediato en Google Fotos y en la galería nativa del usuario.
+- **Auditoría de Código y Calidad para Producción (`code-analysis-audit.yml`)**:
+  - Flujo manual para evaluar seguridad y estabilidad antes de publicar en tiendas como Uptodown. Corre Android Lint (`./gradlew lintDebug`), `cppcheck` para C++23 y libyuv, y `cargo clippy` para Rust 2024.
+- **Integración con Google libyuv (C++23 & SIMD NEON)**:
+  - Incluye `libyuv_bridge.hpp` y `libyuv_bridge.cpp` en `android/app/src/main/cpp`. Proporciona transformaciones de color seguras sin excepciones (`std::expected`, `std::span`) y escalado bilineal para arquitecturas de 32 y 64 bits.
+
 

@@ -11,6 +11,7 @@
 ├── .github/
 │   └── workflows/
 │       ├── build-apk.yml               # GitHub Actions para compilar APK Debug manualmente con selector de ABI (universal o individual)
+│       ├── code-analysis-audit.yml     # GitHub Actions para auditoría de producción y análisis estático (Kotlin Lint, Cppcheck, Clippy, TS)
 │       └── publish-config-release.yml  # GitHub Actions para publicar app_config.json en GitHub Releases (workflow_dispatch)
 │
 ├── android/                             # Estructura del proyecto Android nativo completa
@@ -61,33 +62,38 @@
 │           │           ├── GalleryScreen.kt   # Galería de videos grabados con FileProvider
 │           │           └── BenchmarkScreen.kt # Telemetría comparativa C++23 vs Rust 2024
 │           └── cpp/
-│               ├── CMakeLists.txt      # Configuración CMake para C++23 (-std=c++23, -O3)
+│               ├── CMakeLists.txt      # Configuración CMake para C++23 (-std=c++23, -O3), libyuv y Oboe
 │               ├── NativeRecorderEngine.hpp # Cabecera C++23 con std::expected, span y jthread
-│               └── NativeRecorderEngine.cpp # AMediaCodec, AMediaMuxer, ANativeWindow y JNI
+│               ├── NativeRecorderEngine.cpp # AMediaCodec, AMediaMuxer, ANativeWindow y JNI
+│               ├── libyuv_bridge.hpp   # Interfaz C++23 para aceleración SIMD ARM NEON de Google libyuv (32 y 64 bits)
+│               └── libyuv_bridge.cpp   # Implementación de conversiones de color YUV420 y escalado bilineal con libyuv
 │
 ├── rust/                               # Motor nativo en Rust (Edition 2024)
 │   ├── Cargo.toml                      # Manifiesto de Rust con edition = "2024", cdylib y ndk-sys
 │   └── src/
 │       └── lib.rs                      # Hardware encoder NDK AMediaCodec, ANativeWindow y crossbeam
 │
-├── src/                                # Código fuente de la interfaz y utilidades
-│   ├── components/                     # Componentes modulares de pantalla táctil móvil
-│   │   ├── Navigation.tsx              # Barra de cabecera y barra de navegación inferior táctil
-│   │   ├── RecorderScreen.tsx          # Pantalla principal con monitor nativo, VU meter y controles
-│   │   ├── SettingsScreen.tsx          # Configuración de motor, resolución, FPS, códec y ABIs
-│   │   ├── GalleryScreen.tsx           # Galería de videos grabados con reproductor modal
-│   │   └── BenchmarkScreen.tsx         # Prueba de estrés comparativa C++23 vs Rust 2024
+├── src/                                # Código fuente de la página web oficial (Landing Page)
+│   ├── components/                     # Componentes de la landing page de descarga
+│   │   └── landing/                    # Secciones de presentación orientadas a usuarios comunes
+│   │       ├── Navbar.tsx              # Barra de navegación con botón de descarga del APK
+│   │       ├── HeroSection.tsx         # Titular, ventajas sin anuncios y mockup del teléfono
+│   │       ├── FeaturesSection.tsx     # Ventajas clave para gamers y creadores (sin lag, 120 FPS)
+│   │       ├── ComparisonSection.tsx   # Comparativa directa y calculadora de ahorro de espacio
+│   │       ├── RecordingModesSection.tsx # Modos de grabación (Gaming, Tutoriales, Redes)
+│   │       ├── InstallationGuideSection.tsx # Guía de instalación en 3 pasos sencillos
+│   │       ├── FAQSection.tsx          # Preguntas frecuentes sobre el APK
+│   │       ├── Footer.tsx              # Pie de página y enlaces a releases de GitHub
+│   │       └── DownloadModal.tsx       # Modal de descarga del instalador APK
 │   │
 │   ├── types/
-│   │   └── recorder.ts                 # Tipos TypeScript, interfaces de motor y resoluciones
+│   │   └── recorder.ts                 # Tipos TypeScript e interfaces de resoluciones
 │   │
-│   ├── utils/                          # Lógica pura, pruebas y exportación
-│   │   ├── nativeCodeCatalog.ts        # Catálogo de archivos nativos y descripciones
-│   │   ├── recorderCore.ts             # Funciones matemáticas desacopladas de la UI
-│   │   ├── recorderCore.test.ts        # Tests unitarios deterministas con node:test
-│   │   └── zipExport.ts                # Generador de archivo .ZIP con JSZip para móvil
+│   ├── utils/                          # Lógica pura y pruebas en CI
+│   │   ├── recorderCore.ts             # Funciones matemáticas de bitrate y validación
+│   │   └── recorderCore.test.ts        # Tests unitarios deterministas con node:test
 │   │
-│   ├── App.tsx                         # Componente raíz con estado global y MediaRecorder
+│   ├── App.tsx                         # Página principal de bienvenida y descarga
 │   ├── index.css                       # Estilos globales de Tailwind CSS v4 y fuentes
 │   └── main.tsx                        # Punto de entrada de React 19
 │
