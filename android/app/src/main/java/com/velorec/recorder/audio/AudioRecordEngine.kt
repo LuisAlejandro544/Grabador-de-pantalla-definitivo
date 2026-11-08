@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class AudioRecordEngine(
     private val context: Context,
     private val audioSource: String,
-    private val outputM4aPath: String,
+    private val outputM4aPath: String? = null,
     private val mediaProjection: MediaProjection?
 ) {
 
@@ -126,7 +126,7 @@ class AudioRecordEngine(
             start()
         }
 
-        Log.i(TAG, "Motor de audio iniciado con modo: '$audioSource' -> $outputM4aPath")
+        Log.i(TAG, "Motor de audio iniciado con modo: '$audioSource' -> ${outputM4aPath ?: "Multiplexación Nativa NDK"}")
     }
 
     fun pause() {
@@ -237,9 +237,11 @@ class AudioRecordEngine(
 
     private fun initEncoderAndMuxer() {
         try {
-            val outputFile = File(outputM4aPath)
-            outputFile.parentFile?.mkdirs()
-            if (outputFile.exists()) outputFile.delete()
+            if (!outputM4aPath.isNullOrBlank()) {
+                val outputFile = File(outputM4aPath)
+                outputFile.parentFile?.mkdirs()
+                if (outputFile.exists()) outputFile.delete()
+            }
 
             // Formato AAC-LC Estéreo (44.1 kHz, 128 kbps)
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, SAMPLE_RATE, CHANNEL_COUNT).apply {
@@ -253,7 +255,11 @@ class AudioRecordEngine(
                 start()
             }
 
-            audioMuxer = MediaMuxer(outputM4aPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            if (!outputM4aPath.isNullOrBlank()) {
+                audioMuxer = MediaMuxer(outputM4aPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            } else {
+                audioMuxer = null
+            }
             isMuxerStarted = false
             audioTrackIndex = -1
 

@@ -45,6 +45,7 @@ data class DirectGalleryRecordingTarget(
 )
 
 object GalleryStorageManager {
+    typealias DirectGalleryRecordingTarget = com.velorec.recorder.storage.DirectGalleryRecordingTarget
 
     private const val TAG = "VeloRec_Gallery"
     private const val ALBUM_DIRECTORY_NAME = "Movies/VeloRec"

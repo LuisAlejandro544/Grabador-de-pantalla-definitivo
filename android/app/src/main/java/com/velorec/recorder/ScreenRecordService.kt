@@ -20,6 +20,7 @@ import com.velorec.recorder.audio.AudioMuxerHelper
 import com.velorec.recorder.audio.AudioRecordEngine
 import com.velorec.recorder.service.RecordingNotificationHelper
 import com.velorec.recorder.storage.GalleryStorageManager
+import com.velorec.recorder.storage.DirectGalleryRecordingTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,7 +84,7 @@ class ScreenRecordService : Service() {
     private var audioEngine: AudioRecordEngine? = null
     private var tempVideoFilePath: String? = null
     private var tempAudioFilePath: String? = null
-    private var directGalleryTarget: GalleryStorageManager.DirectGalleryRecordingTarget? = null
+    private var directGalleryTarget: DirectGalleryRecordingTarget? = null
 
     companion object {
         const val ACTION_START = "com.velorec.ACTION_START"

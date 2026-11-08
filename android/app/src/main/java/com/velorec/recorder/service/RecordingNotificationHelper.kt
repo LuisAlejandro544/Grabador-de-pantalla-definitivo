@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.velorec.recorder.MainActivity
 import com.velorec.recorder.ScreenRecordService
+import java.io.File
 
 /**
  * RecordingNotificationHelper.kt
