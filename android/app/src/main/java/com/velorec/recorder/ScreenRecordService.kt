@@ -266,7 +266,15 @@ class ScreenRecordService : Service() {
                     }
                 }, mainHandler)
 
-                // Crear VirtualDisplay conectado directamente a la Surface nativa de hardware (Zero-Copy)
+                // Señalizar al motor nativo para comenzar a codificar fotogramas ANTES del VirtualDisplay
+                // Es mandatorio que AMediaCodec_start esté activo antes de que SurfaceFlinger inyecte cuadros
+                if (engine == "rust2024") {
+                    nativeStartRustEncoding()
+                } else {
+                    nativeStartCppEncoding()
+                }
+
+                // Crear VirtualDisplay conectado directamente a la Surface nativa de hardware ya activa (Zero-Copy)
                 val densityDpi = resources.displayMetrics.densityDpi
                 virtualDisplay = projection.createVirtualDisplay(
                     "VeloRec-Capture",
@@ -278,13 +286,6 @@ class ScreenRecordService : Service() {
                     null,
                     mainHandler
                 )
-
-                // Señalizar al motor nativo para comenzar a codificar fotogramas
-                if (engine == "rust2024") {
-                    nativeStartRustEncoding()
-                } else {
-                    nativeStartCppEncoding()
-                }
 
                 // Arrancar motor de captura y codificación de audio (micrófono, audio interno o mezcla estéreo)
                 if (shouldRecordAudio && audioFileToEncode != null) {
@@ -364,9 +365,18 @@ class ScreenRecordService : Service() {
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // 1. Liberar VirtualDisplay y MediaProjection PRIMERO
-                // Esto detiene inmediatamente la inyección de cuadros de la pantalla
-                // (evitando que el cierre de la barra de notificaciones cuelgue o ensucie el final del video)
+                // 1. Detener codificación en el motor nativo en Dispatchers.IO PRIMERO
+                // El motor nativo envía la señal de fin de flujo (AMediaCodec_signalEndOfInputStream)
+                // mientras la Surface y el VirtualDisplay continúan conectados y activos.
+                // Esto garantiza que el hardware drene todos los fotogramas y cierre el contenedor MP4
+                // con su átomo moov íntegro y sin corrupciones.
+                if (activeEngine == "rust2024") {
+                    nativeStopRustEncoding()
+                } else {
+                    nativeStopCppEncoding()
+                }
+
+                // 2. Liberar VirtualDisplay y MediaProjection tras el drenado completo del encoder
                 try {
                     virtualDisplay?.release()
                 } catch (e: Exception) {
@@ -380,15 +390,6 @@ class ScreenRecordService : Service() {
                     e.printStackTrace()
                 }
                 mediaProjection = null
-
-                // 2. Detener codificación en el motor nativo en Dispatchers.IO
-                // Al haberse detenido el VirtualDisplay, la señal de EOS drenará ordenadamente
-                // los últimos cuadros pendientes hacia el archivo MP4 y cerrará AMediaMuxer limpiamente
-                if (activeEngine == "rust2024") {
-                    nativeStopRustEncoding()
-                } else {
-                    nativeStopCppEncoding()
-                }
 
                 // 3. Detener motor de audio y generar archivo M4A/AAC
                 audioEngine?.stop()

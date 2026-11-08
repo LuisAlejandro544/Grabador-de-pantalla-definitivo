@@ -259,11 +259,16 @@ fun NativeGallerySection(accentColor: Color) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     var previewAspectRatio by remember { mutableStateOf(9f / 16f) }
+                    var playbackFailed by remember { mutableStateOf(false) }
 
                     // Reproductor VideoView nativo de Android
                     AndroidView(
                         factory = { ctx ->
                             VideoView(ctx).apply {
+                                // setZOrderMediaOverlay(true) es INDISPENSABLE dentro de un Dialog en Jetpack Compose.
+                                // Sin esto, la superficie de hardware del SurfaceView queda oculta detrás de la
+                                // ventana del Dialog, mostrando un recuadro completamente negro.
+                                setZOrderMediaOverlay(true)
                                 val mediaController = MediaController(ctx)
                                 mediaController.setAnchorView(this)
                                 setMediaController(mediaController)
@@ -283,6 +288,7 @@ fun NativeGallerySection(accentColor: Color) {
                                 }
                                 setOnErrorListener { _, what, extra ->
                                     android.util.Log.w("VeloRec_Gallery", "Error en VideoView: what=$what, extra=$extra")
+                                    playbackFailed = true
                                     true
                                 }
                                 setVideoPath(file.absolutePath)
@@ -292,6 +298,16 @@ fun NativeGallerySection(accentColor: Color) {
                             .fillMaxWidth()
                             .aspectRatio(previewAspectRatio)
                     )
+
+                    if (playbackFailed) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Aviso: Si el reproductor integrado no muestra la previsualización, usa 'Abrir Externo' para reproducirlo con la app nativa de tu teléfono (Google Fotos, Galería o VLC).",
+                            color = Color(0xFFFBBF24),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
