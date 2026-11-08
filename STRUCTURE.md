@@ -10,7 +10,7 @@
 /
 ├── .github/
 │   └── workflows/
-│       ├── build-apk.yml               # GitHub Actions para compilar APK Debug manualmente (workflow_dispatch)
+│       ├── build-apk.yml               # GitHub Actions para compilar APK Debug manualmente con selector de ABI (universal o individual)
 │       └── publish-config-release.yml  # GitHub Actions para publicar app_config.json en GitHub Releases (workflow_dispatch)
 │
 ├── android/                             # Estructura del proyecto Android nativo completa
@@ -36,7 +36,7 @@
 │           │   ├── ScreenRecordService.kt   # Foreground Service con Surface nativa Zero-Copy y JNI
 │           │   ├── data/
 │           │   │   ├── model/
-│           │   │   │   ├── RecordingConfig.kt   # Modelos de configuración, presets de resolución y bitrate
+│           │   │   │   ├── RecordingConfig.kt   # Modelos de configuración, presets adaptativos, cuenta regresiva y bitrate
 │           │   │   │   └── RemoteUiConfig.kt    # Modelos Server-Driven UI (app_config.json)
 │           │   │   └── repository/
 │           │   │       └── RemoteConfigRepository.kt # Carga asíncrona segura de GitHub Releases (Dispatchers.IO)

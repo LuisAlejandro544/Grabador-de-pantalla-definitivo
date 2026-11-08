@@ -31,8 +31,9 @@ object FFmpegRecoveryEngine {
     private const val TAG = "VeloRec_FFmpeg"
 
     /**
-     * Fusiona sin pérdida de calidad la pista de video y la pista de audio con FFmpeg.
-     * Si no hay audio o falla FFmpeg, aplica fallback seguro a AudioMuxerHelper o copia directa.
+     * Fusiona sin pérdida de calidad la pista de video y la pista de audio con FFmpeg puro.
+     * Incorpora resincronización estricta de marcas de tiempo (-fflags +genpts y -avoid_negative_ts make_zero)
+     * y corte exacto (-shortest) para evitar que el video quede congelado o no avance.
      */
     fun mergeAudioVideoWithFFmpeg(
         videoPath: String,
@@ -48,39 +49,82 @@ object FFmpegRecoveryEngine {
             return false
         }
 
-        // Si no hay audio o está vacío, copiar video directamente con faststart
-        if (audioPath.isNullOrBlank() || !File(audioPath).exists() || File(audioPath).length() < 100L) {
-            return exportVideoDirectly(videoPath, outputPath)
+        if (outputFile.exists()) {
+            outputFile.delete()
         }
 
-        return try {
-            val movFlags = if (isContainerMkv) "" else "-movflags +faststart"
-            // Comando FFmpeg de copia directa de flujo (Zero re-encoding, máxima velocidad)
-            val cmd = "-y -i \"$videoPath\" -i \"$audioPath\" -c:v copy -c:a aac -b:a 192k $movFlags \"$outputPath\""
-            Log.i(TAG, "Ejecutando multiplexación FFmpeg: $cmd")
+        val hasValidAudio = !audioPath.isNullOrBlank() && File(audioPath).exists() && File(audioPath).length() >= 100L
 
-            val session = FFmpegKit.execute(cmd)
+        return try {
+            val args = mutableListOf<String>()
+            args.add("-y")
+            args.add("-fflags")
+            args.add("+genpts")
+            args.add("-i")
+            args.add(videoPath)
+
+            if (hasValidAudio && audioPath != null) {
+                args.add("-i")
+                args.add(audioPath)
+                args.add("-c:v")
+                args.add("copy")
+                args.add("-c:a")
+                args.add("aac")
+                args.add("-b:a")
+                args.add("192k")
+                args.add("-avoid_negative_ts")
+                args.add("make_zero")
+                args.add("-map")
+                args.add("0:v:0")
+                args.add("-map")
+                args.add("1:a:0?")
+                args.add("-shortest")
+            } else {
+                args.add("-c:v")
+                args.add("copy")
+                args.add("-avoid_negative_ts")
+                args.add("make_zero")
+            }
+
+            if (!isContainerMkv) {
+                args.add("-movflags")
+                args.add("+faststart")
+            }
+
+            args.add(outputPath)
+
+            Log.i(TAG, "Ejecutando multiplexación FFmpeg puro: ${args.joinToString(" ")}")
+            val session = FFmpegKit.executeWithArguments(args.toTypedArray())
             val returnCode = session.returnCode
 
-            if (ReturnCode.isSuccess(returnCode)) {
-                Log.i(TAG, "Fusión con FFmpeg completada exitosamente en: $outputPath")
-                // Limpieza de temporales
+            if (ReturnCode.isSuccess(returnCode) && outputFile.exists() && outputFile.length() > 0L) {
+                Log.i(TAG, "Fusión con FFmpeg puro completada con éxito (${outputFile.length()} bytes) en: $outputPath")
                 videoFile.delete()
-                File(audioPath).delete()
+                if (hasValidAudio && audioPath != null) {
+                    File(audioPath).delete()
+                }
                 true
             } else {
-                Log.w(TAG, "FFmpeg retornó código de error ($returnCode). Ejecutando fallback a AudioMuxerHelper.")
-                AudioMuxerHelper.mergeAudioVideo(videoPath, audioPath, outputPath)
+                Log.w(TAG, "FFmpeg finalizó con código ($returnCode). Ejecutando fallback a AudioMuxerHelper.")
+                if (hasValidAudio && audioPath != null) {
+                    AudioMuxerHelper.mergeAudioVideo(videoPath, audioPath, outputPath)
+                } else {
+                    exportVideoDirectly(videoPath, outputPath)
+                }
             }
         } catch (e: Throwable) {
-            Log.e(TAG, "Excepción en FFmpeg mergeAudioVideo: ${e.message}. Aplicando fallback a AudioMuxerHelper.")
-            AudioMuxerHelper.mergeAudioVideo(videoPath, audioPath, outputPath)
+            Log.e(TAG, "Excepción en FFmpeg mergeAudioVideo: ${e.message}. Aplicando fallback seguro.")
+            if (hasValidAudio && audioPath != null) {
+                AudioMuxerHelper.mergeAudioVideo(videoPath, audioPath, outputPath)
+            } else {
+                exportVideoDirectly(videoPath, outputPath)
+            }
         }
     }
 
     /**
      * Repara un archivo de video incompleto o truncado por apagón imprevisto del smartphone.
-     * Utiliza `-err_detect ignore_err` para recuperar todos los fotogramas válidos grabados.
+     * Utiliza `-err_detect ignore_err` y `-fflags +genpts` para recuperar todos los fotogramas válidos grabados.
      */
     fun repairCorruptedVideo(inputPath: String, outputPath: String): Boolean {
         val inputFile = File(inputPath)
@@ -90,10 +134,19 @@ object FFmpegRecoveryEngine {
         }
 
         return try {
-            val cmd = "-y -err_detect ignore_err -i \"$inputPath\" -c copy -movflags +faststart \"$outputPath\""
-            Log.i(TAG, "Iniciando rescate de video truncado: $cmd")
+            val args = arrayOf(
+                "-y",
+                "-err_detect", "ignore_err",
+                "-fflags", "+genpts",
+                "-i", inputPath,
+                "-c", "copy",
+                "-avoid_negative_ts", "make_zero",
+                "-movflags", "+faststart",
+                outputPath
+            )
+            Log.i(TAG, "Iniciando rescate de video con FFmpeg puro: ${args.joinToString(" ")}")
 
-            val session = FFmpegKit.execute(cmd)
+            val session = FFmpegKit.executeWithArguments(args)
             if (ReturnCode.isSuccess(session.returnCode)) {
                 val repairedFile = File(outputPath)
                 if (repairedFile.exists() && repairedFile.length() > 0L) {
@@ -124,11 +177,10 @@ object FFmpegRecoveryEngine {
             for (tempFile in pendingFiles) {
                 val timestamp = System.currentTimeMillis()
                 val recoveredFile = File(privateDir, "VeloRec_Rescatado_${timestamp}.mp4")
-                Log.i(TAG, "Se detectó grabación no finalizada por apagón: ${tempFile.name}. Reparando...")
+                Log.i(TAG, "Se detectó grabación no finalizada por apagón: ${tempFile.name}. Reparando con FFmpeg puro...")
 
                 val success = repairCorruptedVideo(tempFile.absolutePath, recoveredFile.absolutePath)
                 if (success) {
-                    // Publicar en la Galería del usuario
                     GalleryStorageManager.publishVideoToGallery(
                         context,
                         recoveredFile,
@@ -144,13 +196,22 @@ object FFmpegRecoveryEngine {
     }
 
     /**
-     * Exporta el video directamente asegurando el encabezado '+faststart' para galerías móviles.
+     * Exporta el video directamente asegurando el encabezado '+faststart' para galerías móviles con FFmpeg puro.
      */
     private fun exportVideoDirectly(inputPath: String, outputPath: String): Boolean {
         return try {
-            val cmd = "-y -i \"$inputPath\" -c copy -movflags +faststart \"$outputPath\""
-            val session = FFmpegKit.execute(cmd)
-            if (ReturnCode.isSuccess(session.returnCode)) {
+            val args = arrayOf(
+                "-y",
+                "-fflags", "+genpts",
+                "-i", inputPath,
+                "-c", "copy",
+                "-avoid_negative_ts", "make_zero",
+                "-movflags", "+faststart",
+                outputPath
+            )
+            val session = FFmpegKit.executeWithArguments(args)
+            val out = File(outputPath)
+            if (ReturnCode.isSuccess(session.returnCode) && out.exists() && out.length() > 0L) {
                 File(inputPath).delete()
                 true
             } else {

@@ -13,10 +13,11 @@ import {
   Settings2,
   CheckCircle2,
   Info,
-  Maximize2
+  Maximize2,
+  Timer
 } from 'lucide-react';
 import { RecorderSettings, RecordedVideoItem, NativeEngineType } from '../types/recorder';
-import { formatDuration, calculateEngineMetrics, formatBytes, RESOLUTION_PRESETS } from '../utils/recorderCore';
+import { formatDuration, calculateEngineMetrics, formatBytes, RESOLUTION_PRESETS, COUNTDOWN_PRESETS } from '../utils/recorderCore';
 
 interface RecorderScreenProps {
   settings: RecorderSettings;
@@ -59,6 +60,11 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
 
   // Audio VU Meter animado
   const [audioLevel, setAudioLevel] = useState<number>(35);
+
+  // Estado de cuenta regresiva previa a la captura
+  const [isCountingDown, setIsCountingDown] = useState<boolean>(false);
+  const [countdownRemaining, setCountdownRemaining] = useState<number>(settings.countdownSec ?? 3);
+  const countdownTimerRef = useRef<number | null>(null);
 
   // Métricas en vivo del motor nativo
   const liveMetrics = calculateEngineMetrics(
@@ -271,7 +277,7 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
   };
 
   // Iniciar con selector de pantalla nativo si el usuario lo solicita
-  const handleStartCaptureWithRealDisplay = async () => {
+  const handleStartCaptureWithRealDisplay = useCallback(async () => {
     try {
       if (navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices) {
         const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -290,7 +296,37 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
       // Si el usuario canceló el selector de pantalla o está en móvil restringido, grabamos el canvas en vivo
       await onStartRecording();
     }
+  }, [settings, onStartRecording]);
+
+  // Manejador del botón que evalúa si hay cuenta regresiva
+  const handleInitiateRecording = async () => {
+    const delaySec = settings.countdownSec ?? 3;
+    if (delaySec > 0) {
+      setCountdownRemaining(delaySec);
+      setIsCountingDown(true);
+    } else {
+      await handleStartCaptureWithRealDisplay();
+    }
   };
+
+  // Temporizador de cuenta regresiva
+  useEffect(() => {
+    if (isCountingDown) {
+      if (countdownRemaining > 0) {
+        countdownTimerRef.current = window.setTimeout(() => {
+          setCountdownRemaining((prev) => prev - 1);
+        }, 1000);
+      } else {
+        setIsCountingDown(false);
+        handleStartCaptureWithRealDisplay();
+      }
+    }
+    return () => {
+      if (countdownTimerRef.current) {
+        clearTimeout(countdownTimerRef.current);
+      }
+    };
+  }, [isCountingDown, countdownRemaining, handleStartCaptureWithRealDisplay]);
 
   const handleStopAndSave = async () => {
     const item = await onStopRecording();
@@ -301,7 +337,34 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-60px)] pb-24 px-3 pt-3 max-w-lg mx-auto w-full">
+    <div className="flex flex-col min-h-[calc(100vh-60px)] pb-24 px-3 pt-3 max-w-lg mx-auto w-full relative">
+      {/* Modal / Overlay de Cuenta Regresiva */}
+      {isCountingDown && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-cyan-500/60 rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl flex flex-col items-center">
+            <div className="w-20 h-20 rounded-full border-4 border-cyan-400 bg-cyan-950/40 flex items-center justify-center mb-4 shadow-lg shadow-cyan-500/20">
+              <span className="text-4xl font-mono font-black text-cyan-300">
+                {countdownRemaining > 0 ? countdownRemaining : '¡YA!'}
+              </span>
+            </div>
+            <h3 className="text-base font-bold text-white mb-1">Iniciando Grabación...</h3>
+            <p className="text-xs text-slate-400 mb-5">
+              Prepárate o ve a la aplicación que deseas capturar.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setIsCountingDown(false);
+                if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
+              }}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-rose-400 font-bold text-xs border border-slate-700 active:scale-95 transition-all"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Notificación flotante de guardado */}
       {savedNotification && (
         <div className="mb-3 bg-emerald-950/90 border border-emerald-500/60 text-emerald-200 px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 shadow-lg animate-in fade-in slide-in-from-top-2">
@@ -318,7 +381,7 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
             <span className="text-xs font-bold text-white tracking-wide">Ajustes Rápidos de Calidad</span>
           </div>
           <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-800 text-cyan-300 border border-indigo-500/30">
-            {settings.resolution.id.toUpperCase()} • {settings.bitrateMbps}M
+            {settings.resolution.id.toUpperCase()} • {settings.bitrateMbps}M{settings.countdownSec ? ` • ${settings.countdownSec}s` : ' • 0s'}
           </span>
         </div>
 
@@ -350,7 +413,7 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
         </div>
 
         {/* Fila 2: Tasa de Bits (Bitrate) */}
-        <div>
+        <div className="mb-2.5">
           <div className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center space-x-1">
             <span>Tasa de Bits (Bitrate)</span>
           </div>
@@ -371,6 +434,36 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
                   }`}
                 >
                   {isIdeal ? `${mbps} Mbps ★` : `${mbps} Mbps`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Fila 3: Cuenta Regresiva de Inicio */}
+        <div>
+          <div className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center space-x-1">
+            <Timer className="w-3.5 h-3.5 text-slate-400" />
+            <span>Cuenta Regresiva de Inicio</span>
+          </div>
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+            {COUNTDOWN_PRESETS.map((sec) => {
+              const currentSec = settings.countdownSec ?? 3;
+              const isSelected = currentSec === sec;
+              const label = sec === 0 ? '0s (Inmediata)' : sec === 3 ? '3s (Ideal ★)' : `${sec}s`;
+              return (
+                <button
+                  key={sec}
+                  type="button"
+                  disabled={isRecording}
+                  onClick={() => onUpdateSettings({ countdownSec: sec })}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/40 border border-indigo-400'
+                      : 'bg-slate-800/80 text-slate-300 border border-slate-700/80 hover:bg-slate-750'
+                  }`}
+                >
+                  {label}
                 </button>
               );
             })}
@@ -558,7 +651,7 @@ export const RecorderScreen: React.FC<RecorderScreenProps> = ({
             <div className="flex items-center space-x-3 w-full">
               <button
                 type="button"
-                onClick={handleStartCaptureWithRealDisplay}
+                onClick={handleInitiateRecording}
                 className="flex-1 bg-gradient-to-r from-rose-600 via-rose-500 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold py-3.5 px-6 rounded-xl flex items-center justify-center space-x-2.5 shadow-lg shadow-rose-600/30 active:scale-95 transition-transform"
                 aria-label="Iniciar grabación de pantalla"
               >

@@ -10,7 +10,8 @@ import {
   HardDrive,
   ShieldCheck,
   Zap,
-  HelpCircle
+  HelpCircle,
+  Timer
 } from 'lucide-react';
 import {
   RecorderSettings,
@@ -22,6 +23,7 @@ import {
 } from '../types/recorder';
 import {
   RESOLUTION_PRESETS,
+  COUNTDOWN_PRESETS,
   calculateEstimatedFileSize,
   formatBytes,
   validateResolution
@@ -375,7 +377,46 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </div>
       </div>
 
-      {/* SECCIÓN 7: ARQUITECTURAS NDK SOPORTADAS (32-bit y 64-bit) */}
+      {/* SECCIÓN 7: CUENTA REGRESIVA DE INICIO */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-bold text-slate-200 flex items-center space-x-2">
+            <Timer className="w-4 h-4 text-cyan-400" />
+            <span>Cuenta Regresiva de Inicio</span>
+          </label>
+          <span className="text-xs font-mono font-bold text-cyan-400">
+            {(settings.countdownSec ?? 3) === 0 ? 'Inmediata' : `${settings.countdownSec ?? 3}s`}
+          </span>
+        </div>
+        <p className="text-xs text-slate-400">
+          Segundos de espera antes de comenzar a grabar para darte tiempo de cambiar de app.
+        </p>
+
+        <div className="grid grid-cols-4 gap-2">
+          {COUNTDOWN_PRESETS.map((sec) => {
+            const isSelected = (settings.countdownSec ?? 3) === sec;
+            return (
+              <button
+                key={sec}
+                type="button"
+                onClick={() => onUpdateSettings({ countdownSec: sec })}
+                className={`p-2.5 rounded-xl border text-center transition-all ${
+                  isSelected
+                    ? 'bg-cyan-950/60 border-cyan-500 text-cyan-200 ring-1 ring-cyan-500'
+                    : 'bg-slate-800/60 border-slate-700/80 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <div className="text-sm font-bold font-mono">{sec}s</div>
+                <div className="text-[9px] mt-0.5">
+                  {sec === 0 ? 'Inmediata' : sec === 3 ? 'Ideal ★' : sec === 5 ? 'Estándar' : 'Larga'}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* SECCIÓN 8: ARQUITECTURAS NDK SOPORTADAS (32-bit y 64-bit) */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
         <div className="flex items-center justify-between">
           <label className="text-sm font-bold text-slate-200 flex items-center space-x-2">

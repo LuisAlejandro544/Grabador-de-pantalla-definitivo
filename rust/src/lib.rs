@@ -230,13 +230,21 @@ impl RustRecorderEngine {
                     flags: 0,
                 };
 
+                let mut first_frame_time_us: i64 = -1;
+
                 while is_recording.load(Ordering::Relaxed) {
                     // Verificar mensajes en el canal sin bloquear
                     if let Ok(cmd) = rx_worker.try_recv() {
                         match cmd {
                             RecorderCommand::Pause => is_paused.store(true, Ordering::Relaxed),
                             RecorderCommand::Resume => is_paused.store(false, Ordering::Relaxed),
-                            RecorderCommand::Stop => break,
+                            RecorderCommand::Stop => {
+                                // Señalizar fin de stream a MediaCodec para recibir EOS
+                                unsafe {
+                                    ndk_sys::AMediaCodec_signalEndOfInputStream(codec);
+                                }
+                                break;
+                            }
                         }
                     }
 
@@ -263,11 +271,22 @@ impl RustRecorderEngine {
                             );
 
                             if !buffer_ptr.is_null() && buffer_info.size > 0 && muxer_started {
+                                // Normalizar PTS a base cero
+                                if first_frame_time_us < 0 {
+                                    first_frame_time_us = buffer_info.presentationTimeUs;
+                                }
+                                let mut sample_info = buffer_info;
+                                if sample_info.presentationTimeUs >= first_frame_time_us {
+                                    sample_info.presentationTimeUs -= first_frame_time_us;
+                                } else {
+                                    sample_info.presentationTimeUs = 0;
+                                }
+
                                 ndk_sys::AMediaMuxer_writeSampleData(
                                     muxer,
                                     video_track_index as usize,
                                     buffer_ptr,
-                                    &buffer_info,
+                                    &sample_info,
                                 );
                                 frames_encoded.fetch_add(1, Ordering::Relaxed);
                             }
@@ -297,7 +316,6 @@ impl RustRecorderEngine {
                 // Liberación de recursos NDK de hardware
                 unsafe {
                     info!("Rust 2024: Limpiando recursos de hardware NDK...");
-                    ndk_sys::AMediaCodec_signalEndOfInputStream(codec);
                     ndk_sys::AMediaCodec_stop(codec);
                     ndk_sys::AMediaCodec_delete(codec);
 

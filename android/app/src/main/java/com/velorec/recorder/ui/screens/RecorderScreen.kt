@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.velorec.recorder.data.model.BITRATE_PRESETS
+import com.velorec.recorder.data.model.COUNTDOWN_PRESETS
 import com.velorec.recorder.data.model.RESOLUTION_PRESETS
 import com.velorec.recorder.data.model.ResolutionPreset
 import com.velorec.recorder.ui.components.MetricBadge
@@ -75,7 +76,7 @@ import com.velorec.recorder.ui.theme.WarningAmber
  * 
  * Pantalla principal de captura de pantalla y monitor de hardware en vivo.
  * Diseñada 100% bajo los lineamientos nativos de Android (Material 3):
- * - Panel de configuración rápida de resolución y tasa de bits con tarjetas elevadas.
+ * - Panel de configuración rápida de resolución, tasa de bits y cuenta regresiva con tarjetas elevadas.
  * - Visor tipo HUD de cámara con estados animados (Listo, Grabando, Pausado).
  * - Telemetría de hardware en tiempo real con widgets de alto contraste.
  * - Botones de acción táctiles de gran área ergonómica para interacción con una sola mano.
@@ -92,8 +93,11 @@ fun NativeRecorderViewport(
     accentColor: Color,
     primaryColor: Color,
     bannerText: String?,
+    availableResolutions: List<ResolutionPreset> = RESOLUTION_PRESETS,
+    selectedCountdownSec: Int = 3,
     onResolutionChange: (ResolutionPreset) -> Unit,
     onBitrateChange: (Int) -> Unit,
+    onCountdownChange: (Int) -> Unit = {},
     onToggleRecord: () -> Unit,
     onTogglePause: () -> Unit,
     onOpenSettings: () -> Unit
@@ -200,7 +204,7 @@ fun NativeRecorderViewport(
                         border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.4f))
                     ) {
                         Text(
-                            text = "${selectedResolution.id.uppercase()} • ${selectedBitrateMbps}M",
+                            text = "${selectedResolution.id.uppercase()} • ${selectedBitrateMbps}M" + (if (selectedCountdownSec > 0) " • ${selectedCountdownSec}s" else " • 0s"),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -238,7 +242,7 @@ fun NativeRecorderViewport(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    RESOLUTION_PRESETS.forEach { preset ->
+                    availableResolutions.forEach { preset ->
                         val isSelected = selectedResolution.id == preset.id
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -312,6 +316,64 @@ fun NativeRecorderViewport(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) Color(0xFF0F172A) else Color(0xFFCBD5E1),
                                 modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Fila 3: Temporizador de Inicio (Cuenta Regresiva)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = null,
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = "Cuenta Regresiva de Inicio",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    COUNTDOWN_PRESETS.forEach { sec ->
+                        val isSelected = selectedCountdownSec == sec
+                        val label = when (sec) {
+                            0 -> "0s (Inmediata)"
+                            3 -> "3s (Ideal ★)"
+                            else -> "${sec}s"
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) primaryColor else DarkCard,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) primaryColor else Color(0xFF334155)
+                            ),
+                            shadowElevation = if (isSelected) 3.dp else 0.dp,
+                            modifier = Modifier.clickable(enabled = !isRecording) {
+                                onCountdownChange(sec)
+                            }
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else Color(0xFFCBD5E1),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
                             )
                         }
                     }

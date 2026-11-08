@@ -23,12 +23,18 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
 - **Cumplimiento Estricto con Android 14+ (API 34/35)**:
   - Servicio en primer plano configurado con `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION`.
   - `minSdkVersion = 26` (Android 8.0 Oreo) y `targetSdkVersion = 35` (Android 15).
-- **Soporte Multiarquitectura (32 y 64 bits)**:
+- **Soporte Multiarquitectura (32 y 64 bits) y Compilación Selectiva en CI**:
   - `arm64-v8a`: Estándar de 64 bits para teléfonos modernos.
   - `armeabi-v7a`: Soporte de 32 bits para dispositivos antiguos.
   - `x86_64`: Emuladores de desarrollo y Chromebooks.
+  - **Selector de Arquitectura en GitHub Actions**: Permite compilar el APK **Universal** (todas las arquitecturas) o un **APK individual** específico (`arm64-v8a`, `armeabi-v7a` o `x86_64`) para reducir drásticamente el peso de descarga del archivo.
+- **Temporizador de Cuenta Regresiva de Inicio**:
+  - Configurable en 0s (inmediata), 3s (ideal/recomendada), 5s y 10s.
+  - Overlay visual táctil de cuenta atrás con botón de cancelación instantánea para dar tiempo al usuario de cambiar a la app o juego antes de grabar.
+- **Resoluciones Proporcionales Adaptadas al Smartphone**:
+  - Detección en vivo de la relación de aspecto nativa del dispositivo (ej. 20:9, 19.5:9, 18:9) con cálculo automático de paridad de píxeles (`width % 2 == 0 && height % 2 == 0`) eliminando desajustes de pantalla y barras verdes en codificadores de hardware.
 - **Control Total de Video y Audio**:
-  - Resoluciones predefinidas (480p SD, 720p HD, 1080p FHD, 1440p 2K, 4K UHD) y resolución personalizada con comprobación de paridad YUV420p.
+  - Resoluciones predefinidas (Nativa de pantalla, 1080p FHD, 720p HD, 480p SD, 1440p 2K, 4K UHD) y resolución personalizada con comprobación de paridad YUV420p.
   - Tasas de cuadro: 24, 30, 60, 90 y 120 FPS.
   - Bitrate ajustable de 2 a 50 Mbps con cálculo de almacenamiento en vivo.
   - Códecs por hardware: H.264 (AVC), H.265 (HEVC) y AV1.
@@ -83,10 +89,16 @@ Este proyecto incluye un flujo de **GitHub Actions** configurado con activación
    - Desde el navegador de tu celular en GitHub, toca la pestaña **Actions**.
 3. **Ejecuta el Flujo Manual**:
    - Selecciona **"Compilar APK Debug (VeloRec Mobile)"**.
-   - Pulsa el botón **"Run workflow"** y selecciona tu preferencia de motor.
+   - Pulsa el botón **"Run workflow"** y selecciona:
+     - **Motor nativo**: C++23 o Rust 2024.
+     - **Arquitectura de destino**:
+       - `all` (Universal: compatible con cualquier teléfono y emulador).
+       - `arm64-v8a` (Solo 64-bit ARM: APK ligero optimizado para smartphones actuales).
+       - `armeabi-v7a` (Solo 32-bit ARM: para celulares antiguos).
+       - `x86_64` (Solo emuladores de Android Studio / PC).
 4. **Descarga el APK**:
    - En 3-4 minutos, GitHub Actions terminará la compilación.
-   - En la sección **Artifacts** descarga el archivo **`VeloRec-Debug-APK`** e instálalo de inmediato en tu celular o súbelo a Uptodown.
+   - En la sección **Artifacts** descarga el archivo resultante (`VeloRec-Debug-APK-Universal`, `VeloRec-Debug-APK-arm64-v8a`, etc.) e instálalo de inmediato en tu celular o súbelo a Uptodown.
 
 ---
 

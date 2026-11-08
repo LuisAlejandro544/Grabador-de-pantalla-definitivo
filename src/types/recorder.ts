@@ -34,6 +34,7 @@ export interface RecorderSettings {
   audioBitrateKbps: number; // 128, 192, 320
   showTouchPointers: boolean;
   enableFaceCam: boolean;
+  countdownSec: number; // 0 (Desactivada), 3, 5, 10
   targetAbis: SupportedAbi[];
   saveToGallery: boolean;
 }

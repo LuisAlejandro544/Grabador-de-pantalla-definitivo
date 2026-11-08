@@ -19,16 +19,22 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
 - [x] **Motor Rust (Edition 2024)**:
   - Crate con `edition = "2024"`, canales `crossbeam-channel` y bindings JNI seguros.
   - Cero condiciones de carrera y memoria segura garantizada por el compilador.
-- [x] **Soporte Multiarquitectura (32 y 64 bits)**:
+- [x] **Soporte Multiarquitectura (32 y 64 bits) y Compilación Selectiva en CI**:
   - Generación de bibliotecas `.so` para `arm64-v8a`, `armeabi-v7a` y `x86_64`.
+  - Selector en GitHub Actions (`build-apk.yml`) para compilar APK Universal o APK individual por arquitectura reduciendo el tamaño de descarga.
+- [x] **Temporizador de Cuenta Regresiva de Inicio (0s, 3s, 5s, 10s)**:
+  - Retardo táctil antes de comenzar la captura de pantalla con contador animado y botón de cancelación inmediata.
+- [x] **Resoluciones Proporcionales Adaptativas Antideformación**:
+  - Detección del aspect ratio del smartphone (20:9, 19.5:9, 18:9) con ajuste par YUV420p que erradica por completo barras verdes en pantalla.
 - [x] **Motor FFmpeg Puro Kit LTS 16KB y Rescate Anticrash**:
   - Recuperación atómica ante apagón inesperado del smartphone o muerte del proceso por Android OOM Killer (`-err_detect ignore_err`).
   - Multiplexación sin pérdidas (Stream Copy) con `+faststart` para inicio instantáneo de reproducción.
+  - Normalización de marcas de tiempo PTS base 0 y `-avoid_negative_ts make_zero` para eliminar congelamientos de video al pausar/detener.
   - Compatibilidad nativa con páginas de memoria de 16KB en Android 15 (API 35+).
 - [x] **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
   - Guardado automático mediante MediaStore API (Scoped Storage) e indexación instantánea con `MediaScannerConnection` para visibilidad inmediata en Google Fotos, Galería Samsung, Xiaomi, etc.
 - [x] **Suite de Pruebas Unitarias Deterministas**:
-  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, comandos FFmpeg, rutas de galería y métricas de motor.
+  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, temporizador de cuenta regresiva, comandos FFmpeg, rutas de galería y métricas de motor.
 
 ---
 

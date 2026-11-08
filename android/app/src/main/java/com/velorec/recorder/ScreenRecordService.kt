@@ -197,11 +197,8 @@ class ScreenRecordService : Service() {
                 lastOutputFilePath = finalOutputFile.absolutePath
 
                 val shouldRecordAudio = audio != "mute"
-                val videoFileToEncode = if (shouldRecordAudio) {
-                    File(outputDir, "temp_video_${timestamp}.mp4").also { tempVideoFilePath = it.absolutePath }
-                } else {
-                    tempVideoFilePath = null
-                    finalOutputFile
+                val videoFileToEncode = File(outputDir, "temp_video_${timestamp}.mp4").also { 
+                    tempVideoFilePath = it.absolutePath 
                 }
 
                 val audioFileToEncode = if (shouldRecordAudio) {

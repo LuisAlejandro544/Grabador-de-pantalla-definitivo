@@ -259,6 +259,8 @@ fun NativeGallerySection(accentColor: Color) {
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    var previewAspectRatio by remember { mutableStateOf(9f / 16f) }
+
                     // Reproductor VideoView nativo de Android
                     AndroidView(
                         factory = { ctx ->
@@ -266,13 +268,25 @@ fun NativeGallerySection(accentColor: Color) {
                                 val mediaController = MediaController(ctx)
                                 mediaController.setAnchorView(this)
                                 setMediaController(mediaController)
+                                setOnPreparedListener { mp ->
+                                    val w = mp.videoWidth
+                                    val h = mp.videoHeight
+                                    if (w > 0 && h > 0) {
+                                        previewAspectRatio = (w.toFloat() / h.toFloat()).coerceIn(0.4f, 1.8f)
+                                    }
+                                    mp.isLooping = true
+                                    start()
+                                }
+                                setOnErrorListener { _, what, extra ->
+                                    android.util.Log.w("VeloRec_Gallery", "Error en VideoView: what=$what, extra=$extra")
+                                    true
+                                }
                                 setVideoPath(file.absolutePath)
-                                start()
                             }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(9f / 16f)
+                            .aspectRatio(previewAspectRatio)
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))

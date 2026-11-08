@@ -5,6 +5,16 @@ name: Compilar APK Debug (VeloRec Mobile)
 on:
   workflow_dispatch:
     inputs:
+      target_abi:
+        description: 'Arquitecturas móviles a compilar (ABI)'
+        required: true
+        default: 'Universal (arm64-v8a + armeabi-v7a + x86_64)'
+        type: choice
+        options:
+          - 'Universal (arm64-v8a + armeabi-v7a + x86_64)'
+          - 'Solo 64-bit ARM (arm64-v8a - Celulares modernos)'
+          - 'Solo 32-bit ARM (armeabi-v7a - Celulares antiguos)'
+          - 'Solo Emulador x86_64 (x86_64 - Emulador PC)'
       engine_preference:
         description: 'Motor nativo preferente incluido en el APK'
         required: true
@@ -108,25 +118,48 @@ jobs:
             chmod +x gradlew
           fi
 
-      # 8.5. Compilar bibliotecas nativas Rust con cargo-ndk para 32 y 64 bits
+      # 8.5. Compilar bibliotecas nativas Rust con cargo-ndk según la arquitectura seleccionada
       - name: 🦀 Compilar bibliotecas nativas Rust con cargo-ndk
         run: |
+          ABI_INPUT="${{ github.event.inputs.target_abi }}"
+          CARGO_TARGETS="-t arm64-v8a -t armeabi-v7a -t x86_64"
+          GRADLE_PROP="-PtargetAbi=all"
+          ABI_NAME="Universal"
+
+          if [[ "$ABI_INPUT" =~ "arm64-v8a" ]]; then
+            CARGO_TARGETS="-t arm64-v8a"
+            GRADLE_PROP="-PtargetAbi=arm64-v8a"
+            ABI_NAME="arm64-v8a"
+          elif [[ "$ABI_INPUT" =~ "armeabi-v7a" ]]; then
+            CARGO_TARGETS="-t armeabi-v7a"
+            GRADLE_PROP="-PtargetAbi=armeabi-v7a"
+            ABI_NAME="armeabi-v7a"
+          elif [[ "$ABI_INPUT" =~ "x86_64" ]]; then
+            CARGO_TARGETS="-t x86_64"
+            GRADLE_PROP="-PtargetAbi=x86_64"
+            ABI_NAME="x86_64"
+          fi
+
+          echo "ABI_NAME=$ABI_NAME" >> $GITHUB_ENV
+          echo "GRADLE_PROP=$GRADLE_PROP" >> $GITHUB_ENV
+
+          echo "Compilando Rust 2024 para arquitectura seleccionada: $ABI_NAME ($CARGO_TARGETS)"
           mkdir -p android/app/src/main/jniLibs
           cd rust
-          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 --platform 26 -o ../android/app/src/main/jniLibs build --release
+          cargo ndk $CARGO_TARGETS --platform 26 -o ../android/app/src/main/jniLibs build --release
 
       # 9. Compilar el APK Debug
       # Compila las vistas nativas en Kotlin Jetpack Compose (Material 3),
-      # las bibliotecas C++23 con CMake/NDK y Rust 2024 con Cargo NDK para 32 y 64 bits.
+      # las bibliotecas C++23 con CMake/NDK y Rust 2024 con Cargo NDK para la arquitectura seleccionada.
       - name: 🚀 Compilar APK Debug con Gradle
         run: |
           cd android
-          ./gradlew assembleDebug --info --stacktrace
+          ./gradlew assembleDebug ${{ env.GRADLE_PROP }} --info --stacktrace
 
       # 10. Subir el APK Debug compilado como Artefacto descargable
       - name: 📤 Subir APK Debug para descarga móvil
         uses: actions/upload-artifact@v4
         with:
-          name: VeloRec-Debug-APK
+          name: VeloRec-Debug-APK-${{ env.ABI_NAME }}
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 14

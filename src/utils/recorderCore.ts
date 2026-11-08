@@ -234,7 +234,7 @@ export function getFfmpegLosslessMergeCommand(
   isMkv: boolean = false
 ): string {
   const movFlags = isMkv ? '' : '-movflags +faststart';
-  return `-y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -b:a 192k ${movFlags} "${outputPath}"`.trim();
+  return `-y -fflags +genpts -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -b:a 192k -avoid_negative_ts make_zero -map 0:v:0 -map 1:a:0? -shortest ${movFlags} "${outputPath}"`.trim();
 }
 
 /**
@@ -253,6 +253,25 @@ export function detectVideoContainer(fileName: string): 'mp4' | 'mkv' | 'unknown
   if (ext === 'mp4') return 'mp4';
   if (ext === 'mkv') return 'mkv';
   return 'unknown';
+}
+
+/**
+ * Presets de cuenta regresiva para preparar la captura antes de iniciar.
+ * 0 = inicio inmediato sin espera, 3s = estándar recomendado, 5s y 10s para demos o juegos.
+ */
+export const COUNTDOWN_PRESETS = [0, 3, 5, 10] as const;
+export type CountdownSeconds = typeof COUNTDOWN_PRESETS[number];
+
+/**
+ * Valida y describe la configuración de cuenta regresiva previa a la captura.
+ */
+export function validateCountdownSeconds(seconds: number): { valid: boolean; seconds: number; label: string } {
+  if (seconds <= 0) return { valid: true, seconds: 0, label: 'Inmediato (Sin espera)' };
+  if (seconds === 3) return { valid: true, seconds: 3, label: '3 segundos (Recomendado)' };
+  if (seconds === 5) return { valid: true, seconds: 5, label: '5 segundos' };
+  if (seconds === 10) return { valid: true, seconds: 10, label: '10 segundos' };
+  // Fallback seguro a 3 segundos
+  return { valid: false, seconds: 3, label: '3 segundos (Recomendado)' };
 }
 
 

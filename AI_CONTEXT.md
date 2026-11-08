@@ -32,21 +32,25 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
 3. **Estándares de Lenguaje Fijos**:
    - C++ **debe** compilarse con `-std=c++23`.
    - Rust **debe** utilizar `edition = "2024"` (Rust 1.85+).
-4. **Soporte de Arquitecturas (32 y 64 bits)**:
-   - Se deben generar siempre las bibliotecas para `arm64-v8a` (64-bit ARM), `armeabi-v7a` (32-bit ARM) y `x86_64` (emulador).
+4. **Soporte de Arquitecturas (32 y 64 bits) y Compilación Selectiva en CI**:
+   - Se generan las bibliotecas nativas para `arm64-v8a` (64-bit ARM), `armeabi-v7a` (32-bit ARM) y `x86_64` (emulador).
+   - El workflow `build-apk.yml` permite compilar en GitHub Actions el APK Universal o APKs monofiltrados por arquitectura individual (`-PtargetAbi`) para optimizar el peso del instalador.
 5. **Entorno del Usuario y Diseño 100% Móvil Nativo**:
    - La app es una aplicación para smartphone, **NO un sitio web**.
    - No utilizar marcos o barras simuladas de teléfono (`09:41 5G 100%`) dentro de la pantalla, ya que el usuario opera directamente desde un dispositivo físico real.
    - Las interfaces deben ser 100% touch-friendly, con botones grandes, navegación inferior fija Material 3 y sin desbordamientos horizontales.
    - No forzar herramientas que requieran línea de comandos local; el APK se compila en la nube mediante GitHub Actions.
-6. **Políticas de Propiedad Intelectual y Licenciamiento**:
+6. **Cuenta Regresiva y Presets Adaptativos a la Pantalla**:
+   - Toda inicialización de grabación debe respetar la cuenta regresiva seleccionada (0s / desactivada, 3s, 5s o 10s) con interfaz táctil de cancelación inmediata.
+   - Las resoluciones ofrecidas deben adaptarse al aspect ratio físico del teléfono (ej. 20:9 o 19.5:9) y garantizar dimensiones pares para evitar desbordamientos y barras verdes en codificadores de hardware.
+7. **Políticas de Propiedad Intelectual y Licenciamiento**:
    - Nunca incluir nombres de marcas comerciales protegidas en nombres de archivos.
    - Solo usar dependencias con licencias permisivas (MIT, Apache-2.0, BSD). Prohibido introducir librerías GPL o copyleft que obliguen a abrir el código.
-7. **Configuración Remota Dinámica y Releases de GitHub**:
+8. **Configuración Remota Dinámica y Releases de GitHub**:
    - La app consulta de forma asíncrona y no bloqueante los releases en `https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases`.
    - **Resiliencia Offline Obligatoria**: La app nunca debe estar atada al 100% a la conexión ni fallar si no hay internet; siempre debe inicializarse con valores por defecto locales seguros.
    - El workflow `.github/workflows/publish-config-release.yml` debe ejecutarse **exclusivamente con `workflow_dispatch`** (nunca en `push` ni `pull_request`).
-8. **Rescate Anticrash y Almacenamiento Público en Galería**:
+9. **Rescate Anticrash y Almacenamiento Público en Galería**:
    - Toda grabación completada debe guardarse o copiarse a la Galería pública del usuario (`Movies/VeloRec`) mediante Scoped Storage y `MediaScannerConnection`.
    - Ante apagón súbito del smartphone, `FFmpegRecoveryEngine` escanea y repara los archivos incompletos al reiniciar sin intervención requerida del usuario.
 

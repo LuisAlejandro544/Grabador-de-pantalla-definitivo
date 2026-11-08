@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SlowMotionVideo
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
@@ -49,9 +50,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.remember
 import com.velorec.recorder.data.model.BITRATE_PRESETS
+import com.velorec.recorder.data.model.COUNTDOWN_PRESETS
 import com.velorec.recorder.data.model.FPS_PRESETS
 import com.velorec.recorder.data.model.RESOLUTION_PRESETS
+import com.velorec.recorder.data.model.getAdaptivePresetsForDevice
 import com.velorec.recorder.data.model.RemoteUiConfig
 import com.velorec.recorder.data.model.ResolutionPreset
 import com.velorec.recorder.ui.theme.DarkCard
@@ -73,6 +77,7 @@ import com.velorec.recorder.ui.theme.WarningAmber
  * 5. Tasa de Cuadros (24, 30, 60, 90, 120 FPS).
  * 6. Códec de hardware: H.264 (AVC), H.265 (HEVC) y AV1.
  * 7. Fuente de audio: Mezcla estéreo, Micrófono, Audio interno y Silencio.
+ * 8. Temporizador de cuenta regresiva de inicio (0s, 3s, 5s, 10s).
  */
 @Composable
 fun NativeSettingsSection(
@@ -86,14 +91,18 @@ fun NativeSettingsSection(
     accentColor: Color,
     primaryColor: Color,
     remoteConfig: RemoteUiConfig,
+    availableResolutions: List<ResolutionPreset>? = null,
+    selectedCountdownSec: Int = 3,
     onEngineChange: (String) -> Unit,
     onResolutionChange: (ResolutionPreset) -> Unit,
     onBitrateChange: (Int) -> Unit,
     onFpsChange: (Int) -> Unit,
     onCodecChange: (String) -> Unit,
-    onAudioChange: (String) -> Unit
+    onAudioChange: (String) -> Unit,
+    onCountdownChange: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val resolutions = availableResolutions ?: remember(context) { getAdaptivePresetsForDevice(context) }
 
     Column(
         modifier = Modifier
@@ -251,7 +260,7 @@ fun NativeSettingsSection(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
-                RESOLUTION_PRESETS.forEach { preset ->
+                resolutions.forEach { preset ->
                     val isSelected = selectedResolution.id == preset.id
                     Surface(
                         modifier = Modifier
@@ -277,7 +286,7 @@ fun NativeSettingsSection(
                                     color = if (isSelected) accentColor else Color.White
                                 )
                                 Text(
-                                    text = "${preset.width} x ${preset.height} px (9:16 vertical)",
+                                    text = "${preset.width} x ${preset.height} px (${if (preset.isNative) "Nativa 1:1" else "Proporcional"})",
                                     fontSize = 11.sp,
                                     color = Color(0xFF94A3B8)
                                 )
@@ -538,5 +547,81 @@ fun NativeSettingsSection(
                 }
             }
         }
+
+        // 7. Cuenta Regresiva de Inicio (Temporizador de Preparación)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Timer, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Cuenta Regresiva de Inicio",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Retardo antes de comenzar a capturar para preparar tu pantalla o cambiar de aplicación.",
+                    fontSize = 11.sp,
+                    color = Color(0xFF94A3B8)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    COUNTDOWN_PRESETS.forEach { sec ->
+                        val isSelected = selectedCountdownSec == sec
+                        val title = when (sec) {
+                            0 -> "0s"
+                            3 -> "3s ★"
+                            5 -> "5s"
+                            10 -> "10s"
+                            else -> "${sec}s"
+                        }
+                        val subtitle = when (sec) {
+                            0 -> "Inmediata"
+                            3 -> "Recomendada"
+                            5 -> "Estándar"
+                            10 -> "Larga"
+                            else -> "Segundos"
+                        }
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable(enabled = !isRecording) { onCountdownChange(sec) },
+                            color = if (isSelected) primaryColor else DarkCard,
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, accentColor) else null
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
+                            ) {
+                                Text(
+                                    text = title,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else Color(0xFFCBD5E1)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = subtitle,
+                                    fontSize = 9.sp,
+                                    color = if (isSelected) accentColor else Color(0xFF94A3B8)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
+

@@ -1,5 +1,6 @@
 package com.velorec.recorder.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,10 +10,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.delay
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Info
@@ -47,9 +53,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.velorec.recorder.data.model.NativeRecordingConfig
 import com.velorec.recorder.data.model.NativeTab
 import com.velorec.recorder.data.model.RESOLUTION_PRESETS
+import com.velorec.recorder.data.model.getAdaptivePresetsForDevice
 import com.velorec.recorder.data.model.RemoteUiConfig
 import com.velorec.recorder.data.repository.RemoteConfigRepository
 import com.velorec.recorder.ui.components.RemoteAnnouncementDialog
@@ -92,13 +100,44 @@ fun VeloRecMainScreen(
     onTogglePause: () -> Unit = {},
     onStopRecording: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val adaptivePresets = remember(context) { getAdaptivePresetsForDevice(context) }
+
     var activeTab by remember { mutableStateOf(NativeTab.RECORDER) }
     var selectedEngine by remember { mutableStateOf("cpp23") } // "cpp23" o "rust2024"
-    var selectedResolution by remember { mutableStateOf(RESOLUTION_PRESETS[2]) } // 1080p por defecto
+    var selectedResolution by remember(adaptivePresets) {
+        mutableStateOf(adaptivePresets.firstOrNull { it.isNative } ?: adaptivePresets[0])
+    }
     var selectedBitrateMbps by remember { mutableIntStateOf(12) }
     var selectedFps by remember { mutableIntStateOf(60) }
     var selectedCodec by remember { mutableStateOf("H264") } // "H264", "HEVC", "AV1"
     var selectedAudio by remember { mutableStateOf("both") } // "both", "mic", "internal", "mute"
+    var selectedCountdownSec by remember { mutableIntStateOf(3) } // 0, 3, 5, 10
+    var isCountingDown by remember { mutableStateOf(false) }
+    var countdownRemaining by remember { mutableIntStateOf(3) }
+
+    // Corrutina de cuenta regresiva previa a la captura
+    LaunchedEffect(isCountingDown) {
+        if (isCountingDown) {
+            countdownRemaining = selectedCountdownSec
+            while (countdownRemaining > 0) {
+                delay(1000L)
+                countdownRemaining -= 1
+            }
+            isCountingDown = false
+            val config = NativeRecordingConfig(
+                engine = selectedEngine,
+                width = selectedResolution.width,
+                height = selectedResolution.height,
+                fps = selectedFps,
+                bitrateBps = selectedBitrateMbps * 1_000_000,
+                codec = selectedCodec,
+                audioSource = selectedAudio,
+                countdownSec = selectedCountdownSec
+            )
+            onStartRecording(config)
+        }
+    }
 
     // Estado de configuración remota dinámica (Server-Driven UI)
     var remoteConfig by remember { mutableStateOf(RemoteUiConfig()) }
@@ -123,6 +162,78 @@ fun VeloRecMainScreen(
             accentColor = dynamicAccentColor,
             onDismiss = { showAnnouncementModal = false }
         )
+    }
+
+    // Modal de Cuenta Regresiva
+    if (isCountingDown) {
+        Dialog(onDismissRequest = { isCountingDown = false }) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = DarkSurface,
+                border = BorderStroke(2.dp, dynamicAccentColor),
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(90.dp)
+                            .clip(CircleShape)
+                            .background(dynamicPrimaryColor.copy(alpha = 0.2f))
+                            .border(3.dp, dynamicAccentColor, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (countdownRemaining > 0) "$countdownRemaining" else "¡YA!",
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace,
+                            color = dynamicAccentColor
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Text(
+                        text = "Iniciando Grabación...",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Prepárate o ve a la app que deseas capturar",
+                        fontSize = 12.sp,
+                        color = Color(0xFF94A3B8),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    androidx.compose.material3.Button(
+                        onClick = { isCountingDown = false },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = DarkCard
+                        ),
+                        border = BorderStroke(1.dp, Color(0xFF64748B)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Cancelar",
+                            color = Color(0xFFEF4444),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -303,20 +414,28 @@ fun VeloRecMainScreen(
                         accentColor = dynamicAccentColor,
                         primaryColor = dynamicPrimaryColor,
                         bannerText = if (remoteConfig.theme.bannerActive) remoteConfig.theme.bannerText else null,
+                        availableResolutions = adaptivePresets,
+                        selectedCountdownSec = selectedCountdownSec,
                         onResolutionChange = { selectedResolution = it },
                         onBitrateChange = { selectedBitrateMbps = it },
+                        onCountdownChange = { selectedCountdownSec = it },
                         onToggleRecord = {
                             if (!isRecording) {
-                                val config = NativeRecordingConfig(
-                                    engine = selectedEngine,
-                                    width = selectedResolution.width,
-                                    height = selectedResolution.height,
-                                    fps = selectedFps,
-                                    bitrateBps = selectedBitrateMbps * 1_000_000,
-                                    codec = selectedCodec,
-                                    audioSource = selectedAudio
-                                )
-                                onStartRecording(config)
+                                if (selectedCountdownSec > 0) {
+                                    isCountingDown = true
+                                } else {
+                                    val config = NativeRecordingConfig(
+                                        engine = selectedEngine,
+                                        width = selectedResolution.width,
+                                        height = selectedResolution.height,
+                                        fps = selectedFps,
+                                        bitrateBps = selectedBitrateMbps * 1_000_000,
+                                        codec = selectedCodec,
+                                        audioSource = selectedAudio,
+                                        countdownSec = 0
+                                    )
+                                    onStartRecording(config)
+                                }
                             } else {
                                 onStopRecording()
                             }
@@ -337,12 +456,15 @@ fun VeloRecMainScreen(
                         accentColor = dynamicAccentColor,
                         primaryColor = dynamicPrimaryColor,
                         remoteConfig = remoteConfig,
+                        availableResolutions = adaptivePresets,
+                        selectedCountdownSec = selectedCountdownSec,
                         onEngineChange = { selectedEngine = it },
                         onResolutionChange = { selectedResolution = it },
                         onBitrateChange = { selectedBitrateMbps = it },
                         onFpsChange = { selectedFps = it },
                         onCodecChange = { selectedCodec = it },
-                        onAudioChange = { selectedAudio = it }
+                        onAudioChange = { selectedAudio = it },
+                        onCountdownChange = { selectedCountdownSec = it }
                     )
                 }
                 NativeTab.GALLERY -> {

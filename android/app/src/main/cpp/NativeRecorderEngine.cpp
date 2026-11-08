@@ -131,13 +131,20 @@ std::expected<void, std::string> NativeRecorderEngine::stop() {
     if (!m_isRecording.load()) return {};
 
     m_isRecording.store(false);
+
+    // 1. Señalizar el fin de la transmisión de entrada al encoder de hardware
+    // Esto hace que el hardware termine de codificar los fotogramas pendientes y emita el flag EOS
+    if (m_codec) {
+        AMediaCodec_signalEndOfInputStream(m_codec);
+    }
+
+    // 2. Notificar al hilo de trabajo para que termine una vez drenados los fotogramas
     m_stopRequested.store(true);
     if (m_workerThread.joinable()) {
         m_workerThread.join();
     }
 
     if (m_codec) {
-        AMediaCodec_signalEndOfInputStream(m_codec);
         AMediaCodec_stop(m_codec);
         AMediaCodec_delete(m_codec);
         m_codec = nullptr;
@@ -175,7 +182,7 @@ void NativeRecorderEngine::encodingWorkerLoop() {
     AMediaCodecBufferInfo info;
     constexpr int64_t TIMEOUT_US = 10'000; // 10ms
 
-    while (!m_stopRequested.load() && m_isRecording.load()) {
+    while (!m_stopRequested.load() || m_isRecording.load()) {
         if (m_isPaused.load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
             continue;
@@ -191,6 +198,17 @@ void NativeRecorderEngine::encodingWorkerLoop() {
             uint8_t* buffer = AMediaCodec_getOutputBuffer(m_codec, outIndex, &bufferSize);
 
             if (buffer && info.size > 0 && m_isMuxerStarted.load()) {
+                // Sincronización y normalización de PTS a tiempo base cero
+                if (m_firstFrameTimeUs.load() < 0) {
+                    m_firstFrameTimeUs.store(info.presentationTimeUs);
+                }
+                int64_t firstTime = m_firstFrameTimeUs.load();
+                if (info.presentationTimeUs >= firstTime) {
+                    info.presentationTimeUs -= firstTime;
+                } else {
+                    info.presentationTimeUs = 0;
+                }
+
                 // Escribir datos al archivo contenedor
                 AMediaMuxer_writeSampleData(m_muxer, m_videoTrackIndex, buffer, &info);
                 m_frameCount.fetch_add(1, std::memory_order_relaxed);
@@ -199,6 +217,7 @@ void NativeRecorderEngine::encodingWorkerLoop() {
             AMediaCodec_releaseOutputBuffer(m_codec, outIndex, false);
 
             if ((info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) != 0) {
+                LOGI("C++23: Señal EOS recibida y procesada en el Muxer.");
                 break;
             }
 
@@ -215,7 +234,10 @@ void NativeRecorderEngine::encodingWorkerLoop() {
             AMediaFormat_delete(newFormat);
             LOGI("Muxer iniciado con nuevo formato. Pista: %zd", m_videoTrackIndex);
         } else if (outIndex == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
-            // No hay datos aún, continuar ciclo
+            if (m_stopRequested.load()) {
+                // Si ya se solicitó detener y no hay buffers pendientes, salir del ciclo
+                break;
+            }
         }
     }
 }

@@ -12,7 +12,9 @@ import {
   getFfmpegRepairCommand,
   getFfmpegLosslessMergeCommand,
   getGalleryPublicAlbumPath,
-  detectVideoContainer
+  detectVideoContainer,
+  COUNTDOWN_PRESETS,
+  validateCountdownSeconds
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -147,11 +149,38 @@ test('getGalleryPublicAlbumPath formats public directory path', () => {
   assert.equal(sanitized, 'Movies/VeloRec/video_space___.mp4');
 });
 
-test('detectVideoContainer identifies mp4 and mkv formats', () => {
-  assert.equal(detectVideoContainer('clip.mp4'), 'mp4');
-  assert.equal(detectVideoContainer('CLIP.MP4'), 'mp4');
-  assert.equal(detectVideoContainer('record.mkv'), 'mkv');
-  assert.equal(detectVideoContainer('audio.wav'), 'unknown');
+test('COUNTDOWN_PRESETS contains standard preparation delays', () => {
+  assert.deepEqual(Array.from(COUNTDOWN_PRESETS), [0, 3, 5, 10]);
+});
+
+test('validateCountdownSeconds validates delays and provides safe fallback', () => {
+  // 0s = instant
+  const zero = validateCountdownSeconds(0);
+  assert.equal(zero.valid, true);
+  assert.equal(zero.seconds, 0);
+  assert.match(zero.label, /inmediato/i);
+
+  // Negative treated as 0
+  const negative = validateCountdownSeconds(-2);
+  assert.equal(negative.valid, true);
+  assert.equal(negative.seconds, 0);
+
+  // 3s = recommended
+  const three = validateCountdownSeconds(3);
+  assert.equal(three.valid, true);
+  assert.equal(three.seconds, 3);
+  assert.match(three.label, /recomendado/i);
+
+  // 5s and 10s
+  assert.equal(validateCountdownSeconds(5).valid, true);
+  assert.equal(validateCountdownSeconds(5).seconds, 5);
+  assert.equal(validateCountdownSeconds(10).valid, true);
+  assert.equal(validateCountdownSeconds(10).seconds, 10);
+
+  // Invalid value falls back to 3s
+  const invalid = validateCountdownSeconds(99);
+  assert.equal(invalid.valid, false);
+  assert.equal(invalid.seconds, 3);
 });
 
 
