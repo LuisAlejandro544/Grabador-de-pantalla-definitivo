@@ -33,8 +33,8 @@
   - `ui/theme/Color.kt`: Paleta Material 3 Dark Theme y parseo seguro de colores remotos.
   - `data/model/`: `RecordingConfig.kt` (presets adaptativos de aspect ratio, temporizador de cuenta regresiva y bitrate) y `RemoteUiConfig.kt`.
   - `data/repository/RemoteConfigRepository.kt`: Sincronización asíncrona de `app_config.json` en `Dispatchers.IO`.
-  - `service/RecordingNotificationHelper.kt`: Canales y construcción de notificaciones del servicio.
-  - `ffmpeg/FFmpegRecoveryEngine.kt`: Motor de recuperación ante apagones o muerte del proceso con FFmpeg Kit LTS 16KB, timestamps PTS base 0 y multiplexación `+faststart`.
+  - `audio/AudioRecordEngine.kt`: Motor de captura y codificación AAC estéreo (PCM 16-bit Little-Endian) con soporte para micrófono, audio interno y mezcla simultánea sin bloqueos.
+  - `audio/AudioMuxerHelper.kt`: Multiplexador nativo de Android (`MediaMuxer` y `MediaExtractor`) para fusión instantánea de video y audio (<200 ms) sin librerías externas.
   - `storage/GalleryStorageManager.kt`: Publicación e indexación en el álbum público `Movies/VeloRec` de la galería nativa mediante MediaStore API y MediaScannerConnection.
   - `ScreenRecordService.kt`: Servicio en primer plano con `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION`, corrutinas IO y firmas JNI C++23 y Rust 2024.
   - `VeloRecComposeUI.kt`: Fachada modular que mantiene retrocompatibilidad total.

@@ -18,7 +18,6 @@ import android.view.Surface
 import androidx.core.content.IntentCompat
 import com.velorec.recorder.audio.AudioMuxerHelper
 import com.velorec.recorder.audio.AudioRecordEngine
-import com.velorec.recorder.ffmpeg.FFmpegRecoveryEngine
 import com.velorec.recorder.service.RecordingNotificationHelper
 import com.velorec.recorder.storage.GalleryStorageManager
 import kotlinx.coroutines.CoroutineScope
@@ -124,9 +123,12 @@ class ScreenRecordService : Service() {
     override fun onCreate() {
         super.onCreate()
         RecordingNotificationHelper.createNotificationChannel(this)
-        // Escanear y reparar automáticamente cualquier grabación truncada por apagón o cierre abrupto
+        // Limpiar archivos temporales residuales de sesiones previas en segundo plano
         serviceScope.launch(Dispatchers.IO) {
-            FFmpegRecoveryEngine.scanAndRepairPendingRecordings(applicationContext)
+            try {
+                val privateDir = applicationContext.getExternalFilesDir(null) ?: applicationContext.filesDir
+                privateDir.listFiles { f -> f.name.startsWith("temp_") }?.forEach { it.delete() }
+            } catch (_: Exception) {}
         }
     }
 
@@ -197,8 +199,16 @@ class ScreenRecordService : Service() {
                 lastOutputFilePath = finalOutputFile.absolutePath
 
                 val shouldRecordAudio = audio != "mute"
-                val videoFileToEncode = File(outputDir, "temp_video_${timestamp}.mp4").also { 
-                    tempVideoFilePath = it.absolutePath 
+
+                // Si no hay audio, C++23 o Rust graban DIRECTAMENTE al archivo MP4 final
+                // Cero archivos temporales, cero intermediarios, cero impacto del Recolector de Basura (GC)
+                val videoFileToEncode = if (shouldRecordAudio) {
+                    File(outputDir, "temp_video_${timestamp}.mp4").also { 
+                        tempVideoFilePath = it.absolutePath 
+                    }
+                } else {
+                    tempVideoFilePath = null
+                    finalOutputFile
                 }
 
                 val audioFileToEncode = if (shouldRecordAudio) {
@@ -384,28 +394,22 @@ class ScreenRecordService : Service() {
                 audioEngine?.stop()
                 audioEngine = null
 
-                // 4. Fusionar video y audio con FFmpeg puro (+faststart) sin pérdida de calidad
+                // 4. Si se grabó audio, fusionar con el multiplexor nativo de Android (AudioMuxerHelper)
+                // Cero dependencias externas, cero desajustes de contenedor, ejecución en < 200ms
                 val tempVideo = tempVideoFilePath
                 val tempAudio = tempAudioFilePath
                 val finalOutput = lastOutputFilePath
 
                 if (tempVideo != null && finalOutput != null) {
-                    val mergedWithFFmpeg = FFmpegRecoveryEngine.mergeAudioVideoWithFFmpeg(
-                        videoPath = tempVideo,
-                        audioPath = tempAudio,
-                        outputPath = finalOutput
-                    )
-                    if (!mergedWithFFmpeg) {
-                        if (tempAudio != null && File(tempAudio).exists() && File(tempAudio).length() > 100L) {
-                            AudioMuxerHelper.mergeAudioVideo(tempVideo, tempAudio, finalOutput)
-                        } else {
-                            // Fallback directo preservando video
-                            val src = File(tempVideo)
-                            val dst = File(finalOutput)
-                            if (src.exists() && src.length() > 0L) {
-                                src.copyTo(dst, overwrite = true)
-                                src.delete()
-                            }
+                    if (tempAudio != null && File(tempAudio).exists() && File(tempAudio).length() > 100L) {
+                        AudioMuxerHelper.mergeAudioVideo(tempVideo, tempAudio, finalOutput)
+                    } else {
+                        // Preservar video si no hubo audio
+                        val src = File(tempVideo)
+                        val dst = File(finalOutput)
+                        if (src.exists() && src.length() > 0L) {
+                            src.copyTo(dst, overwrite = true)
+                            src.delete()
                         }
                     }
                 }

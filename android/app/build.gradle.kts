@@ -226,11 +226,6 @@ dependencies {
     // Conmuta automáticamente entre AAudio (API 26+) y OpenSL ES para micrófono y audio interno
     implementation("com.google.oboe:oboe:1.9.0")
 
-    // Motor FFmpeg Puro LTS compatible con 16KB page-size de Android 15 (LGPL-3.0)
-    // Rescate automático de archivos incompletos ante apagones o muerte del proceso,
-    // multiplexación sin pérdida (+faststart) y exportación a contenedor MKV/MP4
-    implementation("io.github.jamaismagic.ffmpeg:ffmpeg-kit-lts-16kb:6.1.7")
-
     // Kotlin Coroutines para evitar bloqueos en el hilo de la interfaz de usuario
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")

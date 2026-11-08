@@ -13,9 +13,9 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
 3. **Motores de Codificación Nativa (Hardware NDK)**:
    - **C++23**: `AMediaCodec_createInputSurface`, `std::expected`, `std::span`, `std::jthread`, `ANativeWindow`.
    - **Rust (Edition 2024)**: Crate con `crossbeam-channel`, seguridad de memoria garantizada en tiempo de compilación y enlaces JNI.
-4. **Motor Anticrash y Multiplexación (FFmpeg Kit LTS 16KB)**:
-   - Rescate automático de archivos truncados sin `moov atom` por apagón del smartphone o cierre de Android.
-   - Stream copy sin recodificación con `+faststart` y publicación directa en Galería (`Movies/VeloRec`).
+4. **Grabación Directa NDK y Multiplexación Nativa de Android**:
+   - Codificación directa de hardware a MP4 sin intermediación de la JVM/ART ni recolección de basura (GC-Free).
+   - Multiplexación sin pérdida de audio y video mediante `AudioMuxerHelper` (`MediaMuxer` y `MediaExtractor` oficiales de Android) con guardado directo en Galería (`Movies/VeloRec`).
 5. **CI/CD Móvil**: Flujo de GitHub Actions con disparo **estrictamente manual (`workflow_dispatch`)** para compilar el APK Debug sin necesidad de computadora.
 
 ---
@@ -50,9 +50,9 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
    - La app consulta de forma asíncrona y no bloqueante los releases en `https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases`.
    - **Resiliencia Offline Obligatoria**: La app nunca debe estar atada al 100% a la conexión ni fallar si no hay internet; siempre debe inicializarse con valores por defecto locales seguros.
    - El workflow `.github/workflows/publish-config-release.yml` debe ejecutarse **exclusivamente con `workflow_dispatch`** (nunca en `push` ni `pull_request`).
-9. **Rescate Anticrash y Almacenamiento Público en Galería**:
-   - Toda grabación completada debe guardarse o copiarse a la Galería pública del usuario (`Movies/VeloRec`) mediante Scoped Storage y `MediaScannerConnection`.
-   - Ante apagón súbito del smartphone, `FFmpegRecoveryEngine` escanea y repara los archivos incompletos al reiniciar sin intervención requerida del usuario.
+9. **Grabación NDK Pura y Almacenamiento Público en Galería**:
+   - Toda grabación completada se publica directamente en la Galería del usuario (`Movies/VeloRec`) mediante Scoped Storage y `MediaScannerConnection`.
+   - Limpieza automática de archivos temporales al iniciar el servicio, garantizando que el almacenamiento del dispositivo se mantenga optimizado.
 
 ---
 

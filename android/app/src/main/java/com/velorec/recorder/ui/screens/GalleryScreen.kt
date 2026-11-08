@@ -52,7 +52,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
-import com.velorec.recorder.ffmpeg.FFmpegRecoveryEngine
 import com.velorec.recorder.storage.GalleryStorageManager
 import com.velorec.recorder.ui.theme.DarkBackground
 import com.velorec.recorder.ui.theme.DarkSurface
@@ -116,7 +115,7 @@ fun NativeGallerySection(accentColor: Color) {
                         fontSize = 16.sp
                     )
                     Text(
-                        text = "Álbum: Movies/VeloRec • Rescate FFmpeg LTS",
+                        text = "Álbum: Movies/VeloRec • Motor NDK Directo",
                         color = Color(0xFF94A3B8),
                         fontSize = 11.sp
                     )

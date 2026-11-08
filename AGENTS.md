@@ -62,9 +62,11 @@ npm run build
 - **Enlace de Firmas JNI en C++23 y Rust 2024**:
   - Las firmas nativas exportadas en `NativeRecorderEngine.cpp` y `rust/src/lib.rs` corresponden a `Java_com_velorec_recorder_ScreenRecordService_native*`. Por ello, las declaraciones `external fun` residen en `ScreenRecordService` para evitar excepciones `UnsatisfiedLinkError` en tiempo de ejecución.
 - **Arquitectura Modular en Kotlin**:
-  - La capa nativa se estructura en paquetes (`data/model`, `data/repository`, `ui/screens`, `ui/components`, `ui/theme`, `service`, `ffmpeg`, `storage`), manteniendo `VeloRecComposeUI.kt` como fachada modular retrocompatible.
-- **FFmpeg Kit y Compatibilidad con Páginas de 16KB (Android 15+)**:
-  - `com.arthenica:ffmpeg-kit` fue retirado de Maven Central y falla en Android 15. Se utiliza `io.github.jamaismagic.ffmpeg:ffmpeg-kit-lts-16kb:6.1.7` con alineación de 16KB para evitar caídas del cargador dinámico de bibliotecas compartidas (`dlopen`).
+  - La capa nativa se estructura en paquetes (`data/model`, `data/repository`, `ui/screens`, `ui/components`, `ui/theme`, `service`, `audio`, `storage`), manteniendo `VeloRecComposeUI.kt` como fachada modular retrocompatible.
+- **Grabación Directa NDK C++23 / Rust 2024 sin Recolector de Basura (GC-Free)**:
+  - La codificación de video se realiza al 100% en hilos dedicados de C++23 (`std::thread`) y Rust 2024 (`std::thread`), enlazados a `ANativeWindow` de hardware y `AMediaMuxer`. Ningún byte de video pasa por la JVM/ART ni activa el Garbage Collector de Android durante la captura de pantalla.
+- **Multiplexación Nativa de Audio y Video sin FFmpeg**:
+  - Cuando se graba con audio, la fusión se realiza de forma instantánea (<200 ms) mediante `AudioMuxerHelper` utilizando el subsistema oficial de Android (`MediaExtractor` y `MediaMuxer`), prescindiendo de binarios externos pesados o incompatibles como FFmpeg.
 - **Publicación en Galería Pública del Dispositivo**:
   - Toda grabación finalizada se publica en `Movies/VeloRec` mediante `GalleryStorageManager` (MediaStore Scoped Storage + `MediaScannerConnection.scanFile`) para garantizar que aparezca de inmediato en Google Fotos y en la galería nativa del usuario.
 

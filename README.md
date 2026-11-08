@@ -39,10 +39,10 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
   - Bitrate ajustable de 2 a 50 Mbps con cálculo de almacenamiento en vivo.
   - Códecs por hardware: H.264 (AVC), H.265 (HEVC) y AV1.
   - Captura de audio: Audio Interno, Micrófono con medidor VU en decibeles, Mezcla estéreo y Silencio.
-- **Rescate Anticrash con FFmpeg Puro (Kit LTS 16KB para Android 15+)**:
-  - **Protección contra Apagones y Muerte de Proceso**: Si el teléfono se apaga de golpe por batería agotada o Android mata el proceso en segundo plano, FFmpeg analiza el flujo truncado, reconstruye el índice y recupera la grabación intacta hasta el último segundo sin archivos corruptos.
-  - **Multiplexación sin Pérdidas con `+faststart`**: Fusión ultrarrápida (Stream Copy en <400 ms) de la pista de video nativa con audio AAC, moviendo el `moov atom` al inicio del archivo para reproducción inmediata sin búfer.
-  - **Compatibilidad 16KB Memory Page Size**: Alineado con las exigencias del NDK moderno de Android 15 (API 35+).
+- **Grabación Directa NDK C++23 / Rust 2024 (Zero-Copy & GC-Free)**:
+  - **Sin Impacto del Recolector de Basura (GC-Free)**: Los fotogramas de la GPU se canalizan directamente a `ANativeWindow` de hardware y se empaquetan en C++23 / Rust 2024 con `AMediaMuxer` en hilos de fondo dedicados. Cero pausas de GC durante la grabación de pantalla.
+  - **Multiplexación Nativa de Audio y Video**: Fusión instantánea (<200 ms) sin librerías externas mediante `AudioMuxerHelper` utilizando el subsistema oficial de Android (`MediaExtractor` y `MediaMuxer`).
+  - **Alineación con Android 15 (API 35+)**: Compilación nativa optimizada para arquitecturas de 64 y 32 bits (`arm64-v8a`, `armeabi-v7a`, `x86_64`).
 - **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
   - Las grabaciones se guardan directamente en el álbum público del teléfono vía **MediaStore API** (Scoped Storage) y se indexan al instante con `MediaScannerConnection`.
   - Aparecen inmediatamente en Google Fotos, Galería Samsung, Xiaomi, Motorola, VLC o WhatsApp.

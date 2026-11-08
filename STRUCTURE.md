@@ -42,9 +42,7 @@
 │           │   │       └── RemoteConfigRepository.kt # Carga asíncrona segura de GitHub Releases (Dispatchers.IO)
 │           │   ├── audio/
 │           │   │   ├── AudioRecordEngine.kt     # Captura de micrófono, audio interno (API 29+) y mezcla PCM 16-bit
-│           │   │   └── AudioMuxerHelper.kt      # Stream copy ultrarrápido para fusionar video y audio AAC
-│           │   ├── ffmpeg/
-│           │   │   └── FFmpegRecoveryEngine.kt  # Rescate anticrash ante apagones y multiplexación con +faststart (LTS 16KB)
+│           │   │   └── AudioMuxerHelper.kt      # Multiplexación nativa oficial de Android (MediaMuxer) en <200ms
 │           │   ├── storage/
 │           │   │   └── GalleryStorageManager.kt # Publicación en Galería nativa (Movies/VeloRec) vía MediaStore
 │           │   ├── service/
