@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 // Constantes de protocolo y búfer
