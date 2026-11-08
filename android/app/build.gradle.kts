@@ -119,12 +119,13 @@ android {
     }
 
     lint {
-        isAbortOnError = false
-        isCheckReleaseBuilds = false
-        disable += listOf(
+        // En Android Gradle Plugin (Kotlin DSL), las propiedades de configuración son abortOnError y checkReleaseBuilds
+        abortOnError = false
+        checkReleaseBuilds = false
+        disable.addAll(listOf(
             "GradleDependency",
             "OldTargetApi"
-        )
+        ))
     }
 }
 
