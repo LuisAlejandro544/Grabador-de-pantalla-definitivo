@@ -125,12 +125,12 @@ class AudioRecordEngine(
         }
 
         try {
-            internalAudioReaderThread?.join(500)
+            internalAudioReaderThread?.join(800)
         } catch (_: InterruptedException) {}
         internalAudioReaderThread = null
 
         try {
-            workerThread?.join(1500)
+            workerThread?.join(3000)
         } catch (e: InterruptedException) {
             Log.w(TAG, "Interrupción al esperar hilo de audio: ${e.message}")
         }

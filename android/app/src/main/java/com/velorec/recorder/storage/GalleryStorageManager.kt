@@ -61,7 +61,9 @@ object GalleryStorageManager {
         val mimeType = if (isMkv) "video/x-matroska" else "video/mp4"
 
         try {
-            // Android 10+ (API 29+): Usar MediaStore Scoped Storage
+            var publishedFile: File? = null
+
+            // Android 10+ (API 29+): Usar MediaStore Scoped Storage oficial de Android
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
                     put(MediaStore.Video.Media.DISPLAY_NAME, targetName)
@@ -95,41 +97,55 @@ object GalleryStorageManager {
 
                     Log.i(TAG, "Video publicado exitosamente en Galería del sistema vía MediaStore: $itemUri")
                 }
-            }
 
-            // Guardar también copia directa en la carpeta pública Movies/VeloRec
-            val publicMoviesDir = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
-                "VeloRec"
-            )
-            if (!publicMoviesDir.exists()) {
-                publicMoviesDir.mkdirs()
-            }
+                // En Android 10+, la ruta pública física donde MediaStore aloja el video
+                val publicMoviesDir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+                    "VeloRec"
+                )
+                val candidateFile = File(publicMoviesDir, targetName)
+                publishedFile = if (candidateFile.exists() && candidateFile.length() > 0L) {
+                    candidateFile
+                } else {
+                    sourceFile
+                }
+            } else {
+                // Android 8.0 y 9.0 (API 26-28): Guardado directo en /storage/emulated/0/Movies/VeloRec/
+                val publicMoviesDir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+                    "VeloRec"
+                )
+                if (!publicMoviesDir.exists()) {
+                    publicMoviesDir.mkdirs()
+                }
 
-            val publicFile = File(publicMoviesDir, targetName)
-            if (publicFile.absolutePath != sourceFile.absolutePath) {
-                FileInputStream(sourceFile).use { input ->
-                    FileOutputStream(publicFile).use { output ->
-                        val buffer = ByteArray(BUFFER_SIZE)
-                        var bytesRead: Int
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            output.write(buffer, 0, bytesRead)
+                val publicFile = File(publicMoviesDir, targetName)
+                if (publicFile.absolutePath != sourceFile.absolutePath) {
+                    FileInputStream(sourceFile).use { input ->
+                        FileOutputStream(publicFile).use { output ->
+                            val buffer = ByteArray(BUFFER_SIZE)
+                            var bytesRead: Int
+                            while (input.read(buffer).also { bytesRead = it } != -1) {
+                                output.write(buffer, 0, bytesRead)
+                            }
+                            output.flush()
                         }
-                        output.flush()
                     }
                 }
+                publishedFile = publicFile
             }
 
-            // Escanear con MediaScannerConnection para forzar indexación inmediata en todas las versiones de Android
+            // Escanear con MediaScannerConnection para forzar indexación inmediata en Google Fotos / Galería
+            val fileToScan = publishedFile ?: sourceFile
             MediaScannerConnection.scanFile(
                 context.applicationContext,
-                arrayOf(publicFile.absolutePath),
+                arrayOf(fileToScan.absolutePath),
                 arrayOf(mimeType)
             ) { path, uri ->
                 Log.i(TAG, "MediaScanner indexó el video en Galería: $path -> $uri")
             }
 
-            return publicFile
+            return publishedFile ?: sourceFile
 
         } catch (e: Exception) {
             Log.e(TAG, "Error al publicar video en galería pública: ${e.message}", e)
@@ -140,13 +156,65 @@ object GalleryStorageManager {
 
     /**
      * Obtiene la lista unificada de todas las grabaciones de pantalla disponibles en el smartphone:
-     * 1. Directorio público de galería ('Movies/VeloRec').
-     * 2. Directorio privado de la app ('Android/data/com.velorec.recorder/files/').
+     * 1. Consulta a MediaStore ContentResolver (Android 10+ / Scoped Storage).
+     * 2. Directorio público de galería ('Movies/VeloRec').
+     * 3. Directorio privado de la app ('Android/data/com.velorec.recorder/files/').
      */
     fun getAllRecordings(context: Context): List<File> {
         val uniqueFilesMap = mutableMapOf<String, File>()
 
-        // 1. Archivos en la carpeta pública Movies/VeloRec
+        // 1. Consultar MediaStore oficial para Android 10+ (API 29-35)
+        try {
+            val projection = arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DATA,
+                MediaStore.Video.Media.SIZE
+            )
+            val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
+            } else {
+                "${MediaStore.Video.Media.DATA} LIKE ?"
+            }
+            val selectionArgs = arrayOf("%Movies/VeloRec%")
+
+            context.contentResolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                "${MediaStore.Video.Media.DATE_ADDED} DESC"
+            )?.use { cursor ->
+                val dataColumn = cursor.getColumnIndex(MediaStore.Video.Media.DATA)
+                val nameColumn = cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME)
+                val sizeColumn = cursor.getColumnIndex(MediaStore.Video.Media.SIZE)
+
+                while (cursor.moveToNext()) {
+                    val filePath = if (dataColumn != -1) cursor.getString(dataColumn) else null
+                    val name = if (nameColumn != -1) cursor.getString(nameColumn) else null
+                    val size = if (sizeColumn != -1) cursor.getLong(sizeColumn) else 0L
+
+                    if (filePath != null) {
+                        val file = File(filePath)
+                        if (file.exists() && (file.length() > 0L || size > 0L)) {
+                            uniqueFilesMap[file.name] = file
+                        }
+                    } else if (name != null) {
+                        val publicFile = File(
+                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+                            "VeloRec/$name"
+                        )
+                        if (publicFile.exists() && publicFile.length() > 0L) {
+                            uniqueFilesMap[name] = publicFile
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Aviso al consultar MediaStore: ${e.message}")
+        }
+
+        // 2. Archivos en la carpeta pública Movies/VeloRec (vía File si el sistema lo permite)
         try {
             val publicMoviesDir = File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
@@ -164,7 +232,7 @@ object GalleryStorageManager {
             Log.w(TAG, "No se pudo leer directorio público Movies/VeloRec: ${e.message}")
         }
 
-        // 2. Archivos en el directorio privado de la aplicación
+        // 3. Archivos en el directorio privado de la aplicación
         try {
             val privateDir = context.getExternalFilesDir(null) ?: context.filesDir
             privateDir.listFiles { file ->

@@ -120,4 +120,38 @@ object RecordingNotificationHelper {
 
         return builder.build()
     }
+
+    /**
+     * Construye una notificación persistente de progreso mientras se finaliza la codificación,
+     * se multiplexa el audio/video y se guarda el archivo en la galería pública.
+     * Esto evita que el sistema operativo o el usuario maten el servicio durante la escritura en disco.
+     */
+    fun buildSavingNotification(
+        context: Context,
+        engine: String
+    ): Notification {
+        val engineLabel = if (engine == "rust2024") "Rust 2024" else "C++23"
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+            setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val openAppPendingIntent = PendingIntent.getActivity(context, 0, openAppIntent, flags)
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle("Guardando grabación en Galería...")
+            .setContentText("Procesando video ($engineLabel) y audio sin pérdida...")
+            .setSmallIcon(android.R.drawable.ic_menu_save)
+            .setProgress(0, 0, true)
+            .setContentIntent(openAppPendingIntent)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+
+        return builder.build()
+    }
 }
+

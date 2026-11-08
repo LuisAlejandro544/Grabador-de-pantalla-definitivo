@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import android.util.Log
 
 /**
  * ScreenRecordService.kt
@@ -63,6 +65,8 @@ class ScreenRecordService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
+    private var projectionCallback: MediaProjection.Callback? = null
+    private val isStopping = AtomicBoolean(false)
     private var timerJob: Job? = null
     private var isNativeEncoderStarted = false
 
@@ -171,6 +175,7 @@ class ScreenRecordService : Service() {
         currentHeight = height
         currentFps = fps
         isNativeEncoderStarted = false
+        isStopping.set(false)
 
         _isRecordingFlow.value = true
         _isPausedFlow.value = false
@@ -327,12 +332,14 @@ class ScreenRecordService : Service() {
                 // la Activity sale a segundo plano.
                 // =========================================================================
                 val mainHandler = Handler(Looper.getMainLooper())
-                projection.registerCallback(object : MediaProjection.Callback() {
+                val callback = object : MediaProjection.Callback() {
                     override fun onStop() {
                         super.onStop()
                         handleStopRecording()
                     }
-                }, mainHandler)
+                }
+                projectionCallback = callback
+                projection.registerCallback(callback, mainHandler)
 
                 // Señalizar al motor nativo para comenzar a codificar fotogramas ANTES del VirtualDisplay
                 // Es mandatorio que AMediaCodec_start esté activo antes de que SurfaceFlinger inyecte cuadros
@@ -426,6 +433,13 @@ class ScreenRecordService : Service() {
     }
 
     private fun handleStopRecording() {
+        // Prevenir reentrancia y carreras concurrentes si el usuario presiona 'Detener' múltiples veces
+        // o si MediaProjection.Callback.onStop() se activa simultáneamente
+        if (!isStopping.compareAndSet(false, true)) {
+            Log.w("ScreenRecordService", "handleStopRecording ya en ejecución, ignorando llamada redundante")
+            return
+        }
+
         timerJob?.cancel()
         timerJob = null
         _isCountingDownFlow.value = false
@@ -433,23 +447,43 @@ class ScreenRecordService : Service() {
         _isRecordingFlow.value = false
         _isPausedFlow.value = false
 
+        // Notificación visual de guardado en la barra de estado para evitar que el sistema operativo
+        // descarte el servicio en primer plano por baja prioridad durante el procesamiento en disco
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        notificationManager?.notify(
+            RecordingNotificationHelper.NOTIFICATION_ID,
+            RecordingNotificationHelper.buildSavingNotification(this, currentEngine)
+        )
+
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // 1. Detener codificación en el motor nativo en Dispatchers.IO PRIMERO (si llegó a iniciarse)
-                // El motor nativo envía la señal de fin de flujo (AMediaCodec_signalEndOfInputStream)
-                // mientras la Surface y el VirtualDisplay continúan conectados y activos.
-                // Esto garantiza que el hardware drene todos los fotogramas y cierre el contenedor MP4
-                // con su átomo moov íntegro y sin corrupciones.
+                // 1. Detener PRIMERO el motor de audio y generar el archivo M4A/AAC mientras MediaProjection
+                // y el VirtualDisplay aún están activos. Esto previene que AudioPlaybackCapture sea invalidado
+                // antes de tiempo por el sistema operativo, permitiendo drenar las últimas muestras del juego.
+                try {
+                    audioEngine?.stop()
+                } catch (e: Exception) {
+                    Log.e("ScreenRecordService", "Error al detener audioEngine: ${e.message}", e)
+                }
+                audioEngine = null
+
+                // 2. Detener codificación en el motor nativo en Dispatchers.IO (si llegó a iniciarse)
+                // El motor nativo envía la señal EOS a AMediaCodec y drena los fotogramas pendientes
+                // cerrando el contenedor MP4 con su átomo moov íntegro.
                 if (isNativeEncoderStarted) {
-                    if (activeEngine == "rust2024") {
-                        nativeStopRustEncoding()
-                    } else {
-                        nativeStopCppEncoding()
+                    try {
+                        if (activeEngine == "rust2024") {
+                            nativeStopRustEncoding()
+                        } else {
+                            nativeStopCppEncoding()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ScreenRecordService", "Error al detener motor nativo: ${e.message}", e)
                     }
                     isNativeEncoderStarted = false
                 }
 
-                // 2. Liberar VirtualDisplay y MediaProjection tras el drenado completo del encoder
+                // 3. Liberar VirtualDisplay
                 try {
                     virtualDisplay?.release()
                 } catch (e: Exception) {
@@ -457,19 +491,20 @@ class ScreenRecordService : Service() {
                 }
                 virtualDisplay = null
 
+                // 4. Desregistrar el callback para evitar reentrancias circulares y detener MediaProjection
                 try {
+                    val cb = projectionCallback
+                    if (cb != null) {
+                        mediaProjection?.unregisterCallback(cb)
+                    }
                     mediaProjection?.stop()
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
+                projectionCallback = null
                 mediaProjection = null
 
-                // 3. Detener motor de audio y generar archivo M4A/AAC
-                audioEngine?.stop()
-                audioEngine = null
-
-                // 4. Si se grabó audio, fusionar con el multiplexor nativo de Android (AudioMuxerHelper)
-                // Cero dependencias externas, cero desajustes de contenedor, ejecución en < 200ms
+                // 5. Si se grabó audio, fusionar con el multiplexor nativo de Android con muestras entrelazadas (AudioMuxerHelper)
                 val tempVideo = tempVideoFilePath
                 val tempAudio = tempAudioFilePath
                 val finalOutput = lastOutputFilePath
@@ -478,12 +513,18 @@ class ScreenRecordService : Service() {
                     if (tempAudio != null && File(tempAudio).exists() && File(tempAudio).length() > 100L) {
                         AudioMuxerHelper.mergeAudioVideo(tempVideo, tempAudio, finalOutput)
                     } else {
-                        // Preservar video si no hubo audio
+                        // Preservar video si no hubo audio o la pista estuvo silenciada
                         val src = File(tempVideo)
                         val dst = File(finalOutput)
                         if (src.exists() && src.length() > 0L) {
-                            src.copyTo(dst, overwrite = true)
-                            src.delete()
+                            if (src.absolutePath != dst.absolutePath) {
+                                if (dst.exists()) dst.delete()
+                                val renamed = src.renameTo(dst)
+                                if (!renamed) {
+                                    src.copyTo(dst, overwrite = true)
+                                    src.delete()
+                                }
+                            }
                         }
                     }
                 }
@@ -491,7 +532,7 @@ class ScreenRecordService : Service() {
                 tempVideoFilePath = null
                 tempAudioFilePath = null
 
-                // 5. Publicar en la Galería nativa del usuario ('Movies/VeloRec') para que aparezca al instante
+                // 6. Publicar en la Galería nativa del usuario ('Movies/VeloRec') para que aparezca al instante
                 val finalFile = lastOutputFilePath?.let { File(it) }
                 if (finalFile != null && finalFile.exists() && finalFile.length() > 0L) {
                     val publishedFile = GalleryStorageManager.publishVideoToGallery(
@@ -504,12 +545,16 @@ class ScreenRecordService : Service() {
                     } else {
                         lastFileSizeBytes = finalFile.length()
                     }
+                    Log.i("ScreenRecordService", "Grabación guardada con éxito en Galería: ${lastOutputFilePath} (${lastFileSizeBytes} bytes)")
+                } else {
+                    Log.w("ScreenRecordService", "Archivo final no encontrado o vacío tras finalizar captura.")
                 }
 
+            } catch (e: Exception) {
+                Log.e("ScreenRecordService", "Excepción inesperada en handleStopRecording: ${e.message}", e)
+            } finally {
                 stopForeground(Service.STOP_FOREGROUND_REMOVE)
                 stopSelf()
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
         }
     }
@@ -522,7 +567,9 @@ class ScreenRecordService : Service() {
         _countdownRemainingFlow.value = 0
         _isRecordingFlow.value = false
         _isPausedFlow.value = false
-        audioEngine?.stop()
+        try {
+            audioEngine?.stop()
+        } catch (_: Exception) {}
         audioEngine = null
         serviceScope.cancel()
     }

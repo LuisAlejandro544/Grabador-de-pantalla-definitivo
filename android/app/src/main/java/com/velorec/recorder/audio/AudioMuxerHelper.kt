@@ -107,80 +107,135 @@ object AudioMuxerHelper {
             val byteBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY_BYTES)
             val bufferInfo = MediaCodec.BufferInfo()
 
-            // 1. Copiar muestras de video sin recodificar
+            // =========================================================================
+            // ENTRELAZADO CRÍTICO DE MUESTRAS (INTERLEAVING):
+            // En grabaciones largas (como partidas de Free Fire de varios minutos),
+            // escribir primero todo el video y luego todo el audio provoca que MediaMuxer
+            // aborte por desbordamiento de búfer o discrepancia de marcas de tiempo en el NDK.
+            // Se entrelazan alternativamente las muestras de video y audio según presentationTimeUs.
+            // =========================================================================
             videoExtractor.selectTrack(videoTrackIndexInExtractor)
-            while (true) {
-                byteBuffer.clear()
-                val sampleSize = videoExtractor.readSampleData(byteBuffer, 0)
-                if (sampleSize < 0) break
-
-                bufferInfo.offset = 0
-                bufferInfo.size = sampleSize
-                bufferInfo.presentationTimeUs = videoExtractor.sampleTime
-                
-                // Mapear banderas de muestra de MediaExtractor a constantes válidas de MediaCodec
-                val sampleFlags = videoExtractor.sampleFlags
-                var codecFlags = 0
-                if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
-                    codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
-                }
-                if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME) != 0) {
-                    codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_PARTIAL_FRAME
-                }
-                bufferInfo.flags = codecFlags
-
-                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                    muxer.writeSampleData(muxerVideoTrack, byteBuffer, bufferInfo)
-                }
-                videoExtractor.advance()
-            }
-
-            // 2. Copiar muestras de audio sin recodificar
             audioExtractor.selectTrack(audioTrackIndexInExtractor)
-            while (true) {
-                byteBuffer.clear()
-                val sampleSize = audioExtractor.readSampleData(byteBuffer, 0)
-                if (sampleSize < 0) break
 
-                bufferInfo.offset = 0
-                bufferInfo.size = sampleSize
-                bufferInfo.presentationTimeUs = audioExtractor.sampleTime
-                
-                // Mapear banderas de muestra de audio de MediaExtractor a constantes válidas de MediaCodec
-                val sampleFlags = audioExtractor.sampleFlags
-                var codecFlags = 0
-                if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
-                    codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
-                }
-                if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME) != 0) {
-                    codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_PARTIAL_FRAME
-                }
-                bufferInfo.flags = codecFlags
+            var lastVideoPts = -1L
+            var lastAudioPts = -1L
+            var videoDone = false
+            var audioDone = false
 
-                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                    muxer.writeSampleData(muxerAudioTrack, byteBuffer, bufferInfo)
+            while (!videoDone || !audioDone) {
+                val videoTime = if (!videoDone) videoExtractor.sampleTime else Long.MAX_VALUE
+                val audioTime = if (!audioDone) audioExtractor.sampleTime else Long.MAX_VALUE
+
+                if (videoTime == -1L) {
+                    videoDone = true
                 }
-                audioExtractor.advance()
+                if (audioTime == -1L) {
+                    audioDone = true
+                }
+                if (videoDone && audioDone) break
+
+                // Escribir la muestra que tenga la marca de tiempo menor para mantener sincronización estricta
+                if (!videoDone && (audioDone || videoTime <= audioTime)) {
+                    byteBuffer.clear()
+                    val sampleSize = videoExtractor.readSampleData(byteBuffer, 0)
+                    if (sampleSize < 0) {
+                        videoDone = true
+                    } else {
+                        bufferInfo.offset = 0
+                        bufferInfo.size = sampleSize
+
+                        var pts = videoExtractor.sampleTime
+                        if (pts <= lastVideoPts) {
+                            pts = if (lastVideoPts >= 0) lastVideoPts + 1000L else 0L
+                        }
+                        lastVideoPts = pts
+                        bufferInfo.presentationTimeUs = pts
+
+                        val sampleFlags = videoExtractor.sampleFlags
+                        var codecFlags = 0
+                        if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                            codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+                        }
+                        if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME) != 0) {
+                            codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_PARTIAL_FRAME
+                        }
+                        bufferInfo.flags = codecFlags
+
+                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                            muxer.writeSampleData(muxerVideoTrack, byteBuffer, bufferInfo)
+                        }
+                        videoExtractor.advance()
+                    }
+                } else if (!audioDone) {
+                    byteBuffer.clear()
+                    val sampleSize = audioExtractor.readSampleData(byteBuffer, 0)
+                    if (sampleSize < 0) {
+                        audioDone = true
+                    } else {
+                        bufferInfo.offset = 0
+                        bufferInfo.size = sampleSize
+
+                        var pts = audioExtractor.sampleTime
+                        if (pts <= lastAudioPts) {
+                            pts = if (lastAudioPts >= 0) lastAudioPts + 1000L else 0L
+                        }
+                        lastAudioPts = pts
+                        bufferInfo.presentationTimeUs = pts
+
+                        val sampleFlags = audioExtractor.sampleFlags
+                        var codecFlags = 0
+                        if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                            codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+                        }
+                        if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME) != 0) {
+                            codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_PARTIAL_FRAME
+                        }
+                        bufferInfo.flags = codecFlags
+
+                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                            muxer.writeSampleData(muxerAudioTrack, byteBuffer, bufferInfo)
+                        }
+                        audioExtractor.advance()
+                    }
+                }
             }
 
-            Log.i(TAG, "Fusión de video y audio completada con éxito en: $outputPath")
+            // Cerrar el Muxer de forma segura antes de limpiar archivos
+            var muxerClosedCleanly = false
+            try {
+                muxer.stop()
+                muxerClosedCleanly = true
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al finalizar muxer: ${e.message}", e)
+            } finally {
+                try { muxer.release() } catch (_: Exception) {}
+                muxer = null
+            }
 
-            // Limpieza de archivos temporales
-            videoFile.delete()
-            audioFile.delete()
-            true
+            if (muxerClosedCleanly && outputFile.exists() && outputFile.length() > 0L) {
+                Log.i(TAG, "Fusión de video y audio completada con éxito en: $outputPath (${outputFile.length()} bytes)")
+                // Limpieza de temporales solo tras confirmar éxito
+                videoFile.delete()
+                audioFile.delete()
+                true
+            } else {
+                Log.w(TAG, "Muxer incompleto o corrupto, aplicando fallback a video sin recodificar.")
+                safeFallbackVideoOnly(videoFile, outputFile)
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Error durante la fusión de audio y video: ${e.message}", e)
+            try { muxer?.stop() } catch (_: Exception) {}
+            try { muxer?.release() } catch (_: Exception) {}
+            muxer = null
             safeFallbackVideoOnly(videoFile, outputFile)
         } finally {
             try {
                 videoExtractor?.release()
                 audioExtractor?.release()
-                muxer?.stop()
                 muxer?.release()
             } catch (e: Exception) {
-                Log.w(TAG, "Aviso al liberar recursos de muxer/extractors: ${e.message}")
+                Log.w(TAG, "Aviso al liberar recursos de extractors: ${e.message}")
             }
         }
     }
