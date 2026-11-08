@@ -8,15 +8,18 @@ Este documento proporciona contexto técnico estructurado y reglas invariantes p
 
 VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendimiento diseñada para Android. Utiliza una arquitectura en cuatro capas para maximizar la tasa de cuadros por segundo (FPS) y minimizar el consumo térmico y de batería:
 
-1. **Frontend / Presentación**: Aplicación móvil 100% nativa con **Kotlin Jetpack Compose (Material 3)** organizada modularmente (`ui/screens`, `ui/components`, `ui/theme`, `data/repository`, `data/model`) con Server-Driven UI dinámico desde GitHub Releases.
+1. **Frontend / Presentación**: Aplicación móvil 100% nativa con **Kotlin Jetpack Compose (Material 3)** organizada modularmente (`ui/screens`, `ui/components`, `ui/theme`, `data/repository`, `data/model`) con Server-Driven UI dinámico desde GitHub Releases y **Lanzador Rápido de Juegos/Apps (1-Click REC)**.
 2. **Orquestación en Android**: Kotlin con Arquitectura MVVM (`MainViewModel` con StateFlow), Corrutinas (`Dispatchers.IO`), gestión modular de permisos `MediaProjection`, y `ScreenRecordService` con `RecordingNotificationHelper`.
 3. **Motores de Codificación Nativa (Hardware NDK)**:
    - **C++23**: `AMediaCodec_createInputSurface`, `std::expected`, `std::span`, `std::jthread`, `ANativeWindow`.
    - **Rust (Edition 2024)**: Crate con `crossbeam-channel`, seguridad de memoria garantizada en tiempo de compilación y enlaces JNI.
-4. **Grabación Directa NDK y Multiplexación Nativa de Android**:
+4. **Aceleración Gráfica y Protocolos de Red (Go & Shaders GPU)**:
+   - **Shaders GPU (GLSL ES 3.20 & SPIR-V Vulkan)**: Tubería C++23 (`GpuShaderPipeline`) para FaceCam circular antialiased, Chroma Key (pantalla verde) y Gaming Color Boost en la GPU a 60/120 FPS sin consumo de CPU.
+   - **Go (Golang 1.22+)**: Infraestructura de streaming (`/go/streamer.go`) con *goroutines*, colas de paquetes NAL y *Ring Buffer* de 4 MB para protocolos RTMP/SRT.
+5. **Grabación Directa NDK y Multiplexación Nativa de Android**:
    - Codificación directa de hardware a MP4 sin intermediación de la JVM/ART ni recolección de basura (GC-Free).
    - Multiplexación sin pérdida de audio y video mediante `AudioMuxerHelper` (`MediaMuxer` y `MediaExtractor` oficiales de Android) con guardado directo en Galería (`Movies/VeloRec`).
-5. **CI/CD Móvil**: Flujo de GitHub Actions con disparo **estrictamente manual (`workflow_dispatch`)** para compilar el APK Debug sin necesidad de computadora.
+6. **CI/CD Móvil**: Flujo de GitHub Actions con disparo **estrictamente manual (`workflow_dispatch`)** para compilar el APK Debug sin necesidad de computadora.
 
 ---
 

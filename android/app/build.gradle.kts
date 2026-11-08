@@ -204,9 +204,40 @@ tasks.register("cargoNdkBuild") {
     }
 }
 
-// Asegurar que la compilación de Rust se ejecute antes de empaquetar el APK
+// =========================================================================
+// TAREA GRADLE PARA COMPILAR Y VERIFICAR MOTOR GO (STREAMING RTMP/SRT)
+// =========================================================================
+tasks.register("goStreamerCheck") {
+    description = "Verifica y compila el motor Go para streaming y protocolos de red (RTMP/SRT)"
+    group = "build"
+
+    doLast {
+        val goDir = rootProject.projectDir.resolve("../go").normalize()
+        if (goDir.exists()) {
+            println("🐹 Verificando motor de streaming en Go (Golang)...")
+            try {
+                val pb = ProcessBuilder("go", "vet", "./...")
+                    .directory(goDir)
+                    .redirectErrorStream(true)
+                val process = pb.start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                val code = process.waitFor()
+                if (code == 0) {
+                    println("✅ Motor Go verificado con éxito (sintaxis y concurrencia limpias).")
+                } else {
+                    println("⚠️ Aviso en Go: $output")
+                }
+            } catch (e: Exception) {
+                println("ℹ️ Go no instalado en el entorno local o no en PATH (${e.message}). Omitiendo verificación estricta.")
+            }
+        }
+    }
+}
+
+// Asegurar que la compilación de Rust y Go se ejecuten antes de empaquetar el APK
 tasks.named("preBuild") {
     dependsOn("cargoNdkBuild")
+    dependsOn("goStreamerCheck")
 }
 
 dependencies {

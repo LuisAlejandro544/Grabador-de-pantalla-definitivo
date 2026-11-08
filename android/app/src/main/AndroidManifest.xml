@@ -23,6 +23,16 @@
     <!-- Cumplimiento con Android 14+ (API 34+) para acceso parcial a fotos y videos seleccionados -->
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
+    <!-- Permiso y consultas para listar juegos y apps instaladas en el Lanzador Rápido con Grabación Automática -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <!-- Aceleración por hardware obligatoria y compatibilidad de almacenamiento -->
     <application
         android:allowBackup="true"

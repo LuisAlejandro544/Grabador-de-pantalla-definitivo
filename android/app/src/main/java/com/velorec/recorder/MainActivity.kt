@@ -100,6 +100,21 @@ class MainActivity : ComponentActivity() {
                         // Iniciar Foreground Service de forma segura (minSdk 26+ garantizado)
                         ContextCompat.startForegroundService(this, serviceIntent)
 
+                        // Si el usuario seleccionó un juego/app para abrir y grabar automáticamente, lanzarlo de inmediato
+                        val targetPackage = viewModel.pendingLaunchPackage.value
+                        if (!targetPackage.isNullOrBlank()) {
+                            try {
+                                val launchIntent = packageManager.getLaunchIntentForPackage(targetPackage)
+                                if (launchIntent != null) {
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    startActivity(launchIntent)
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(this, "No se pudo abrir $targetPackage: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                            viewModel.clearPendingLaunchPackage()
+                        }
+
                         val toastMsg = if (config.countdownSec > 0) {
                             "Iniciando en ${config.countdownSec}s (${config.width}x${config.height} @ ${config.fps}fps)"
                         } else {
@@ -107,6 +122,7 @@ class MainActivity : ComponentActivity() {
                         }
                         Toast.makeText(this, toastMsg, Toast.LENGTH_SHORT).show()
                     } else {
+                        viewModel.clearPendingLaunchPackage()
                         Toast.makeText(this, "Permiso de captura cancelado", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -121,7 +137,40 @@ class MainActivity : ComponentActivity() {
                             getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                         mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
                     } else {
+                        viewModel.clearPendingLaunchPackage()
                         Toast.makeText(this, "Se requiere permiso de audio para capturar", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                // Función compartida para solicitar permisos y lanzar captura
+                val startRecordingFlow: (NativeRecordingConfig) -> Unit = { config ->
+                    viewModel.setPendingConfig(config)
+                    val permissionsToRequest = mutableListOf<String>()
+
+                    // Solo solicitar micrófono si la fuente de audio no es 'mute'
+                    if (config.audioSource != "mute" && ContextCompat.checkSelfPermission(
+                            this,
+                            Manifest.permission.RECORD_AUDIO
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (ContextCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+
+                    if (permissionsToRequest.isNotEmpty()) {
+                        permissionLauncher.launch(permissionsToRequest.toTypedArray())
+                    } else {
+                        val projectionManager =
+                            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                        mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
                     }
                 }
 
@@ -137,34 +186,21 @@ class MainActivity : ComponentActivity() {
                         }
                         startService(stopIntent)
                     },
-                    onStartRecording = { config ->
-                        viewModel.setPendingConfig(config)
-                        val permissionsToRequest = mutableListOf<String>()
-
-                        // Solo solicitar micrófono si la fuente de audio no es 'mute'
-                        if (config.audioSource != "mute" && ContextCompat.checkSelfPermission(
-                                this,
-                                Manifest.permission.RECORD_AUDIO
-                            ) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            if (ContextCompat.checkSelfPermission(
-                                    this,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+                    onStartRecording = startRecordingFlow,
+                    onLaunchAppAndRecord = { packageName, config ->
+                        if (isRecording) {
+                            try {
+                                val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+                                if (launchIntent != null) {
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    startActivity(launchIntent)
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(this, "No se pudo abrir la app: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
-                        }
-
-                        if (permissionsToRequest.isNotEmpty()) {
-                            permissionLauncher.launch(permissionsToRequest.toTypedArray())
                         } else {
-                            val projectionManager =
-                                getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                            mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
+                            viewModel.setPendingLaunchPackage(packageName)
+                            startRecordingFlow(config)
                         }
                     },
                     onTogglePause = {

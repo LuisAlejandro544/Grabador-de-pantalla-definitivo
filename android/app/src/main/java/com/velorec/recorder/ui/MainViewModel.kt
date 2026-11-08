@@ -38,6 +38,10 @@ class MainViewModel : ViewModel() {
     private val _pendingConfig = MutableStateFlow<NativeRecordingConfig?>(null)
     val pendingConfig: StateFlow<NativeRecordingConfig?> = _pendingConfig.asStateFlow()
 
+    // Paquete de aplicación/juego seleccionado para abrir y grabar automáticamente
+    private val _pendingLaunchPackage = MutableStateFlow<String?>(null)
+    val pendingLaunchPackage: StateFlow<String?> = _pendingLaunchPackage.asStateFlow()
+
     // Estado de cuenta regresiva posterior a la aprobación de la notificación nativa de Android
     private val _isCountingDown = MutableStateFlow(false)
     val isCountingDown: StateFlow<Boolean> = _isCountingDown.asStateFlow()
@@ -50,6 +54,14 @@ class MainViewModel : ViewModel() {
 
     fun setPendingConfig(config: NativeRecordingConfig?) {
         _pendingConfig.value = config
+    }
+
+    fun setPendingLaunchPackage(packageName: String?) {
+        _pendingLaunchPackage.value = packageName
+    }
+
+    fun clearPendingLaunchPackage() {
+        _pendingLaunchPackage.value = null
     }
 
     /**

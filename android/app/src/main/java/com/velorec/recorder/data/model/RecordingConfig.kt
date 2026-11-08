@@ -238,5 +238,17 @@ val FPS_PRESETS = listOf(24, 30, 60, 90, 120)
 val COUNTDOWN_PRESETS = listOf(0, 3, 5, 10)
 
 enum class NativeTab {
-    RECORDER, SETTINGS, GALLERY, BENCHMARK
+    RECORDER, LAUNCHER, SETTINGS, GALLERY, BENCHMARK
 }
+
+/**
+ * Representa una aplicación o juego instalado en el dispositivo disponible en el Lanzador Rápido.
+ */
+data class InstalledAppItem(
+    val packageName: String,
+    val appName: String,
+    val isGame: Boolean = false,
+    val category: String = "App",
+    val versionName: String = "",
+    val icon: android.graphics.drawable.Drawable? = null
+)

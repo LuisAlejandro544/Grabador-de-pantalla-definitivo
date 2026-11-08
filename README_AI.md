@@ -29,22 +29,25 @@
   - `MainActivity.kt`: Entrada de ComponentActivity conectada a `MainViewModel`.
   - `ui/MainViewModel.kt`: Manejador de estado reactivo y temporizador persistente a rotaciones.
   - `ui/VeloRecMainScreen.kt`: Scaffold principal, barra de navegación táctil, conmutador NDK y diálogo de cuenta regresiva previa a la captura.
-  - `ui/screens/`: Pantallas desacopladas (`RecorderScreen.kt`, `SettingsScreen.kt`, `GalleryScreen.kt`, `BenchmarkScreen.kt`).
+  - `ui/screens/`: Pantallas desacopladas (`RecorderScreen.kt`, `AppLauncherScreen.kt` para 1-Click REC, `SettingsScreen.kt`, `GalleryScreen.kt`, `BenchmarkScreen.kt`).
   - `ui/components/`: Componentes modulares (`MetricBadge.kt`, `RemoteAnnouncementDialog.kt`).
   - `ui/theme/Color.kt`: Paleta Material 3 Dark Theme y parseo seguro de colores remotos.
-  - `data/model/`: `RecordingConfig.kt` (presets adaptativos de aspect ratio con 5 opciones de escala nativa: 100%, FHD, HD, SD y 2K, temporizador de cuenta regresiva y bitrate) y `RemoteUiConfig.kt`.
+  - `data/model/`: `RecordingConfig.kt` (presets adaptativos de aspect ratio con 5 opciones de escala nativa: 100%, FHD, HD, SD y 2K, temporizador de cuenta regresiva, bitrate e `InstalledAppItem`) y `RemoteUiConfig.kt`.
   - `data/repository/RemoteConfigRepository.kt`: Sincronización asíncrona de `app_config.json` en `Dispatchers.IO`.
   - `audio/AudioRecordEngine.kt`: Motor de captura y codificación AAC estéreo (PCM 16-bit Little-Endian) con soporte para micrófono, audio interno y mezcla simultánea sin bloqueos.
   - `audio/AudioMuxerHelper.kt`: Multiplexador nativo de Android (`MediaMuxer` y `MediaExtractor`) para fusión instantánea de video y audio (<200 ms) sin librerías externas.
   - `storage/GalleryStorageManager.kt`: Publicación e indexación en el álbum público `Movies/VeloRec` de la galería nativa mediante MediaStore API y MediaScannerConnection.
   - `ScreenRecordService.kt`: Servicio en primer plano con `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION`, corrutinas IO y firmas JNI C++23 y Rust 2024.
   - `VeloRecComposeUI.kt`: Fachada modular que mantiene retrocompatibilidad total.
+- **`android/app/src/main/shaders/`**: Aceleración gráfica en GPU con shaders GLSL ES 3.20 (`glsl/`) y bytecode SPIR-V (`spirv/SpirvShaderBytecode.hpp`) para FaceCam circular antialiased, Chroma Key y Gaming Color Boost.
+- **`android/app/src/main/cpp/GpuShaderPipeline.hpp` & `.cpp`**: Tubería gráfica C++23 con `std::expected` enlazada a `GLESv3` y `EGL` para efectos de sombreado directo en GPU.
 - **`android/app/src/main/cpp/NativeRecorderEngine.hpp` & `.cpp`**: Motor C++23 con `AMediaCodec_createInputSurface` para codificación directa por hardware con cero copias y normalización PTS base 0.
 - **`android/app/src/main/cpp/libyuv_bridge.hpp` & `.cpp`**: Puente de integración con Google libyuv (Licencia BSD) acelerado con vectorización ARM NEON para transformaciones de color YUV420 y escalado bilineal.
-- **`android/app/src/main/cpp/CMakeLists.txt`**: Configuración CMake con `-std=c++23` y enlace a `mediandk`, `android`, `log`, `libyuv` y `oboe`.
+- **`android/app/src/main/cpp/CMakeLists.txt`**: Configuración CMake con `-std=c++23` y enlace a `mediandk`, `android`, `log`, `libyuv`, `oboe`, `GLESv3` y `EGL`.
+- **`go/go.mod` & `go/streamer.go`**: Motor de streaming en red y baja latencia en Go (v1.22+) con *goroutines*, colas de paquetes NAL y *Ring Buffer* de 4 MB para protocolos RTMP/SRT.
 - **`rust/Cargo.toml` & `rust/src/lib.rs`**: Motor Rust Edition 2024 con canales `crossbeam-channel`, sincronización PTS base 0 y enlaces JNI.
-- **`android/app/build.gradle.kts`**: Script Gradle que compila CMake (C++23), Cargo NDK (Rust) con soporte para `-PtargetAbi`, y Jetpack Compose con firma de depuración automática.
-- **`src/utils/recorderCore.ts`**: Lógica desacoplada de cálculo de bitrate, validación de paridad de resolución, validación de cuenta regresiva y estimaciones de peso.
+- **`android/app/build.gradle.kts`**: Script Gradle que compila CMake (C++23), Cargo NDK (Rust), Go Streamer Check y Jetpack Compose con firma de depuración automática.
+- **`src/utils/recorderCore.ts`**: Lógica desacoplada de cálculo de bitrate, validación de paridad de resolución, validación de cuenta regresiva, paquetes Android y especificaciones de shaders/Go.
 - **`src/utils/recorderCore.test.ts`**: Suite de tests unitarios ejecutables con `npx --yes tsx --test`.
 
 ---

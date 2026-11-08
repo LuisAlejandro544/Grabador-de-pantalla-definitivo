@@ -20,10 +20,11 @@ add_compile_options(
     -fdata-sections
 )
 
-# Definir biblioteca compartida .so
+# Definir biblioteca compartida .so con aceleración de sombreado GPU (GLSL/SPIR-V)
 add_library(velorec_cpp23 SHARED
     NativeRecorderEngine.cpp
     libyuv_bridge.cpp
+    GpuShaderPipeline.cpp
 )
 
 # Inclusiones de encabezados
@@ -35,10 +36,13 @@ target_include_directories(velorec_cpp23 PRIVATE
 # mediandk: AMediaCodec, AMediaMuxer, AMediaFormat
 # android: ANativeWindow, ANativeWindow_toSurface
 # log: __android_log_print
+# GLESv3 & EGL: Tubería de sombreadores GPU (GLSL ES 3.20 y SPIR-V)
 target_link_libraries(velorec_cpp23 PRIVATE
     android
     mediandk
     log
+    GLESv3
+    EGL
 )
 
 # Integración con Google Oboe (AAR Prefab) para captura y procesado de audio en C++23

@@ -38,8 +38,18 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
   - Multiplexación nativa de audio y video en <200 ms con `AudioMuxerHelper` (`MediaMuxer` y `MediaExtractor` de Android), eliminando por completo la sobrecarga e inestabilidad de FFmpeg.
 - [x] **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
   - Guardado automático mediante MediaStore API (Scoped Storage) e indexación instantánea con `MediaScannerConnection` para visibilidad inmediata en Google Fotos, Galería Samsung, Xiaomi, etc.
+- [x] **Lanzador Rápido de Juegos y Apps con 1-Click REC (`NativeAppLauncherSection.kt`)**:
+  - Detección asíncrona (`Dispatchers.IO`) de todos los juegos y aplicaciones descargadas en el smartphone mediante `PackageManager`.
+  - Tarjetas interactivas con icono nativo y botón *"ABRIR Y GRABAR"* que abre el juego e inicia automáticamente la grabación sin pasos manuales.
+  - Buscador en vivo y filtros por categoría (*Todos, Juegos, Apps*).
+- [x] **Integración de Aceleración Gráfica con Shaders de GPU (GLSL ES 3.20 y SPIR-V Vulkan)**:
+  - Tubería gráfica dual en C++23 (`GpuShaderPipeline.hpp/cpp`) vinculada a `GLESv3` y `EGL`.
+  - Shaders para FaceCam circular con borde antialiased, Chroma Key en GPU y Gaming Color Boost (realce de saturación y contraste a 60/120 FPS).
+- [x] **Fundación del Motor de Streaming de Ultra Baja Latencia en Go (Golang 1.22+)**:
+  - Módulo `/go/streamer.go` con cola de paquetes NAL en goroutines y *Ring Buffer* de 4 MB para absorber fluctuaciones de red móvil 4G/5G.
+  - Tarea Gradle `goStreamerCheck` y configuración en GitHub Actions con `setup-go@v5`.
 - [x] **Suite de Pruebas Unitarias Deterministas**:
-  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, temporizador de cuenta regresiva, resoluciones nativas proporcionales, comandos FFmpeg, rutas de galería y métricas de motor.
+  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, temporizador de cuenta regresiva, validación de paquetes Android, especificaciones de shaders GPU y motor Go.
 
 ---
 

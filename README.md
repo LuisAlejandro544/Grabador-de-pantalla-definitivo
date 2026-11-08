@@ -54,6 +54,21 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
 - **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
   - Las grabaciones se guardan directamente en el álbum público del teléfono vía **MediaStore API** (Scoped Storage) y se indexan al instante con `MediaScannerConnection`.
   - Aparecen inmediatamente en Google Fotos, Galería Samsung, Xiaomi, Motorola, VLC o WhatsApp.
+- **🎮 Lanzador Rápido de Juegos y Aplicaciones (1-Click REC)**:
+  - Nueva sección táctil dedicada (`NativeAppLauncherSection.kt`) en la barra de navegación inferior.
+  - Lista de forma asíncrona (`Dispatchers.IO`) todos los juegos y aplicaciones descargadas en el teléfono con su icono oficial y badge de categoría.
+  - **Apertura y Grabación Instantánea**: Al tocar un juego (ej. Free Fire, PUBG, COD Mobile, Brawl Stars), la app inicia la captura con la resolución/FPS seleccionados y abre el juego inmediatamente para comenzar a jugar y grabar sin pasos intermedios.
+  - Buscador en tiempo real y filtros rápidos (*Todos, Juegos, Apps*).
+- **🐹 Motor de Streaming en Go (Golang 1.22+)**:
+  - Infraestructura lista en `/go/streamer.go` para transmisión de ultra baja latencia (RTMP, RTMPS, SRT y WebRTC).
+  - Despachador de paquetes NAL con *goroutines*, colas concurrentes y *Ring Buffer* de 4 MB para absorber fluctuaciones de red móvil 4G/5G.
+  - Tarea Gradle `goStreamerCheck` y compilación en GitHub Actions con `setup-go@v5`.
+- **🎨 Aceleración Gráfica con Shaders de GPU (GLSL ES 3.20 y SPIR-V Vulkan)**:
+  - Tubería gráfica dual en C++23 (`GpuShaderPipeline.hpp` & `.cpp`) enlazada con `GLESv3` y `EGL`.
+  - Shaders GLSL ES 3.20 y bytecode binario SPIR-V (`SpirvShaderBytecode.hpp`) para renderizado a 60/120 FPS sin consumo de CPU:
+    - `facecam_circular.frag`: Cámara flotante con máscara circular antialiased, borde dinámico y Chroma Key (pantalla verde) en GPU.
+    - `gaming_color_boost.frag`: Realce de contraste dinámico, brillo y saturación cromática para videojuegos.
+    - `passthrough.vert`: Vertex shader passthrough de alta velocidad.
 - **Herramientas de Superposición**:
   - Cámara flotante FaceCam ajustable.
   - Efectos visuales de toques en pantalla.

@@ -551,5 +551,45 @@ export function parseUserPreferences(jsonString: string | null | undefined): Per
   }
 }
 
+/**
+ * Valida si una cadena cumple con el formato estándar de un nombre de paquete Android
+ * (ejemplo: 'com.dts.freefireth', 'com.tencent.ig', 'com.supercell.brawlstars').
+ */
+export function validateAppPackageName(packageName: string | null | undefined): boolean {
+  if (!packageName || typeof packageName !== 'string') return false;
+  const trimmed = packageName.trim();
+  if (trimmed.length < 3 || trimmed.length > 256) return false;
+  const regex = /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/;
+  return regex.test(trimmed);
+}
 
+/**
+ * Describe las capacidades de la tubería de sombreadores en GPU (GLSL ES 3.20 y SPIR-V Vulkan).
+ */
+export function getShaderPipelineCapabilities() {
+  return {
+    formats: ['GLSL_ES32', 'SPIR_V'] as const,
+    supportedEffects: [
+      { id: 'passthrough', name: 'Passthrough Puro', acceleration: 'GPU Direct' },
+      { id: 'facecam_circular', name: 'FaceCam Circular con Borde y Chroma Key', acceleration: 'GPU Hardware' },
+      { id: 'gaming_color_boost', name: 'Gaming Color Boost (Saturación y Contraste)', acceleration: 'GPU Adreno/Mali' }
+    ],
+    vulkanSpirvSupported: true,
+    glslEs32Supported: true,
+    zeroCpuOverhead: true
+  };
+}
 
+/**
+ * Describe las especificaciones del motor de streaming en Go (Golang) para protocolos de red.
+ */
+export function getGoStreamingEngineSpecs() {
+  return {
+    engine: 'Go (Golang 1.22+)',
+    protocols: ['RTMP', 'RTMPS', 'SRT', 'WebRTC'] as const,
+    queueCapacity: 1024,
+    ringBufferBytes: 4 * 1024 * 1024,
+    zeroCopyNalDispatch: true,
+    crossPlatformAbis: ['arm64-v8a', 'armeabi-v7a', 'x86_64'] as const
+  };
+}

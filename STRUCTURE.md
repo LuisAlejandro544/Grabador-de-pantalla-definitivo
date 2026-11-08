@@ -57,16 +57,26 @@
 │           │       │   ├── MetricBadge.kt   # Componente de telemetría de hardware
 │           │       │   └── RemoteAnnouncementDialog.kt # Diálogo modal para anuncios remotos
 │           │       └── screens/
-│           │           ├── RecorderScreen.kt  # Pantalla de visor de captura, chips y botones REC
-│           │           ├── SettingsScreen.kt  # Ajustes de hardware, códec, audio y GitHub
-│           │           ├── GalleryScreen.kt   # Galería de videos grabados con FileProvider
-│           │           └── BenchmarkScreen.kt # Telemetría comparativa C++23 vs Rust 2024
+│           │           ├── RecorderScreen.kt    # Pantalla de visor de captura, chips y botones REC
+│           │           ├── AppLauncherScreen.kt # Lanzador rápido de juegos y apps descargadas con 1-Click REC
+│           │           ├── SettingsScreen.kt    # Ajustes de hardware, códec, audio y GitHub
+│           │           ├── GalleryScreen.kt     # Galería de videos grabados con FileProvider
+│           │           └── BenchmarkScreen.kt   # Telemetría comparativa C++23 vs Rust 2024
+│           ├── shaders/                         # Aceleración gráfica por hardware en GPU
+│           │   ├── glsl/                        # Shaders de texto GLSL ES 3.20 (FaceCam circular, Gaming Color Boost, Passthrough)
+│           │   └── spirv/                       # Shaders en bytecode compilado SPIR-V (SpirvShaderBytecode.hpp) para Vulkan
 │           └── cpp/
-│               ├── CMakeLists.txt      # Configuración CMake para C++23 (-std=c++23, -O3), libyuv y Oboe
+│               ├── CMakeLists.txt          # Configuración CMake para C++23 (-std=c++23, -O3), libyuv, Oboe y GLESv3/EGL
 │               ├── NativeRecorderEngine.hpp # Cabecera C++23 con std::expected, span y jthread
 │               ├── NativeRecorderEngine.cpp # AMediaCodec, AMediaMuxer, ANativeWindow y JNI
-│               ├── libyuv_bridge.hpp   # Interfaz C++23 para aceleración SIMD ARM NEON de Google libyuv (32 y 64 bits)
-│               └── libyuv_bridge.cpp   # Implementación de conversiones de color YUV420 y escalado bilineal con libyuv
+│               ├── GpuShaderPipeline.hpp   # Tubería C++23 para sombreadores GPU (GLSL ES 3.20 y SPIR-V)
+│               ├── GpuShaderPipeline.cpp   # Implementación de compilación, enlace y uniforms de FaceCam/Gaming
+│               ├── libyuv_bridge.hpp       # Interfaz C++23 para aceleración SIMD ARM NEON de Google libyuv (32 y 64 bits)
+│               └── libyuv_bridge.cpp       # Implementación de conversiones de color YUV420 y escalado bilineal con libyuv
+│
+├── go/                                 # Motor de streaming en red y baja latencia (Go 1.22+)
+│   ├── go.mod                          # Manifiesto del módulo Go (github.com/velorec/streamer)
+│   └── streamer.go                     # Despachador de paquetes NAL con goroutines, Ring Buffer de 4MB y bindings RTMP/SRT
 │
 ├── rust/                               # Motor nativo en Rust (Edition 2024)
 │   ├── Cargo.toml                      # Manifiesto de Rust con edition = "2024", cdylib y ndk-sys

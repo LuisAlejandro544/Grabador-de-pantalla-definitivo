@@ -21,7 +21,10 @@ import {
   STANDARD_POPULAR_PRESETS,
   serializeUserPreferences,
   parseUserPreferences,
-  DEFAULT_USER_PREFERENCES
+  DEFAULT_USER_PREFERENCES,
+  validateAppPackageName,
+  getShaderPipelineCapabilities,
+  getGoStreamingEngineSpecs
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -301,5 +304,46 @@ test('serializeUserPreferences and parseUserPreferences maintain settings across
   assert.deepEqual(fallbackCorrupt, DEFAULT_USER_PREFERENCES);
 });
 
+test('validateAppPackageName validates Android package names correctly', () => {
+  // Paquetes válidos de juegos y apps populares
+  assert.equal(validateAppPackageName('com.dts.freefireth'), true);
+  assert.equal(validateAppPackageName('com.tencent.ig'), true);
+  assert.equal(validateAppPackageName('com.supercell.brawlstars'), true);
+  assert.equal(validateAppPackageName('com.velorec.recorder'), true);
+  assert.equal(validateAppPackageName('org.videolan.vlc'), true);
 
+  // Paquetes inválidos
+  assert.equal(validateAppPackageName(''), false);
+  assert.equal(validateAppPackageName(null), false);
+  assert.equal(validateAppPackageName(undefined), false);
+  assert.equal(validateAppPackageName('invalidpackage'), false); // Sin punto
+  assert.equal(validateAppPackageName('.com.test'), false); // Empieza con punto
+  assert.equal(validateAppPackageName('com.test.'), false); // Termina con punto
+  assert.equal(validateAppPackageName('123com.test'), false); // Empieza con número
+});
 
+test('getShaderPipelineCapabilities provides GLSL and SPIR-V specs', () => {
+  const caps = getShaderPipelineCapabilities();
+  assert.equal(caps.vulkanSpirvSupported, true);
+  assert.equal(caps.glslEs32Supported, true);
+  assert.equal(caps.zeroCpuOverhead, true);
+  assert.ok(caps.formats.includes('GLSL_ES32'));
+  assert.ok(caps.formats.includes('SPIR_V'));
+
+  const effectIds = caps.supportedEffects.map(e => e.id);
+  assert.ok(effectIds.includes('passthrough'));
+  assert.ok(effectIds.includes('facecam_circular'));
+  assert.ok(effectIds.includes('gaming_color_boost'));
+});
+
+test('getGoStreamingEngineSpecs defines RTMP and SRT streaming specs', () => {
+  const specs = getGoStreamingEngineSpecs();
+  assert.match(specs.engine, /Go/);
+  assert.ok(specs.protocols.includes('RTMP'));
+  assert.ok(specs.protocols.includes('SRT'));
+  assert.equal(specs.zeroCopyNalDispatch, true);
+  assert.equal(specs.queueCapacity, 1024);
+  assert.equal(specs.ringBufferBytes, 4 * 1024 * 1024);
+  assert.ok(specs.crossPlatformAbis.includes('arm64-v8a'));
+  assert.ok(specs.crossPlatformAbis.includes('armeabi-v7a'));
+});

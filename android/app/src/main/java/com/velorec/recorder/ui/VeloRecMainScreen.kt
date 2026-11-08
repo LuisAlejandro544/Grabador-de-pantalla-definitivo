@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,6 +63,7 @@ import com.velorec.recorder.data.model.RemoteUiConfig
 import com.velorec.recorder.data.repository.RemoteConfigRepository
 import com.velorec.recorder.data.repository.UserPreferencesRepository
 import com.velorec.recorder.ui.components.RemoteAnnouncementDialog
+import com.velorec.recorder.ui.screens.NativeAppLauncherSection
 import com.velorec.recorder.ui.screens.NativeBenchmarkSection
 import com.velorec.recorder.ui.screens.NativeGallerySection
 import com.velorec.recorder.ui.screens.NativeRecorderViewport
@@ -101,6 +103,7 @@ fun VeloRecMainScreen(
     countdownRemaining: Int = 3,
     onCancelCountdown: () -> Unit = {},
     onStartRecording: (config: NativeRecordingConfig) -> Unit = {},
+    onLaunchAppAndRecord: (packageName: String, config: NativeRecordingConfig) -> Unit = { _, _ -> },
     onTogglePause: () -> Unit = {},
     onStopRecording: () -> Unit = {}
 ) {
@@ -346,6 +349,19 @@ fun VeloRecMainScreen(
                     )
                 )
                 NavigationBarItem(
+                    selected = activeTab == NativeTab.LAUNCHER,
+                    onClick = { activeTab = NativeTab.LAUNCHER },
+                    icon = { Icon(Icons.Default.SportsEsports, contentDescription = "Lanzador de Juegos") },
+                    label = { Text("Juegos", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = dynamicPrimaryColor,
+                        selectedTextColor = dynamicPrimaryColor,
+                        indicatorColor = dynamicPrimaryColor.copy(alpha = 0.15f),
+                        unselectedIconColor = Color(0xFF94A3B8),
+                        unselectedTextColor = Color(0xFF94A3B8)
+                    )
+                )
+                NavigationBarItem(
                     selected = activeTab == NativeTab.SETTINGS,
                     onClick = { activeTab = NativeTab.SETTINGS },
                     icon = { Icon(Icons.Default.Settings, contentDescription = "Ajustes") },
@@ -482,6 +498,19 @@ fun VeloRecMainScreen(
                             selectedCountdownSec = it
                             UserPreferencesRepository.saveCountdownSec(context, it)
                         }
+                    )
+                }
+                NativeTab.LAUNCHER -> {
+                    NativeAppLauncherSection(
+                        selectedEngine = selectedEngine,
+                        selectedResolution = selectedResolution,
+                        selectedBitrateMbps = selectedBitrateMbps,
+                        selectedFps = selectedFps,
+                        selectedCountdownSec = selectedCountdownSec,
+                        isRecording = isRecording,
+                        accentColor = dynamicAccentColor,
+                        primaryColor = dynamicPrimaryColor,
+                        onLaunchAppAndRecord = onLaunchAppAndRecord
                     )
                 }
                 NativeTab.GALLERY -> {
