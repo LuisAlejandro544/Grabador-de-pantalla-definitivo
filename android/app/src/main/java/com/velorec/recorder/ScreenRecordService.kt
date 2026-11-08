@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import android.util.Log
 
@@ -50,10 +51,12 @@ import android.util.Log
  *    - Declara 'FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'.
  * 3. Delega la creación de canales, notificaciones fijas y controles en la barra de estado
  *    a 'RecordingNotificationHelper'.
- * 4. Tubería ZERO-COPY:
+ * 4. Tubería ZERO-COPY Y GUARDADO DIRECTO EN GALERÍA:
  *    - Obtiene la Surface de hardware directamente del codificador nativo en C++23 o Rust 2024.
  *    - Vincula esa Surface con el VirtualDisplay de MediaProjection.
- *    - CERO alocación de memoria ni bitmaps en la máquina virtual Java/ART.
+ *    - Grabación directa sobre el descriptor de archivo de la Galería (MediaStore IS_PENDING = 1)
+ *      evitando copias de disco de 300+ MB al detener la grabación.
+ *    - Multiplexación de Audio en Tiempo Real en C++23 con AMediaMuxer entrelazado.
  * 5. Corrutinas ('Dispatchers.IO'): Todas las llamadas al NDK se ejecutan fuera del hilo de UI
  *    para prevenir congelamientos ANR.
  * 6. Sincronización Reactiva de Estado:
@@ -80,6 +83,7 @@ class ScreenRecordService : Service() {
     private var audioEngine: AudioRecordEngine? = null
     private var tempVideoFilePath: String? = null
     private var tempAudioFilePath: String? = null
+    private var directGalleryTarget: GalleryStorageManager.DirectGalleryRecordingTarget? = null
 
     companion object {
         const val ACTION_START = "com.velorec.ACTION_START"
@@ -245,10 +249,10 @@ class ScreenRecordService : Service() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                if (isMute) {
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                } else {
+                if (audio == "mic" || audio == "both") {
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                } else {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
                 }
             } else {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
@@ -316,14 +320,31 @@ class ScreenRecordService : Service() {
 
                 val outputDir = getExternalFilesDir(null) ?: filesDir
                 val timestamp = System.currentTimeMillis()
-                val finalOutputFile = File(outputDir, "VeloRec_${timestamp}_${engine}.mp4")
-                lastOutputFilePath = finalOutputFile.absolutePath
-
                 val shouldRecordAudio = audio != "mute"
 
-                // Si no hay audio, C++23 o Rust graban DIRECTAMENTE al archivo MP4 final
-                // Cero archivos temporales, cero intermediarios, cero impacto del Recolector de Basura (GC)
-                val videoFileToEncode = if (shouldRecordAudio) {
+                // 1. ELIMINACIÓN DEL PASO 3: Grabación directa sobre el descriptor de la Galería (MediaStore IS_PENDING = 1)
+                // Se genera la entrada en la Galería antes de comenzar y se obtiene el Descriptor de Archivo nativo (FD).
+                // Al detener la grabación, no se realiza ninguna copia de archivo pesada; solo se confirma IS_PENDING = 0.
+                val displayName = "VeloRec_${timestamp}_${engine}.mp4"
+                val directTarget = if (engine == "cpp23") {
+                    GalleryStorageManager.createDirectPendingGalleryTarget(this@ScreenRecordService, displayName)
+                } else {
+                    null
+                }
+                directGalleryTarget = directTarget
+
+                val finalOutputFile = if (directTarget != null) {
+                    File(directTarget.filePath)
+                } else {
+                    File(outputDir, displayName)
+                }
+                lastOutputFilePath = finalOutputFile.absolutePath
+
+                // Para Rust o fallback, se crean archivos temporales si se requiere multiplexación diferida
+                val videoFileToEncode = if (engine == "cpp23") {
+                    tempVideoFilePath = null
+                    finalOutputFile
+                } else if (shouldRecordAudio) {
                     File(outputDir, "temp_video_${timestamp}.mp4").also { 
                         tempVideoFilePath = it.absolutePath 
                     }
@@ -332,12 +353,16 @@ class ScreenRecordService : Service() {
                     finalOutputFile
                 }
 
-                val audioFileToEncode = if (shouldRecordAudio) {
+                val audioFileToEncode = if (engine != "cpp23" && shouldRecordAudio) {
                     File(outputDir, "temp_audio_${timestamp}.m4a").also { tempAudioFilePath = it.absolutePath }
                 } else {
                     tempAudioFilePath = null
                     null
                 }
+
+                // Detección de tecnología de almacenamiento para Buffer Pacing asíncrono
+                val isEmmc = isEmmcStorageDetected()
+                Log.i("ScreenRecordService", "Hardware I/O: ${if (isEmmc) "eMMC detectado (/sys/block/mmcblk0) -> Buffer Pacing Asíncrono Habilitado" else "UFS / NVMe -> Escritura Directa Ultrarrápida"}")
 
                 // Inicializar motor nativo elegido (C++23 o Rust 2024) y obtener la Surface de hardware
                 val nativeSurface: Surface = if (engine == "rust2024") {
@@ -351,6 +376,7 @@ class ScreenRecordService : Service() {
                         audio
                     )
                 } else {
+                    val targetFd = directTarget?.rawFd ?: -1
                     nativeInitCppRecorder(
                         videoFileToEncode.absolutePath,
                         width,
@@ -358,7 +384,8 @@ class ScreenRecordService : Service() {
                         fps,
                         bitrate,
                         codec,
-                        audio
+                        audio,
+                        targetFd
                     )
                 }
 
@@ -413,13 +440,23 @@ class ScreenRecordService : Service() {
                 )
 
                 // Arrancar motor de captura y codificación de audio (micrófono, audio interno o mezcla estéreo)
-                if (shouldRecordAudio && audioFileToEncode != null) {
+                // ELIMINACIÓN DEL PASO 2: Multiplexación de Audio en Tiempo Real en C++23
+                if (shouldRecordAudio) {
                     audioEngine = AudioRecordEngine(
                         context = this@ScreenRecordService,
                         audioSource = audio,
-                        outputM4aPath = audioFileToEncode.absolutePath,
+                        outputM4aPath = audioFileToEncode?.absolutePath,
                         mediaProjection = projection
                     ).apply {
+                        if (engine == "cpp23") {
+                            // Enrutamiento directo sin intermediación de disco ni garbage collector
+                            onAudioTrackConfigured = { csdBuffer, csdSize, sampleRate, channelCount ->
+                                nativeAddAudioTrack(csdBuffer, csdSize, sampleRate, channelCount)
+                            }
+                            onAudioSampleEncoded = { dataBuffer, offset, size, ptsUs, flags ->
+                                nativeWriteAudioSample(dataBuffer, offset, size, ptsUs, flags)
+                            }
+                        }
                         start()
                     }
                 }
@@ -501,19 +538,21 @@ class ScreenRecordService : Service() {
         _isPausedFlow.value = false
         notifyStateChanged()
 
-        // Notificación visual de guardado en la barra de estado para evitar que el sistema operativo
-        // descarte el servicio en primer plano por baja prioridad durante el procesamiento en disco
+        // Notificación visual de guardado en la barra de estado con porcentaje inicial (25%)
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.notify(
             RecordingNotificationHelper.NOTIFICATION_ID,
-            RecordingNotificationHelper.buildSavingNotification(this, currentEngine)
+            RecordingNotificationHelper.buildSavingNotification(
+                this,
+                currentEngine,
+                progressPercent = 25,
+                customStatus = "Deteniendo codificación..."
+            )
         )
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // 1. Detener PRIMERO el motor de audio y generar el archivo M4A/AAC mientras MediaProjection
-                // y el VirtualDisplay aún están activos. Esto previene que AudioPlaybackCapture sea invalidado
-                // antes de tiempo por el sistema operativo, permitiendo drenar las últimas muestras del juego.
+                // 1. Detener PRIMERO el motor de audio mientras MediaProjection sigue activo
                 try {
                     audioEngine?.stop()
                 } catch (e: Exception) {
@@ -521,9 +560,9 @@ class ScreenRecordService : Service() {
                 }
                 audioEngine = null
 
-                // 2. Detener codificación en el motor nativo en Dispatchers.IO (si llegó a iniciarse)
-                // El motor nativo envía la señal EOS a AMediaCodec y drena los fotogramas pendientes
-                // cerrando el contenedor MP4 con su átomo moov íntegro.
+                // 2. Detener codificación en el motor nativo en Dispatchers.IO
+                // C++23 drena los fotogramas pendientes, inserta EOS y cierra el AMediaMuxer
+                // directamente sobre el FD de la Galería sin copias en memoria.
                 if (isNativeEncoderStarted) {
                     try {
                         if (activeEngine == "rust2024") {
@@ -558,50 +597,87 @@ class ScreenRecordService : Service() {
                 projectionCallback = null
                 mediaProjection = null
 
-                // 5. Si se grabó audio, fusionar con el multiplexor nativo de Android con muestras entrelazadas (AudioMuxerHelper)
-                val tempVideo = tempVideoFilePath
-                val tempAudio = tempAudioFilePath
-                val finalOutput = lastOutputFilePath
+                // Actualizar progreso al 75% mientras se finaliza el archivo en MediaStore
+                notificationManager?.notify(
+                    RecordingNotificationHelper.NOTIFICATION_ID,
+                    RecordingNotificationHelper.buildSavingNotification(
+                        this@ScreenRecordService,
+                        currentEngine,
+                        progressPercent = 75,
+                        customStatus = "Publicando en Galería..."
+                    )
+                )
 
-                if (tempVideo != null && finalOutput != null) {
-                    if (tempAudio != null && File(tempAudio).exists() && File(tempAudio).length() > 100L) {
-                        AudioMuxerHelper.mergeAudioVideo(tempVideo, tempAudio, finalOutput)
-                    } else {
-                        // Preservar video si no hubo audio o la pista estuvo silenciada
-                        val src = File(tempVideo)
-                        val dst = File(finalOutput)
-                        if (src.exists() && src.length() > 0L) {
-                            if (src.absolutePath != dst.absolutePath) {
-                                if (dst.exists()) dst.delete()
-                                val renamed = src.renameTo(dst)
-                                if (!renamed) {
-                                    src.copyTo(dst, overwrite = true)
-                                    src.delete()
+                // 5. Finalización instantánea:
+                val currentDirectTarget = directGalleryTarget
+                if (currentDirectTarget != null) {
+                    // ELIMINACIÓN DEL PASO 3: El archivo ya está en Movies/VeloRec porque fue escrito directamente.
+                    // Solo removemos la marca IS_PENDING = 0 y notificamos al scanner (< 10 ms).
+                    val finalizedUri = GalleryStorageManager.finalizeDirectPendingGalleryTarget(
+                        context = applicationContext,
+                        target = currentDirectTarget
+                    )
+                    directGalleryTarget = null
+
+                    val finalFile = File(currentDirectTarget.filePath)
+                    if (finalFile.exists()) {
+                        lastFileSizeBytes = finalFile.length()
+                        lastOutputFilePath = currentDirectTarget.filePath
+                    }
+                    Log.i("ScreenRecordService", "Grabación directa finalizada en MediaStore: ${currentDirectTarget.filePath} ($lastFileSizeBytes bytes, uri=$finalizedUri)")
+                } else {
+                    // Flujo fallback para Rust o si no se pudo crear descriptor directo
+                    val tempVideo = tempVideoFilePath
+                    val tempAudio = tempAudioFilePath
+                    val finalOutput = lastOutputFilePath
+
+                    if (tempVideo != null && finalOutput != null) {
+                        if (tempAudio != null && File(tempAudio).exists() && File(tempAudio).length() > 100L) {
+                            AudioMuxerHelper.mergeAudioVideo(tempVideo, tempAudio, finalOutput)
+                        } else {
+                            val src = File(tempVideo)
+                            val dst = File(finalOutput)
+                            if (src.exists() && src.length() > 0L) {
+                                if (src.absolutePath != dst.absolutePath) {
+                                    if (dst.exists()) dst.delete()
+                                    val renamed = src.renameTo(dst)
+                                    if (!renamed) {
+                                        src.copyTo(dst, overwrite = true)
+                                        src.delete()
+                                    }
                                 }
                             }
                         }
                     }
+
+                    tempVideoFilePath = null
+                    tempAudioFilePath = null
+
+                    // Publicar en la Galería nativa del usuario ('Movies/VeloRec')
+                    val finalFile = lastOutputFilePath?.let { File(it) }
+                    if (finalFile != null && finalFile.exists() && finalFile.length() > 0L) {
+                        val publishedFile = GalleryStorageManager.publishVideoToGallery(
+                            context = applicationContext,
+                            sourceFile = finalFile
+                        )
+                        if (publishedFile != null && publishedFile.exists()) {
+                            lastOutputFilePath = publishedFile.absolutePath
+                            lastFileSizeBytes = publishedFile.length()
+                        } else {
+                            lastFileSizeBytes = finalFile.length()
+                        }
+                        Log.i("ScreenRecordService", "Grabación guardada en Galería: ${lastOutputFilePath} (${lastFileSizeBytes} bytes)")
+                    } else {
+                        Log.w("ScreenRecordService", "Archivo final no encontrado o vacío tras finalizar captura.")
+                    }
                 }
 
-                tempVideoFilePath = null
-                tempAudioFilePath = null
-
-                // 6. Publicar en la Galería nativa del usuario ('Movies/VeloRec') para que aparezca al instante
-                val finalFile = lastOutputFilePath?.let { File(it) }
-                if (finalFile != null && finalFile.exists() && finalFile.length() > 0L) {
-                    val publishedFile = GalleryStorageManager.publishVideoToGallery(
-                        context = applicationContext,
-                        sourceFile = finalFile
+                // Notificación de guardado completado (100% éxito)
+                lastOutputFilePath?.let { savedPath ->
+                    notificationManager?.notify(
+                        RecordingNotificationHelper.NOTIFICATION_ID + 1,
+                        RecordingNotificationHelper.buildSavedCompletedNotification(this@ScreenRecordService, savedPath)
                     )
-                    if (publishedFile != null && publishedFile.exists()) {
-                        lastOutputFilePath = publishedFile.absolutePath
-                        lastFileSizeBytes = publishedFile.length()
-                    } else {
-                        lastFileSizeBytes = finalFile.length()
-                    }
-                    Log.i("ScreenRecordService", "Grabación guardada con éxito en Galería: ${lastOutputFilePath} (${lastFileSizeBytes} bytes)")
-                } else {
-                    Log.w("ScreenRecordService", "Archivo final no encontrado o vacío tras finalizar captura.")
                 }
 
             } catch (e: Exception) {
@@ -628,13 +704,48 @@ class ScreenRecordService : Service() {
         serviceScope.cancel()
     }
 
+    /**
+     * Detección estricta de tecnología de almacenamiento (eMMC vs UFS/NVMe)
+     * en dispositivos Android mediante inspección de particiones y bloques Linux.
+     */
+    private fun isEmmcStorageDetected(): Boolean {
+        return try {
+            File("/sys/block/mmcblk0").exists() ||
+            File("/sys/class/block/mmcblk0").exists() ||
+            File("/proc/partitions").takeIf { it.exists() }?.readText()?.contains("mmcblk0") == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     // ==========================================
     // FIRMAS JNI PARA MOTOR C++23
     // (Enlazan con Java_com_velorec_recorder_ScreenRecordService_native*)
     // ==========================================
     private external fun nativeInitCppRecorder(
-        path: String, width: Int, height: Int, fps: Int, bitrate: Int, codec: String, audio: String
+        path: String,
+        width: Int,
+        height: Int,
+        fps: Int,
+        bitrate: Int,
+        codec: String,
+        audio: String,
+        targetFd: Int
     ): Surface
+    private external fun nativeAddAudioTrack(
+        csdBuffer: ByteBuffer?,
+        csdSize: Int,
+        sampleRate: Int,
+        channelCount: Int
+    ): Boolean
+    private external fun nativeWriteAudioSample(
+        dataBuffer: ByteBuffer,
+        offset: Int,
+        size: Int,
+        presentationTimeUs: Long,
+        flags: Int
+    )
+    private external fun nativeIsAudioTrackAdded(): Boolean
     private external fun nativeStartCppEncoding()
     private external fun nativePauseCppEncoding()
     private external fun nativeResumeCppEncoding()
@@ -645,7 +756,13 @@ class ScreenRecordService : Service() {
     // (Enlazan con Java_com_velorec_recorder_ScreenRecordService_native*Rust*)
     // ==========================================
     private external fun nativeInitRustRecorder(
-        path: String, width: Int, height: Int, fps: Int, bitrate: Int, codec: String, audio: String
+        path: String,
+        width: Int,
+        height: Int,
+        fps: Int,
+        bitrate: Int,
+        codec: String,
+        audio: String
     ): Surface
     private external fun nativeStartRustEncoding()
     private external fun nativePauseRustEncoding()

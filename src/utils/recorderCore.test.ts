@@ -24,7 +24,12 @@ import {
   DEFAULT_USER_PREFERENCES,
   validateAppPackageName,
   getShaderPipelineCapabilities,
-  getGoStreamingEngineSpecs
+  getGoStreamingEngineSpecs,
+  detectStorageTechnology,
+  calculateOptimalThreadAffinity,
+  calculateSavingProgress,
+  estimateDirectGallerySpeedup,
+  validateDirectGalleryTarget
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -347,3 +352,132 @@ test('getGoStreamingEngineSpecs defines RTMP and SRT streaming specs', () => {
   assert.ok(specs.crossPlatformAbis.includes('arm64-v8a'));
   assert.ok(specs.crossPlatformAbis.includes('armeabi-v7a'));
 });
+
+test('detectStorageTechnology identifies eMMC and recommends asynchronous buffer pacing', () => {
+  // Dispositivo con memoria eMMC (/sys/block/mmcblk0)
+  const emmcResult = detectStorageTechnology(['mmcblk0', 'mmcblk0p1', 'mmcblk0rpmb']);
+  assert.equal(emmcResult.type, 'eMMC');
+  assert.equal(emmcResult.isEmmc, true);
+  assert.equal(emmcResult.bufferPacingRecommended, true);
+  assert.equal(emmcResult.pacingBatchLimit, 16);
+  assert.match(emmcResult.description, /eMMC/);
+
+  // Dispositivo con memoria UFS rápida (SCSI sda/sdb)
+  const ufsResult = detectStorageTechnology(['sda', 'sdb', 'sdc']);
+  assert.equal(ufsResult.type, 'UFS');
+  assert.equal(ufsResult.isEmmc, false);
+  assert.equal(ufsResult.bufferPacingRecommended, false);
+  assert.equal(ufsResult.pacingBatchLimit, 0);
+
+  // Dispositivo con memoria NVMe
+  const nvmeResult = detectStorageTechnology(['nvme0n1', 'nvme0n1p1']);
+  assert.equal(nvmeResult.type, 'NVMe');
+  assert.equal(nvmeResult.isEmmc, false);
+  assert.equal(nvmeResult.bufferPacingRecommended, false);
+});
+
+test('calculateOptimalThreadAffinity pins encoder to LITTLE cores and reserves Big cores for gaming', () => {
+  // Simulación de un SoC de 8 núcleos como MediaTek Helio G81 / G85:
+  // 6 núcleos Cortex-A55 @ 1.8 GHz (eficiencia) + 2 núcleos Cortex-A75 @ 2.0 GHz (rendimiento gamer)
+  const helioG81Freqs = [1800000, 1800000, 1800000, 1800000, 1800000, 1800000, 2000000, 2000000];
+  const affinityG81 = calculateOptimalThreadAffinity(8, helioG81Freqs);
+
+  assert.equal(affinityG81.totalCores, 8);
+  assert.deepEqual(affinityG81.efficiencyCoreIndices, [0, 1, 2, 3, 4, 5]);
+  assert.equal(affinityG81.efficiencyCoresCount, 6);
+  assert.equal(affinityG81.bigCoresReservedForGaming, 2);
+  // Máscara binaria: 1+2+4+8+16+32 = 63 (0x3F)
+  assert.equal(affinityG81.cpuAffinityMask, 63);
+
+  // Fallback determinista cuando no se pueden leer frecuencias por permisos de SELinux
+  const fallback8Cores = calculateOptimalThreadAffinity(8);
+  assert.equal(fallback8Cores.totalCores, 8);
+  assert.deepEqual(fallback8Cores.efficiencyCoreIndices, [0, 1, 2, 3]);
+  assert.equal(fallback8Cores.efficiencyCoresCount, 4);
+  assert.equal(fallback8Cores.bigCoresReservedForGaming, 4);
+  // Máscara binaria: 1+2+4+8 = 15 (0x0F)
+  assert.equal(fallback8Cores.cpuAffinityMask, 15);
+
+  // Fallback para procesadores de 4 núcleos
+  const quadCore = calculateOptimalThreadAffinity(4);
+  assert.equal(quadCore.efficiencyCoresCount, 2);
+  assert.equal(quadCore.bigCoresReservedForGaming, 2);
+});
+
+test('calculateSavingProgress returns correct progression and completion flags', () => {
+  const p1 = calculateSavingProgress('stopping');
+  assert.equal(p1.percent, 25);
+  assert.equal(p1.isComplete, false);
+  assert.match(p1.label, /Deteniendo codificación/i);
+
+  const p2 = calculateSavingProgress('finalizing');
+  assert.equal(p2.percent, 75);
+  assert.equal(p2.isComplete, false);
+  assert.match(p2.label, /Publicando en Galería/i);
+
+  const p3 = calculateSavingProgress('completed');
+  assert.equal(p3.percent, 100);
+  assert.equal(p3.isComplete, true);
+  assert.match(p3.label, /éxito/i);
+});
+
+test('estimateDirectGallerySpeedup demonstrates time savings on eMMC and UFS', () => {
+  // 300 MB recording
+  const fileBytes = 300 * 1024 * 1024;
+
+  const emmcReport = estimateDirectGallerySpeedup(fileBytes, true);
+  assert.equal(emmcReport.fileSizeMb, 300);
+  // En eMMC a 40 MB/s, 300 MB tardarían ~7.5 segundos
+  assert.ok(emmcReport.legacyCopyTimeMs >= 7000);
+  assert.equal(emmcReport.directFdTimeMs, 12);
+  assert.ok(emmcReport.timeSavedMs >= 7000);
+  assert.ok(emmcReport.speedupFactor >= 100);
+
+  const ufsReport = estimateDirectGallerySpeedup(fileBytes, false);
+  assert.equal(ufsReport.fileSizeMb, 300);
+  assert.ok(ufsReport.legacyCopyTimeMs >= 1500);
+  assert.ok(ufsReport.speedupFactor >= 50);
+});
+
+test('validateDirectGalleryTarget handles valid and invalid targets deterministically', () => {
+  // Valid
+  const valid = validateDirectGalleryTarget({
+    rawFd: 42,
+    uri: 'content://media/external/video/media/999',
+    filePath: '/storage/emulated/0/Movies/VeloRec/VeloRec_test.mp4'
+  });
+  assert.equal(valid.isValid, true);
+  assert.equal(valid.reason, undefined);
+
+  // Invalid null / undefined
+  assert.equal(validateDirectGalleryTarget(null).isValid, false);
+  assert.equal(validateDirectGalleryTarget(undefined).isValid, false);
+
+  // Invalid FD
+  const invalidFd = validateDirectGalleryTarget({
+    rawFd: -1,
+    uri: 'content://media/external/video/media/999',
+    filePath: '/storage/emulated/0/Movies/VeloRec/VeloRec_test.mp4'
+  });
+  assert.equal(invalidFd.isValid, false);
+  assert.match(invalidFd.reason ?? '', /FD/i);
+
+  // Invalid URI
+  const invalidUri = validateDirectGalleryTarget({
+    rawFd: 12,
+    uri: 'file:///path/to/video.mp4',
+    filePath: '/storage/emulated/0/Movies/VeloRec/VeloRec_test.mp4'
+  });
+  assert.equal(invalidUri.isValid, false);
+  assert.match(invalidUri.reason ?? '', /content:\/\//i);
+
+  // Empty path
+  const emptyPath = validateDirectGalleryTarget({
+    rawFd: 12,
+    uri: 'content://media/external/video/media/999',
+    filePath: '   '
+  });
+  assert.equal(emptyPath.isValid, false);
+  assert.match(emptyPath.reason ?? '', /ruta/i);
+});
+

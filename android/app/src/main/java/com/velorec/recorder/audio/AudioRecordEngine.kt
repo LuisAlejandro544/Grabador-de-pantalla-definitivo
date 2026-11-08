@@ -91,6 +91,18 @@ class AudioRecordEngine(
     private var isMuxerStarted: Boolean = false
 
     /**
+     * Callback invocado cuando el codificador AAC genera el codec-specific data (csd-0).
+     * Permite registrar la pista de audio en AMediaMuxer de C++23 en tiempo real.
+     */
+    var onAudioTrackConfigured: ((csdBuffer: ByteBuffer, csdSize: Int, sampleRate: Int, channelCount: Int) -> Unit)? = null
+
+    /**
+     * Callback invocado cada vez que se produce una muestra AAC codificada.
+     * Envía los bytes directamente al muxer nativo en tiempo real sin pasar por archivos temporales.
+     */
+    var onAudioSampleEncoded: ((dataBuffer: ByteBuffer, offset: Int, size: Int, ptsUs: Long, flags: Int) -> Unit)? = null
+
+    /**
      * Inicia la captura y codificación de audio en un hilo de fondo dedicado.
      */
     fun start() {
@@ -202,10 +214,11 @@ class AudioRecordEngine(
                     .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
                     .build()
 
+                val internalBufferSize = maxOf(bufferSize * 4, 16384)
                 internalRecord = AudioRecord.Builder()
                     .setAudioPlaybackCaptureConfig(playbackConfig)
                     .setAudioFormat(audioFormat)
-                    .setBufferSizeInBytes(bufferSize * 4)
+                    .setBufferSizeInBytes(internalBufferSize)
                     .build()
 
                 if (internalRecord?.state != AudioRecord.STATE_INITIALIZED) {
@@ -260,7 +273,7 @@ class AudioRecordEngine(
         initEncoderAndMuxer()
 
         val encoder = audioEncoder ?: return
-        val muxer = audioMuxer ?: return
+        val muxer = audioMuxer
 
         try {
             micRecord?.startRecording()
@@ -284,9 +297,9 @@ class AudioRecordEngine(
             freeChunkPool.offer(DirectAudioChunk(chunkSizeBytes))
         }
 
-        // Si estamos en modo mezcla simultánea ("both"), arrancamos un lector dedicado para audio interno
-        // usando exclusivamente DirectByteBuffer (off-heap) para erradicar las alocaciones por frame
-        if (audioSource == "both" && internalRecord != null) {
+        // Arrancamos lector dedicado en segundo plano para audio interno tanto en modo 'internal' como en 'both'
+        // usando exclusivamente DirectByteBuffer (off-heap) para erradicar cualquier bloqueo y alocaciones por frame
+        if ((audioSource == "both" || audioSource == "internal") && internalRecord != null) {
             internalAudioReaderThread = Thread({
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
                 while (isRecording.get()) {
@@ -353,9 +366,32 @@ class AudioRecordEngine(
                 }
 
                 "internal" -> {
-                    val readInternal = internalRecord?.read(finalStereoBuffer, 0, stereoSamplesCount) ?: 0
-                    if (readInternal > 0) {
-                        framesObtained = readInternal / CHANNEL_COUNT
+                    // Extraer audio interno puro de la cola concurrente (DirectByteBuffer Off-Heap)
+                    val internalChunk = internalAudioQueue.poll()
+                    if (internalChunk != null) {
+                        internalChunk.buffer.position(0)
+                        internalChunk.buffer.limit(internalChunk.sizeBytes)
+                        val shortBuf = internalChunk.buffer.asShortBuffer()
+                        val samplesCount = minOf(shortBuf.remaining(), stereoSamplesCount)
+                        for (i in 0 until samplesCount) {
+                            finalStereoBuffer[i] = shortBuf.get()
+                        }
+                        for (i in samplesCount until stereoSamplesCount) {
+                            finalStereoBuffer[i] = 0
+                        }
+                        framesObtained = stereoSamplesCount / CHANNEL_COUNT
+                        freeChunkPool.offer(internalChunk)
+                    } else if (internalRecord != null) {
+                        // Si el juego está en silencio o cargando pero el grabador interno está activo,
+                        // generar silencio temporal a cadencia fija de frame para mantener estricta
+                        // sincronización monotónica de audio y video sin bloquear el pipeline.
+                        java.util.Arrays.fill(finalStereoBuffer, 0.toShort())
+                        framesObtained = stereoSamplesCount / CHANNEL_COUNT
+                        try {
+                            Thread.sleep(20)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
                     }
                 }
 
@@ -457,7 +493,7 @@ class AudioRecordEngine(
 
     private fun drainEncoder(
         encoder: MediaCodec,
-        muxer: MediaMuxer,
+        muxer: MediaMuxer?,
         bufferInfo: MediaCodec.BufferInfo,
         endOfStream: Boolean
     ) {
@@ -465,23 +501,38 @@ class AudioRecordEngine(
             val outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
 
             if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                if (isMuxerStarted) {
-                    Log.w(TAG, "Formato cambiado posterior al inicio del Muxer.")
-                } else {
-                    val newFormat = encoder.outputFormat
+                val newFormat = encoder.outputFormat
+                val csd0 = newFormat.getByteBuffer("csd-0")
+                if (csd0 != null) {
+                    onAudioTrackConfigured?.invoke(csd0, csd0.remaining(), SAMPLE_RATE, CHANNEL_COUNT)
+                }
+
+                if (muxer != null && !isMuxerStarted) {
                     audioTrackIndex = muxer.addTrack(newFormat)
                     muxer.start()
                     isMuxerStarted = true
-                    Log.i(TAG, "Muxer de audio iniciado. Pista asignada: $audioTrackIndex")
+                    Log.i(TAG, "Muxer de audio independiente iniciado. Pista asignada: $audioTrackIndex")
                 }
             } else if (outputBufferIndex >= 0) {
                 val encodedData = encoder.getOutputBuffer(outputBufferIndex)
 
-                if (encodedData != null && bufferInfo.size > 0 && isMuxerStarted) {
+                if (encodedData != null && bufferInfo.size > 0) {
                     if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
                         encodedData.position(bufferInfo.offset)
                         encodedData.limit(bufferInfo.offset + bufferInfo.size)
-                        muxer.writeSampleData(audioTrackIndex, encodedData, bufferInfo)
+
+                        // Transmitir directamente a C++23 si la multiplexación en vivo está activa
+                        if (onAudioSampleEncoded != null) {
+                            onAudioSampleEncoded?.invoke(
+                                encodedData,
+                                bufferInfo.offset,
+                                bufferInfo.size,
+                                bufferInfo.presentationTimeUs,
+                                bufferInfo.flags
+                            )
+                        } else if (muxer != null && isMuxerStarted) {
+                            muxer.writeSampleData(audioTrackIndex, encodedData, bufferInfo)
+                        }
                     }
                 }
 

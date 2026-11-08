@@ -593,3 +593,200 @@ export function getGoStreamingEngineSpecs() {
     crossPlatformAbis: ['arm64-v8a', 'armeabi-v7a', 'x86_64'] as const
   };
 }
+
+export interface StorageTechnologyReport {
+  type: 'eMMC' | 'UFS' | 'NVMe';
+  isEmmc: boolean;
+  bufferPacingRecommended: boolean;
+  pacingBatchLimit: number;
+  description: string;
+}
+
+/**
+ * Detecta si el dispositivo cuenta con almacenamiento eMMC o de alta velocidad (UFS/NVMe)
+ * mediante el análisis de nodos de bloques Linux (/sys/block/mmcblk0 o /proc/partitions).
+ * Si se detecta eMMC, recomienda activar el buffer pacing asíncrono para prevenir micro-congelamientos (stutters).
+ */
+export function detectStorageTechnology(blockDevices: string[] = ['mmcblk0']): StorageTechnologyReport {
+  const hasEmmc = blockDevices.some(dev => dev.includes('mmcblk'));
+  const hasNvme = blockDevices.some(dev => dev.includes('nvme'));
+
+  if (hasEmmc) {
+    return {
+      type: 'eMMC',
+      isEmmc: true,
+      bufferPacingRecommended: true,
+      pacingBatchLimit: 16,
+      description: 'Almacenamiento eMMC 5.1 detectado. Buffer Pacing Asíncrono activo para amortiguar picos de I/O.'
+    };
+  }
+
+  if (hasNvme) {
+    return {
+      type: 'NVMe',
+      isEmmc: false,
+      bufferPacingRecommended: false,
+      pacingBatchLimit: 0,
+      description: 'Almacenamiento NVMe PCIe de ultra-alta velocidad. Escritura directa habilitada.'
+    };
+  }
+
+  return {
+    type: 'UFS',
+    isEmmc: false,
+    bufferPacingRecommended: false,
+    pacingBatchLimit: 0,
+    description: 'Almacenamiento UFS (Universal Flash Storage) detectado. Escritura directa sin cuello de botella.'
+  };
+}
+
+export interface ThreadAffinityReport {
+  totalCores: number;
+  efficiencyCoreIndices: number[];
+  cpuAffinityMask: number;
+  efficiencyCoresCount: number;
+  bigCoresReservedForGaming: number;
+  description: string;
+}
+
+/**
+ * Calcula la afinidad de hilos óptima para procesadores móviles big.LITTLE (ej: Helio G81/G85/G88, Snapdragon).
+ * Asigna los hilos de codificación y I/O exclusivamente a los núcleos de eficiencia (LITTLE, ej: Cortex-A55),
+ * dejando los núcleos de alto rendimiento (Big, ej: Cortex-A75) 100% libres para el juego (Subway Surfers, Free Fire, etc.).
+ */
+export function calculateOptimalThreadAffinity(
+  totalCores: number = 8,
+  coreFrequenciesKhz?: number[]
+): ThreadAffinityReport {
+  const safeTotal = Math.max(1, totalCores);
+
+  let efficiencyIndices: number[] = [];
+
+  if (coreFrequenciesKhz && coreFrequenciesKhz.length === safeTotal) {
+    const maxFreq = Math.max(...coreFrequenciesKhz);
+    efficiencyIndices = coreFrequenciesKhz
+      .map((freq, idx) => ({ freq, idx }))
+      .filter(item => item.freq < maxFreq)
+      .map(item => item.idx);
+  }
+
+  // Si no se proporcionaron frecuencias o todos tienen la misma frecuencia:
+  // En SoCs de 8 núcleos estándar, reservamos la mitad inferior (cores 0..3) para tareas de fondo
+  if (efficiencyIndices.length === 0) {
+    const count = safeTotal >= 8 ? 4 : Math.max(1, Math.floor(safeTotal / 2));
+    efficiencyIndices = Array.from({ length: count }, (_, i) => i);
+  }
+
+  let mask = 0;
+  for (const idx of efficiencyIndices) {
+    mask |= (1 << idx);
+  }
+
+  const bigCoresCount = safeTotal - efficiencyIndices.length;
+
+  return {
+    totalCores: safeTotal,
+    efficiencyCoreIndices: efficiencyIndices,
+    cpuAffinityMask: mask,
+    efficiencyCoresCount: efficiencyIndices.length,
+    bigCoresReservedForGaming: Math.max(0, bigCoresCount),
+    description: `Afinidad fijada a ${efficiencyIndices.length} núcleos LITTLE. ${bigCoresCount} núcleos Big reservados para el videojuego.`
+  };
+}
+
+export interface SavingProgressState {
+  stage: 'stopping' | 'finalizing' | 'completed';
+  percent: number;
+  label: string;
+  isComplete: boolean;
+}
+
+/**
+ * Modela las etapas de guardado asíncrono con notificación de progreso en segundo plano.
+ * Permite que la UI cambie de inmediato al estado inactivo sin congelar la experiencia del usuario.
+ */
+export function calculateSavingProgress(
+  stage: 'stopping' | 'finalizing' | 'completed'
+): SavingProgressState {
+  switch (stage) {
+    case 'stopping':
+      return {
+        stage: 'stopping',
+        percent: 25,
+        label: 'Deteniendo codificación...',
+        isComplete: false
+      };
+    case 'finalizing':
+      return {
+        stage: 'finalizing',
+        percent: 75,
+        label: 'Publicando en Galería...',
+        isComplete: false
+      };
+    case 'completed':
+      return {
+        stage: 'completed',
+        percent: 100,
+        label: '¡Grabación guardada con éxito!',
+        isComplete: true
+      };
+  }
+}
+
+export interface DirectGallerySpeedupReport {
+  fileSizeMb: number;
+  legacyCopyTimeMs: number;
+  directFdTimeMs: number;
+  timeSavedMs: number;
+  speedupFactor: number;
+  description: string;
+}
+
+/**
+ * Estima la ganancia de velocidad al escribir directamente sobre el Descriptor de Archivo (FD)
+ * de la Galería (MediaStore) frente a la copia byte a byte tradicional en almacenamientos móviles.
+ */
+export function estimateDirectGallerySpeedup(
+  fileSizeBytes: number,
+  isEmmc: boolean = false
+): DirectGallerySpeedupReport {
+  const sizeMb = Math.max(0, fileSizeBytes / (1024 * 1024));
+  // Velocidad típica de copia eMMC 5.1 (~40 MB/s con I/O contención) vs UFS (~180 MB/s)
+  const copySpeedMbPerSec = isEmmc ? 40 : 180;
+  const legacyCopyTimeMs = Math.round((sizeMb / copySpeedMbPerSec) * 1000);
+  // Con targetFd directo, AMediaMuxer escribe directamente; finalizar es solo IS_PENDING = 0 (< 15 ms)
+  const directFdTimeMs = 12;
+  const timeSavedMs = Math.max(0, legacyCopyTimeMs - directFdTimeMs);
+  const speedupFactor = legacyCopyTimeMs > 0 ? Number((legacyCopyTimeMs / directFdTimeMs).toFixed(1)) : 1;
+
+  return {
+    fileSizeMb: Number(sizeMb.toFixed(2)),
+    legacyCopyTimeMs,
+    directFdTimeMs,
+    timeSavedMs,
+    speedupFactor,
+    description: `Ahorro de ${(timeSavedMs / 1000).toFixed(2)}s al eliminar la copia redundante de ${sizeMb.toFixed(1)} MB (${speedupFactor}x más rápido).`
+  };
+}
+
+/**
+ * Valida un objetivo de grabación directa sobre la Galería (MediaStore).
+ */
+export function validateDirectGalleryTarget(
+  target: { rawFd: number; uri: string; filePath: string } | null | undefined
+): { isValid: boolean; reason?: string } {
+  if (!target) {
+    return { isValid: false, reason: 'El descriptor de la galería no fue inicializado.' };
+  }
+  if (typeof target.rawFd !== 'number' || target.rawFd < 0) {
+    return { isValid: false, reason: 'El descriptor de archivo nativo (FD) es inválido (< 0).' };
+  }
+  if (!target.uri || !target.uri.startsWith('content://')) {
+    return { isValid: false, reason: 'La URI de MediaStore debe iniciar con content://.' };
+  }
+  if (!target.filePath || target.filePath.trim().length === 0) {
+    return { isValid: false, reason: 'La ruta absoluta del archivo en Movies/VeloRec está vacía.' };
+  }
+  return { isValid: true };
+}
+

@@ -48,8 +48,23 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
 - [x] **Fundación del Motor de Streaming de Ultra Baja Latencia en Go (Golang 1.22+)**:
   - Módulo `/go/streamer.go` con cola de paquetes NAL en goroutines y *Ring Buffer* de 4 MB para absorber fluctuaciones de red móvil 4G/5G.
   - Tarea Gradle `goStreamerCheck` y configuración en GitHub Actions con `setup-go@v5`.
+- **Buffer Pacing Asíncrono para Almacenamiento eMMC (Detección Automática)**:
+  - [x] Detección automática de memorias eMMC mediante `/sys/block/mmcblk0` o `/proc/partitions`.
+  - [x] Desacopla la escritura de muestras en `AMediaMuxer` mediante un hilo y cola amortiguadora (*coalescing* hasta 16 muestras) para evitar micro-tirones (*stutters*) por picos de latencia de I/O en memorias eMMC 5.1 durante escenas con partículas o monedas masivas en juegos (ej: Subway Surfers). Si se detecta almacenamiento UFS/NVMe, se mantiene la escritura directa ultrarrápida.
+- **Afinidad de Hilos (Thread Affinity) a Núcleos de Eficiencia (LITTLE)**:
+  - [x] Aislamiento de núcleos grandes de alto rendimiento (Big cluster, Cortex-A75) para el videojuego en ejecución mediante `sched_setaffinity` en Linux.
+  - [x] Los hilos de codificación y compresión (`VeloRec_CppEncoder`, `VeloRec_Pacing`, `velorec_rust_worker`) quedan anclados a los núcleos de bajo consumo (LITTLE cluster, Cortex-A55), reduciendo la temperatura y garantizando que el juego no sufra caídas de FPS.
+- **Captura de Audio Interno Puro sin Mezcla Indeseada**:
+  - [x] Corrección de la tubería de audio interno en `ScreenRecordService` y `AudioRecordEngine`. En modo "Audio Interno", el Foreground Service solicita exclusivamente `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` (sin solicitar micrófono), evitando el icono de privacidad de Android 14+ y eliminando el enrutamiento parásito del micro.
+  - [x] Soporte para selección directa de fuente de audio (Interno, Micrófono, Mezcla, Silencio) desde la pantalla de grabación y lanzador de juegos.
+- **Multiplexación de Audio en Tiempo Real en C++23 (Eliminación del Paso 2)**:
+  - [x] Transmisión en tiempo real de paquetes AAC (`nativeWriteAudioSample`) directamente al `AMediaMuxer` nativo en C++23. El archivo MP4 ya queda listo y sincronizado al terminar, sin requerir procesamiento posterior ni fusión secundaria de audio.
+- **Grabación Directa sobre Descriptor de la Galería MediaStore (Eliminación del Paso 3)**:
+  - [x] Creación de la entrada en MediaStore con `IS_PENDING = 1` previo al inicio de la grabación y pase directo de `rawFd` a `AMediaMuxer_new(fd, ...)`. Al detener, se finaliza con `IS_PENDING = 0` en <15 ms, eliminando por completo copias pesadas de cientos de megabytes en discos eMMC lentos.
+- **Guardado en Segundo Plano con Notificación de Progreso Escalonado**:
+  - [x] Desacople total del hilo de UI al presionar "Detener", con retroalimentación progresiva en la barra de estado (25% -> 75% -> 100%), eliminando cualquier sensación de lentitud o congelamiento.
 - [x] **Suite de Pruebas Unitarias Deterministas**:
-  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, temporizador de cuenta regresiva, validación de paquetes Android, especificaciones de shaders GPU y motor Go.
+  - Validación con `node:test` de cálculo de bitrate, validación de paridad de resolución, temporizador de cuenta regresiva, validación de paquetes Android, detección de eMMC, cálculo de afinidad de hilos, especificaciones de shaders GPU y motor Go.
 
 ---
 

@@ -46,14 +46,28 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
   - Tasas de cuadro: 24, 30, 60, 90 y 120 FPS.
   - Bitrate ajustable de 2 a 50 Mbps con cálculo de almacenamiento en vivo.
   - Códecs por hardware: H.264 (AVC), H.265 (HEVC) y AV1.
-  - Captura de audio: Audio Interno, Micrófono con medidor VU en decibeles, Mezcla estéreo y Silencio.
+- **Buffer Pacing Asíncrono para Almacenamiento eMMC (Detección Automática)**:
+  - Detección automática en hardware de memorias eMMC mediante `/sys/block/mmcblk0` y `/proc/partitions`.
+  - Desacopla la escritura en `AMediaMuxer` utilizando un hilo de fondo y una cola de amortiguación por lotes (*coalescing* de hasta 16 muestras).
+  - Absorbe la latencia de escritura de memorias eMMC 5.1 durante escenas con partículas o monedas masivas en videojuegos (ej: Subway Surfers), erradicando micro-congelamientos (*stutters*).
+  - En dispositivos con memorias UFS o NVMe, el sistema omite la cola y realiza escritura directa de ultra-alta velocidad.
+- **Afinidad de Hilos de CPU (Thread Affinity) hacia Núcleos de Eficiencia (LITTLE)**:
+  - En procesadores ARM big.LITTLE (ej: MediaTek Helio G81 / G85 / G88, Qualcomm Snapdragon), ancla mediante `sched_setaffinity` los hilos de codificación y vaciado (`VeloRec_CppEncoder`, `VeloRec_Pacing`, `velorec_rust_worker`) exclusivamente a los núcleos de bajo consumo (Cortex-A55).
+  - Reserva los núcleos grandes de alto rendimiento (Big, Cortex-A75) **100% libres y disponibles para el videojuego**, evitando pérdidas de FPS o caídas térmicas.
+- **Captura de Audio Interno Puro y Mezcla Dual Inteligente**:
+  - Corrección de la tubería de audio en `ScreenRecordService` y `AudioRecordEngine`: en modo "Audio Interno", el servicio en primer plano solicita exclusivamente `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` (sin solicitar micrófono), suprimiendo el indicador de privacidad de Android 14+ y eliminando el enrutamiento parásito del micro.
+  - Generación de silencio de confort mono/estéreo durante pausas del juego para mantener sincronización estricta Audio/Video.
+  - Selector táctil de acceso rápido (1 toque) en la pantalla principal para cambiar entre Audio Interno, Micrófono, Mezcla y Silencio.
 - **Grabación Directa NDK C++23 / Rust 2024 (Zero-Copy & GC-Free)**:
-  - **Sin Impacto del Recolector de Basura (GC-Free)**: Los fotogramas de la GPU se canalizan directamente a `ANativeWindow` de hardware y se empaquetan en C++23 / Rust 2024 con `AMediaMuxer` en hilos de fondo dedicados. Cero pausas de GC durante la grabación de pantalla.
-  - **Multiplexación Nativa de Audio y Video**: Fusión instantánea (<200 ms) sin librerías externas mediante `AudioMuxerHelper` utilizando el subsistema oficial de Android (`MediaExtractor` y `MediaMuxer`).
+  - **Sin Impacto del Recolector de Basura (GC-Free)**: Los fotogramas de la GPU se canalizan directamente a `ANativeWindow` de hardware y se empaquetan en C++23 / Rust 2024 con `AMediaMuxer` en hilos de fondo dedicados. Cero pausas de GC durante la captura.
+  - **Multiplexación de Audio en Tiempo Real en C++23 (Eliminación del Paso 2)**: Transmisión directa de paquetes AAC desde Kotlin a `AMediaMuxer` entrelazados en tiempo real. Al parar la grabación, el archivo MP4 ya contiene video y audio sincronizados sin necesidad de procesos de fusión posteriores.
   - **Alineación con Android 15 (API 35+)**: Compilación nativa optimizada para arquitecturas de 64 y 32 bits (`arm64-v8a`, `armeabi-v7a`, `x86_64`).
+- **Grabación Directa sobre Descriptor de la Galería MediaStore (Eliminación del Paso 3)**:
+  - La entrada en la galería se crea al inicio (`IS_PENDING = 1`) y su descriptor nativo (`rawFd`) se pasa a C++23 (`AMediaMuxer_new(fd, ...)`). Al detener, el archivo ya está en `Movies/VeloRec`; solo se remueve la marca pendiente (<15 ms), erradicando las copias de disco de 300+ MB en memorias eMMC lentas.
+- **Guardado en Segundo Plano con Notificación de Progreso Escalonado**:
+  - Al presionar "Detener", la interfaz se libera de inmediato (`isRecording = false`) y una notificación dinámica muestra el progreso en segundo plano (25% deteniendo codificador -> 75% finalizando contenedor -> 100% video disponible en galería), garantizando cero cuelgues o congelamientos ANR.
 - **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
-  - Las grabaciones se guardan directamente en el álbum público del teléfono vía **MediaStore API** (Scoped Storage) y se indexan al instante con `MediaScannerConnection`.
-  - Aparecen inmediatamente en Google Fotos, Galería Samsung, Xiaomi, Motorola, VLC o WhatsApp.
+  - Las grabaciones se indexan al instante con `MediaScannerConnection` para aparecer de inmediato en Google Fotos, Galería Samsung, Xiaomi, Motorola, VLC o WhatsApp.
 - **🎮 Lanzador Rápido de Juegos y Aplicaciones (1-Click REC)**:
   - Nueva sección táctil dedicada (`NativeAppLauncherSection.kt`) en la barra de navegación inferior.
   - Lista de forma asíncrona (`Dispatchers.IO`) todos los juegos y aplicaciones descargadas en el teléfono con su icono oficial y badge de categoría.

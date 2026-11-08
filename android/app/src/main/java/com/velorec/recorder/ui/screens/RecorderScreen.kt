@@ -30,7 +30,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
@@ -40,6 +42,8 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -59,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.velorec.recorder.data.model.AUDIO_SOURCE_PRESETS
 import com.velorec.recorder.data.model.BITRATE_PRESETS
 import com.velorec.recorder.data.model.COUNTDOWN_PRESETS
 import com.velorec.recorder.data.model.RESOLUTION_PRESETS
@@ -95,8 +100,10 @@ fun NativeRecorderViewport(
     bannerText: String?,
     availableResolutions: List<ResolutionPreset> = RESOLUTION_PRESETS,
     selectedCountdownSec: Int = 3,
+    selectedAudio: String = "internal",
     onResolutionChange: (ResolutionPreset) -> Unit,
     onBitrateChange: (Int) -> Unit,
+    onAudioChange: (String) -> Unit = {},
     onCountdownChange: (Int) -> Unit = {},
     onToggleRecord: () -> Unit,
     onTogglePause: () -> Unit,
@@ -198,13 +205,19 @@ fun NativeRecorderViewport(
                     }
 
                     // Badge del Perfil Activo
+                    val audioBadge = when (selectedAudio) {
+                        "internal" -> "INTERNO"
+                        "mic" -> "MIC"
+                        "mute" -> "MUTE"
+                        else -> "MEZCLA"
+                    }
                     Surface(
                         color = DarkCard,
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.4f))
                     ) {
                         Text(
-                            text = "${selectedResolution.id.uppercase()} • ${selectedBitrateMbps}M" + (if (selectedCountdownSec > 0) " • ${selectedCountdownSec}s" else " • 0s"),
+                            text = "${selectedResolution.id.uppercase()} • ${selectedBitrateMbps}M • $audioBadge" + (if (selectedCountdownSec > 0) " • ${selectedCountdownSec}s" else " • 0s"),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -341,7 +354,82 @@ fun NativeRecorderViewport(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Fila 3: Temporizador de Inicio (Cuenta Regresiva)
+                // Fila 3: Fuente de Audio (Interno, Mezcla, Micrófono, Silencio)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = when (selectedAudio) {
+                            "internal" -> Icons.Default.VolumeUp
+                            "mic" -> Icons.Default.Mic
+                            "mute" -> Icons.Default.VolumeOff
+                            else -> Icons.Default.Headphones
+                        },
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = "Fuente de Audio (Sonido)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AUDIO_SOURCE_PRESETS.forEach { audioPreset ->
+                        val isSelected = selectedAudio == audioPreset.id
+                        val isInternal = audioPreset.id == "internal"
+                        val chipColor = if (isSelected) {
+                            if (isInternal) Color(0xFF0284C7) else primaryColor
+                        } else {
+                            if (isInternal) Color(0xFF0369A1).copy(alpha = 0.25f) else DarkCard
+                        }
+                        val borderColor = if (isSelected) {
+                            if (isInternal) Color(0xFF38BDF8) else primaryColor
+                        } else {
+                            if (isInternal) Color(0xFF0284C7).copy(alpha = 0.45f) else Color(0xFF334155)
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = chipColor,
+                            border = BorderStroke(1.dp, borderColor),
+                            shadowElevation = if (isSelected) 3.dp else 0.dp,
+                            modifier = Modifier.clickable(enabled = !isRecording) {
+                                onAudioChange(audioPreset.id)
+                            }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp)
+                            ) {
+                                Text(
+                                    text = "${audioPreset.iconEmoji} ",
+                                    fontSize = 11.sp
+                                )
+                                Text(
+                                    text = audioPreset.label + if (isInternal) " ★" else "",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else if (isInternal) Color(0xFF7DD3FC) else Color(0xFFCBD5E1)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Fila 4: Temporizador de Inicio (Cuenta Regresiva)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 6.dp)

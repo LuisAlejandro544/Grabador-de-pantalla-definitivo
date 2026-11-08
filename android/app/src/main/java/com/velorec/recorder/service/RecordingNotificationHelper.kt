@@ -122,13 +122,14 @@ object RecordingNotificationHelper {
     }
 
     /**
-     * Construye una notificación persistente de progreso mientras se finaliza la codificación,
-     * se multiplexa el audio/video y se guarda el archivo en la galería pública.
-     * Esto evita que el sistema operativo o el usuario maten el servicio durante la escritura en disco.
+     * Construye una notificación persistente de progreso con porcentaje visible mientras se finaliza la codificación,
+     * se cierran los contenedores de hardware y se indexa el archivo en la galería pública.
      */
     fun buildSavingNotification(
         context: Context,
-        engine: String
+        engine: String,
+        progressPercent: Int = -1,
+        customStatus: String? = null
     ): Notification {
         val engineLabel = if (engine == "rust2024") "Rust 2024" else "C++23"
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -137,21 +138,59 @@ object RecordingNotificationHelper {
         }
         val openAppPendingIntent = PendingIntent.getActivity(context, 0, openAppIntent, flags)
 
+        val title = if (progressPercent in 0..100) {
+            "Guardando en Galería ($progressPercent%)"
+        } else {
+            "Guardando grabación en Galería..."
+        }
+
+        val contentText = customStatus ?: "Finalizando video ($engineLabel) sin pérdidas..."
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("Guardando grabación en Galería...")
-            .setContentText("Procesando video ($engineLabel) y audio sin pérdida...")
+            .setContentTitle(title)
+            .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_menu_save)
-            .setProgress(0, 0, true)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        if (progressPercent in 0..100) {
+            builder.setProgress(100, progressPercent, false)
+        } else {
+            builder.setProgress(0, 0, true)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         }
 
         return builder.build()
+    }
+
+    /**
+     * Notificación breve de éxito al completar el guardado en la galería.
+     */
+    fun buildSavedCompletedNotification(
+        context: Context,
+        filePath: String
+    ): Notification {
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+            setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val openAppPendingIntent = PendingIntent.getActivity(context, 0, openAppIntent, flags)
+        val fileName = File(filePath).name
+
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle("Grabación lista en Galería")
+            .setContentText("Guardado en Movies/VeloRec: $fileName")
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentIntent(openAppPendingIntent)
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
     }
 }
 

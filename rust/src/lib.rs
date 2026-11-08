@@ -216,14 +216,47 @@ impl RustRecorderEngine {
         is_recording.store(true, Ordering::SeqCst);
         is_paused.store(false, Ordering::SeqCst);
 
+/// Aplica afinidad de hilos hacia núcleos de eficiencia (LITTLE) en procesadores ARM big.LITTLE
+/// para dejar los núcleos de alto rendimiento (Big) 100% libres para videojuegos (ej: Subway Surfers).
+fn apply_efficiency_core_affinity(thread_name: &str) {
+    if let Ok(c_name) = CString::new(thread_name) {
+        unsafe {
+            libc::pthread_setname_np(libc::pthread_self(), c_name.as_ptr());
+        }
+    }
+
+    let total_cores = unsafe { libc::sysconf(libc::_SC_NPROCESSORS_CONF) as i32 };
+    if total_cores <= 1 {
+        return;
+    }
+
+    unsafe {
+        let mut cpuset: libc::cpu_set_t = std::mem::zeroed();
+        libc::CPU_ZERO(&mut cpuset);
+
+        // En arquitecturas big.LITTLE (ej: Helio G81 / Snapdragon),
+        // asignamos los primeros núcleos de eficiencia (LITTLE) para dejar libres los Big cores
+        let efficiency_cores = if total_cores >= 8 { 4 } else { (total_cores / 2).max(1) };
+        for i in 0..efficiency_cores {
+            libc::CPU_SET(i as usize, &mut cpuset);
+        }
+
+        let res = libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &cpuset);
+        if res == 0 {
+            info!("Rust 2024: Afinidad aplicada para [{}] hacia {} núcleos LITTLE de {} totales.",
+                thread_name, efficiency_cores, total_cores);
+        }
+    }
+}
+
         // Hilo worker de codificación sin contención de cerrojos
         // Captura únicamente tipos escalares (usize, i32) y Arcs que son intrínsecamente Send
         let handle = thread::Builder::new()
             .name("velorec_rust_worker".into())
             .spawn(move || {
                 info!("Rust 2024: Hilo de codificación activo.");
-                // Configurar prioridad de tiempo real para el hilo de codificación en Rust (nice -16)
-                // Inmuniza la codificación frente a interrupciones del Garbage Collector o LMK
+                // Configurar afinidad a núcleos LITTLE y prioridad en tiempo real (nice -16)
+                apply_efficiency_core_affinity("velorec_rust_worker");
                 unsafe {
                     libc::setpriority(libc::PRIO_PROCESS, 0, -16);
                 }

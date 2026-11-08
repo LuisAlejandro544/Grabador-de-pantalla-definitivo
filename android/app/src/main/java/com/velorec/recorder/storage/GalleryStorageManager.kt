@@ -6,6 +6,7 @@ import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.util.Log
 import java.io.File
@@ -32,11 +33,129 @@ import java.io.FileOutputStream
  *    - Si por restricciones de permisos el guardado público fallara, preserva el archivo en el
  *      almacenamiento privado de la aplicación para garantizar que el usuario nunca pierda su grabación.
  */
+/**
+ * Estructura para grabación directa en la Galería del usuario sin archivos temporales ni copias pesadas.
+ */
+data class DirectGalleryRecordingTarget(
+    val uri: Uri?,
+    val pfd: ParcelFileDescriptor?,
+    val rawFd: Int,
+    val filePath: String,
+    val displayName: String
+)
+
 object GalleryStorageManager {
 
     private const val TAG = "VeloRec_Gallery"
     private const val ALBUM_DIRECTORY_NAME = "Movies/VeloRec"
     private const val BUFFER_SIZE = 64 * 1024 // 64 KB para transferencia fluida de archivos grandes
+
+    /**
+     * Crea un destino de grabación pendiente directamente en MediaStore (Android 10+)
+     * o en la carpeta pública Movies/VeloRec (Android 8-9).
+     * Permite que el codificador por hardware en C++23 escriba los fotogramas directamente
+     * sobre el descriptor de la Galería, eliminando por completo el tiempo de copiado final (Paso 3).
+     */
+    fun createDirectPendingGalleryTarget(
+        context: Context,
+        displayName: String
+    ): DirectGalleryRecordingTarget {
+        val publicMoviesDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            "VeloRec"
+        )
+        if (!publicMoviesDir.exists()) {
+            publicMoviesDir.mkdirs()
+        }
+        val candidateFile = File(publicMoviesDir, displayName)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, displayName)
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                put(MediaStore.Video.Media.RELATIVE_PATH, ALBUM_DIRECTORY_NAME)
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+                put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
+                put(MediaStore.Video.Media.DATE_MODIFIED, System.currentTimeMillis() / 1000)
+            }
+
+            val resolver = context.contentResolver
+            val collectionUri = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            val itemUri = resolver.insert(collectionUri, values)
+
+            if (itemUri != null) {
+                val pfd = resolver.openFileDescriptor(itemUri, "rwt")
+                val rawFd = pfd?.fd ?: -1
+                Log.i(TAG, "Destino directo de MediaStore creado con IS_PENDING=1: $itemUri (rawFd=$rawFd)")
+                return DirectGalleryRecordingTarget(
+                    uri = itemUri,
+                    pfd = pfd,
+                    rawFd = rawFd,
+                    filePath = candidateFile.absolutePath,
+                    displayName = displayName
+                )
+            }
+        }
+
+        // Android 8.0-9.0 o fallback si MediaStore insert falla:
+        val pfd = try {
+            ParcelFileDescriptor.open(
+                candidateFile,
+                ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo abrir ParcelFileDescriptor directo en $candidateFile: ${e.message}")
+            null
+        }
+
+        val rawFd = pfd?.fd ?: -1
+        Log.i(TAG, "Destino directo en archivo público creado: ${candidateFile.absolutePath} (rawFd=$rawFd)")
+        return DirectGalleryRecordingTarget(
+            uri = null,
+            pfd = pfd,
+            rawFd = rawFd,
+            filePath = candidateFile.absolutePath,
+            displayName = displayName
+        )
+    }
+
+    /**
+     * Finaliza el destino de grabación directa:
+     * 1. Desmarca IS_PENDING = 0 en MediaStore para que el video aparezca al instante en la Galería.
+     * 2. Cierra el descriptor ParcelFileDescriptor de forma segura.
+     * 3. Dispara la indexación inmediata de miniatura mediante MediaScannerConnection.
+     */
+    fun finalizeDirectPendingGalleryTarget(
+        context: Context,
+        target: DirectGalleryRecordingTarget
+    ): File? {
+        try {
+            target.pfd?.close()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && target.uri != null) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Video.Media.IS_PENDING, 0)
+                }
+                context.contentResolver.update(target.uri, values, null, null)
+                Log.i(TAG, "Destino MediaStore finalizado con éxito (IS_PENDING=0): ${target.uri}")
+            }
+
+            val finalFile = File(target.filePath)
+            if (finalFile.exists() && finalFile.length() > 0L) {
+                MediaScannerConnection.scanFile(
+                    context.applicationContext,
+                    arrayOf(finalFile.absolutePath),
+                    arrayOf("video/mp4")
+                ) { path, uri ->
+                    Log.i(TAG, "MediaScanner indexó grabación directa en Galería: $path -> $uri")
+                }
+                return finalFile
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al finalizar destino de grabación directa: ${e.message}", e)
+        }
+        return null
+    }
 
     /**
      * Publica un archivo de video grabado (MP4 o MKV) directamente en la Galería del usuario.

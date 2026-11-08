@@ -18,6 +18,8 @@
 #include <unistd.h>
 #include <sys/resource.h>
 #include <pthread.h>
+#include <sched.h>
+#include <vector>
 
 #define LOG_TAG "VeloRec_CPP23"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -39,7 +41,219 @@ NativeRecorderEngine::~NativeRecorderEngine() {
     }
 }
 
+bool NativeRecorderEngine::checkIsEmmcStorage() noexcept {
+    // 1. Verificación directa de nodos de bloque eMMC estándar en el kernel Linux de Android
+    if (access("/sys/block/mmcblk0", F_OK) == 0 || access("/sys/class/block/mmcblk0", F_OK) == 0) {
+        LOGI("Almacenamiento eMMC detectado mediante sysfs (/sys/block/mmcblk0).");
+        return true;
+    }
+
+    // 2. Inspección de particiones activas en /proc/partitions
+    int fd = open("/proc/partitions", O_RDONLY);
+    if (fd >= 0) {
+        char buf[2048];
+        ssize_t bytesRead = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (bytesRead > 0) {
+            buf[bytesRead] = '\0';
+            if (std::string_view(buf).find("mmcblk0") != std::string_view::npos) {
+                LOGI("Almacenamiento eMMC detectado en /proc/partitions.");
+                return true;
+            }
+        }
+    }
+
+    LOGI("Almacenamiento de alta velocidad UFS / NVMe detectado (sin mmcblk0).");
+    return false;
+}
+
+void NativeRecorderEngine::applyCpuAffinityForEfficiencyCores(const char* threadName) noexcept {
+    if (threadName) {
+        pthread_setname_np(pthread_self(), threadName);
+    }
+
+    int totalCores = static_cast<int>(sysconf(_SC_NPROCESSORS_CONF));
+    if (totalCores <= 1) {
+        return; // Dispositivo mononúcleo, no hay afinidad aplicable
+    }
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+
+    // Intentar leer las frecuencias máximas de los núcleos en sysfs para distinguir LITTLE vs big
+    int efficiencyCoresFound = 0;
+    int maxFreqGlobal = 0;
+    std::vector<int> coreFreqs(totalCores, 0);
+
+    for (int i = 0; i < totalCores; ++i) {
+        char path[128];
+        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+        int fd = open(path, O_RDONLY);
+        if (fd >= 0) {
+            char buf[32];
+            ssize_t bytes = read(fd, buf, sizeof(buf) - 1);
+            close(fd);
+            if (bytes > 0) {
+                buf[bytes] = '\0';
+                coreFreqs[i] = atoi(buf);
+                if (coreFreqs[i] > maxFreqGlobal) {
+                    maxFreqGlobal = coreFreqs[i];
+                }
+            }
+        }
+    }
+
+    if (maxFreqGlobal > 0) {
+        // Asignar afinidad exclusivamente a los núcleos con menor frecuencia (LITTLE cluster)
+        for (int i = 0; i < totalCores; ++i) {
+            if (coreFreqs[i] > 0 && coreFreqs[i] < maxFreqGlobal) {
+                CPU_SET(i, &cpuset);
+                efficiencyCoresFound++;
+            }
+        }
+    }
+
+    // Estrategia de respaldo determinista para SoCs big.LITTLE (ej: Helio G81 / G85 / G88, Snapdragon):
+    if (efficiencyCoresFound == 0) {
+        int efficiencyLimit = (totalCores >= 8) ? 4 : (totalCores / 2);
+        for (int i = 0; i < efficiencyLimit; ++i) {
+            CPU_SET(i, &cpuset);
+        }
+        efficiencyCoresFound = efficiencyLimit;
+    }
+
+    int result = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
+    if (result == 0) {
+        LOGI("Afinidad de hilos aplicada exitosamente para [%s]: %d nucleos LITTLE asignados de %d totales.",
+             threadName ? threadName : "Hilo", efficiencyCoresFound, totalCores);
+    } else {
+        LOGI("Nota de afinidad: sched_setaffinity no restringido por politicas del kernel (status %d).", result);
+    }
+}
+
+void NativeRecorderEngine::checkAndStartMuxer() {
+    std::lock_guard<std::mutex> lock(m_muxerInitMutex);
+    if (m_isMuxerStarted.load()) return;
+
+    bool canStart = m_videoFormatReady.load() && (!m_hasAudio.load() || m_audioFormatReady.load());
+    if (canStart) {
+        media_status_t status = AMediaMuxer_start(m_muxer);
+        if (status == AMEDIA_OK) {
+            m_isMuxerStarted.store(true);
+            LOGI("AMediaMuxer iniciado exitosamente con pistas: video=%zd, audio=%zd",
+                 m_videoTrackIndex, m_audioTrackIndex);
+
+            // Vaciar cola pre-inicio de video si había muestras esperando al inicio del audio
+            std::lock_guard<std::mutex> writeLock(m_muxerWriteMutex);
+            for (const auto& sample : m_preStartVideoQueue) {
+                if (m_isEmmcActive.load()) {
+                    std::lock_guard<std::mutex> pLock(m_pacingMutex);
+                    m_pacingQueue.push_back(sample);
+                } else {
+                    AMediaMuxer_writeSampleData(m_muxer, sample.trackIndex, sample.data.data(), &sample.info);
+                }
+            }
+            if (m_isEmmcActive.load() && !m_preStartVideoQueue.empty()) {
+                m_pacingCv.notify_one();
+            }
+            m_preStartVideoQueue.clear();
+        } else {
+            LOGE("Fallo al iniciar AMediaMuxer (status=%d)", static_cast<int>(status));
+        }
+    }
+}
+
+bool NativeRecorderEngine::addAudioTrack(const uint8_t* csd0Data, size_t csd0Size, int32_t sampleRate, int32_t channelCount) {
+    std::lock_guard<std::mutex> lock(m_muxerInitMutex);
+    if (m_isMuxerStarted.load() || m_audioTrackIndex >= 0 || !m_muxer) {
+        return false;
+    }
+
+    AMediaFormat* audioFormat = AMediaFormat_new();
+    AMediaFormat_setString(audioFormat, AMEDIAFORMAT_KEY_MIME, "audio/mp4a-latm");
+    AMediaFormat_setInt32(audioFormat, AMEDIAFORMAT_KEY_SAMPLE_RATE, sampleRate > 0 ? sampleRate : 44100);
+    AMediaFormat_setInt32(audioFormat, AMEDIAFORMAT_KEY_CHANNEL_COUNT, channelCount > 0 ? channelCount : 2);
+    AMediaFormat_setInt32(audioFormat, AMEDIAFORMAT_KEY_BIT_RATE, 128000);
+
+    if (csd0Data && csd0Size > 0) {
+        AMediaFormat_setBuffer(audioFormat, "csd-0", const_cast<uint8_t*>(csd0Data), csd0Size);
+    }
+
+    m_audioTrackIndex = AMediaMuxer_addTrack(m_muxer, audioFormat);
+    AMediaFormat_delete(audioFormat);
+
+    if (m_audioTrackIndex >= 0) {
+        m_audioFormatReady.store(true);
+        LOGI("Pista de audio AAC registrada en AMediaMuxer: índice=%zd, %d Hz, %d canales",
+             m_audioTrackIndex, sampleRate, channelCount);
+        checkAndStartMuxer();
+        return true;
+    } else {
+        LOGE("Fallo al añadir pista de audio al AMediaMuxer");
+        return false;
+    }
+}
+
+void NativeRecorderEngine::writeAudioSample(const uint8_t* data, size_t size, int64_t ptsUs, int32_t flags) {
+    if (!data || size == 0 || !m_muxer || m_audioTrackIndex < 0) {
+        return;
+    }
+    if (m_isPaused.load()) return;
+
+    AMediaCodecBufferInfo info;
+    info.offset = 0;
+    info.size = static_cast<int32_t>(size);
+    info.presentationTimeUs = ptsUs;
+    info.flags = flags;
+
+    // Normalizar PTS de audio con el tiempo base de video para estricta sincronización
+    int64_t firstTime = m_firstFrameTimeUs.load();
+    if (firstTime > 0) {
+        if (info.presentationTimeUs >= firstTime) {
+            info.presentationTimeUs -= firstTime;
+        } else {
+            info.presentationTimeUs = 0;
+        }
+    }
+
+    // Monotonicidad estricta para audio en el contenedor MP4
+    int64_t lastPts = m_lastAudioPtsUs.load();
+    if (info.presentationTimeUs <= lastPts) {
+        info.presentationTimeUs = (lastPts >= 0) ? (lastPts + 1000) : 0;
+    }
+    m_lastAudioPtsUs.store(info.presentationTimeUs);
+
+    if (m_isEmmcActive.load()) {
+        PacedSample sample;
+        sample.trackIndex = static_cast<int>(m_audioTrackIndex);
+        sample.data.assign(data, data + size);
+        sample.info = info;
+        {
+            std::lock_guard<std::mutex> pLock(m_pacingMutex);
+            m_pacingQueue.push_back(std::move(sample));
+        }
+        m_pacingCv.notify_one();
+    } else {
+        std::lock_guard<std::mutex> writeLock(m_muxerWriteMutex);
+        if (m_isMuxerStarted.load()) {
+            AMediaMuxer_writeSampleData(m_muxer, m_audioTrackIndex, data, &info);
+        }
+    }
+}
+
 std::expected<jobject, std::string> NativeRecorderEngine::initialize(JNIEnv* env) {
+    // 0. Detección de tecnología de almacenamiento y soporte de audio
+    bool isEmmc = m_config.isEmmcStorage || checkIsEmmcStorage();
+    m_isEmmcActive.store(isEmmc);
+    m_hasAudio.store(m_config.audioSource != "mute");
+    m_videoFormatReady.store(false);
+    m_audioFormatReady.store(false);
+    m_isMuxerStarted.store(false);
+
+    LOGI("Detección de almacenamiento: eMMC=%s | Audio habilitado=%s", 
+         isEmmc ? "SI (Buffer Pacing)" : "NO (Directo)",
+         m_hasAudio.load() ? "SI" : "NO");
+
     // 1. Crear formato de video para el encoder
     m_format = AMediaFormat_new();
     AMediaFormat_setString(m_format, AMEDIAFORMAT_KEY_MIME, m_config.codecMime.c_str());
@@ -50,7 +264,7 @@ std::expected<jobject, std::string> NativeRecorderEngine::initialize(JNIEnv* env
     AMediaFormat_setInt32(m_format, AMEDIAFORMAT_KEY_I_FRAME_INTERVAL, 1); // 1 segundo entre Keyframes
     // Modo de color Surface (COLOR_FormatSurface = 0x7f000789)
     AMediaFormat_setInt32(m_format, AMEDIAFORMAT_KEY_COLOR_FORMAT, 0x7f000789);
-    // Repetición automática de cuadro si la pantalla está estática (evita videos congelados o de 1 solo frame)
+    // Repetición automática de cuadro si la pantalla está estática (evita videos congelados)
     int64_t repeatIntervalUs = (m_config.fps > 0) ? (1'000'000LL / m_config.fps) : 16'666LL;
     AMediaFormat_setInt64(m_format, "repeat-previous-frame-after", repeatIntervalUs);
 
@@ -78,10 +292,19 @@ std::expected<jobject, std::string> NativeRecorderEngine::initialize(JNIEnv* env
         return std::unexpected("Fallo al crear la ANativeWindow Input Surface de hardware.");
     }
 
-    // 4. Crear Muxer MP4 de salida
-    int fd = open(m_config.outputPath.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0644);
+    // 4. Crear Muxer MP4 de salida: Usar targetFd de MediaStore si se proveyó, o abrir archivo
+    int fd = -1;
+    if (m_config.targetFd >= 0) {
+        fd = dup(m_config.targetFd);
+        LOGI("AMediaMuxer enlazado a descriptor directo de MediaStore / Galería: targetFd=%d -> fd=%d",
+             m_config.targetFd, fd);
+    } else {
+        fd = open(m_config.outputPath.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0644);
+        LOGI("AMediaMuxer enlazado a ruta de archivo: %s", m_config.outputPath.c_str());
+    }
+
     if (fd < 0) {
-        return std::unexpected(std::string("No se pudo abrir el archivo de salida: ") + m_config.outputPath);
+        return std::unexpected(std::string("No se pudo abrir el descriptor/archivo de salida: ") + m_config.outputPath);
     }
 
     m_muxer = AMediaMuxer_new(fd, AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
@@ -112,6 +335,15 @@ std::expected<void, std::string> NativeRecorderEngine::start() {
     m_isRecording.store(true);
     m_isPaused.store(false);
     m_stopRequested.store(false);
+
+    // Si eMMC está activo, iniciar el hilo desacoplado de Buffer Pacing
+    if (m_isEmmcActive.load()) {
+        m_pacingStopRequested.store(false);
+        m_pacingThread = std::thread([this]() {
+            this->pacingFlusherLoop();
+        });
+        LOGI("C++23: Hilo de Buffer Pacing Asíncrono para eMMC lanzado.");
+    }
 
     // Iniciar hilo worker con std::thread compatible con NDK libc++
     m_workerThread = std::thread([this]() {
@@ -149,6 +381,15 @@ std::expected<void, std::string> NativeRecorderEngine::stop() {
         m_workerThread.join();
     }
 
+    // 3. Finalizar y vaciar el hilo de Buffer Pacing de eMMC
+    if (m_isEmmcActive.load()) {
+        m_pacingStopRequested.store(true);
+        m_pacingCv.notify_all();
+        if (m_pacingThread.joinable()) {
+            m_pacingThread.join();
+        }
+    }
+
     if (m_codec) {
         AMediaCodec_stop(m_codec);
         AMediaCodec_delete(m_codec);
@@ -179,16 +420,74 @@ EngineStats NativeRecorderEngine::getStats() const noexcept {
         .averageLatencyMs = m_lastLatencyMs.load(),
         .currentFps = static_cast<float>(m_config.fps),
         .isRecording = m_isRecording.load(),
-        .isPaused = m_isPaused.load()
+        .isPaused = m_isPaused.load(),
+        .isEmmcPacingActive = m_isEmmcActive.load()
     };
 }
 
+void NativeRecorderEngine::pacingFlusherLoop() {
+    // Asignar afinidad hacia núcleos de eficiencia LITTLE
+    applyCpuAffinityForEfficiencyCores("VeloRec_Pacing");
+    setpriority(PRIO_PROCESS, 0, 5); // Prioridad de fondo para coalescing de I/O
+
+    std::vector<PacedSample> localBatch;
+    localBatch.reserve(16);
+
+    while (true) {
+        {
+            std::unique_lock<std::mutex> lock(m_pacingMutex);
+            m_pacingCv.wait_for(lock, std::chrono::milliseconds(10), [this]() {
+                return !m_pacingQueue.empty() || m_pacingStopRequested.load();
+            });
+
+            if (m_pacingQueue.empty() && m_pacingStopRequested.load()) {
+                break;
+            }
+
+            // Drenar lote de hasta 16 muestras amortiguadas
+            size_t batchCount = std::min(m_pacingQueue.size(), static_cast<size_t>(16));
+            if (batchCount > 0) {
+                localBatch.assign(
+                    std::make_move_iterator(m_pacingQueue.begin()),
+                    std::make_move_iterator(m_pacingQueue.begin() + batchCount)
+                );
+                m_pacingQueue.erase(m_pacingQueue.begin(), m_pacingQueue.begin() + batchCount);
+            }
+        }
+
+        // Escritura asíncrona por lotes (coalescing) al muxer
+        for (auto& sample : localBatch) {
+            if (m_muxer && m_isMuxerStarted.load()) {
+                std::lock_guard<std::mutex> lock(m_muxerWriteMutex);
+                AMediaMuxer_writeSampleData(m_muxer, sample.trackIndex, sample.data.data(), &sample.info);
+            }
+        }
+        localBatch.clear();
+    }
+
+    // Drenar remanentes al finalizar
+    {
+        std::lock_guard<std::mutex> lock(m_pacingMutex);
+        for (auto& sample : m_pacingQueue) {
+            if (m_muxer && m_isMuxerStarted.load()) {
+                std::lock_guard<std::mutex> wLock(m_muxerWriteMutex);
+                AMediaMuxer_writeSampleData(m_muxer, sample.trackIndex, sample.data.data(), &sample.info);
+            }
+        }
+        m_pacingQueue.clear();
+    }
+
+    LOGI("C++23: Hilo de Buffer Pacing finalizado con éxito.");
+}
+
 void NativeRecorderEngine::encodingWorkerLoop() {
-    // Configurar prioridad de tiempo real para el hilo de codificación NDK en Linux/Android:
-    // 1. Nice value -16 (ultra-alta prioridad para impedir que el planificador pause el hilo ante GC o LMK)
+    // 1. Aplicar afinidad de hilos a núcleos LITTLE para dejar libres los núcleos grandes para el juego
+    applyCpuAffinityForEfficiencyCores("VeloRec_CppEncoder");
+
+    // 2. Configurar prioridad de tiempo real para el hilo de codificación NDK en Linux/Android:
     setpriority(PRIO_PROCESS, 0, -16);
 
-    // 2. Intentar asignar política de tiempo real Round-Robin (SCHED_RR) si las capacidades del sistema lo permiten
+    // 3. Intentar asignar política de tiempo real Round-Robin (SCHED_RR) si las capacidades del sistema lo permiten
     struct sched_param schedParam{};
     schedParam.sched_priority = sched_get_priority_max(SCHED_RR);
     pthread_setschedparam(pthread_self(), SCHED_RR, &schedParam);
@@ -213,9 +512,9 @@ void NativeRecorderEngine::encodingWorkerLoop() {
             size_t bufferSize = 0;
             uint8_t* buffer = AMediaCodec_getOutputBuffer(m_codec, outIndex, &bufferSize);
 
-            if (buffer && info.size > 0 && m_isMuxerStarted.load()) {
+            if (buffer && info.size > 0) {
                 // Descartar buffers de configuración (SPS/PPS) en writeSampleData
-                // AMediaMuxer ya los tiene en el MediaFormat de addTrack; escribirlos aquí corrompe las muestras
+                // AMediaMuxer ya los tiene en el MediaFormat de addTrack
                 if ((info.flags & 2) != 0) { // 2 = AMEDIACODEC_BUFFER_FLAG_CODEC_CONFIG
                     LOGI("C++23: Buffer CODEC_CONFIG omitido en muxer");
                 } else {
@@ -237,8 +536,35 @@ void NativeRecorderEngine::encodingWorkerLoop() {
                     }
                     m_lastPresentationTimeUs.store(info.presentationTimeUs);
 
-                    // Escribir datos al archivo contenedor
-                    AMediaMuxer_writeSampleData(m_muxer, m_videoTrackIndex, buffer, &info);
+                    // Si el muxer aún no ha arrancado (esperando pista de audio)
+                    if (!m_isMuxerStarted.load()) {
+                        PacedSample preSample;
+                        preSample.trackIndex = static_cast<int>(m_videoTrackIndex);
+                        preSample.data.assign(buffer, buffer + info.size);
+                        preSample.info = info;
+                        {
+                            std::lock_guard<std::mutex> lock(m_muxerInitMutex);
+                            m_preStartVideoQueue.push_back(std::move(preSample));
+                            if (m_preStartVideoQueue.size() >= 30) {
+                                LOGI("Audio track no recibido tras 30 cuadros; forzando arranque de muxer solo-video.");
+                                m_hasAudio.store(false);
+                            }
+                        }
+                        checkAndStartMuxer();
+                    } else if (m_isEmmcActive.load()) {
+                        PacedSample sample;
+                        sample.trackIndex = static_cast<int>(m_videoTrackIndex);
+                        sample.data.assign(buffer, buffer + info.size);
+                        sample.info = info;
+                        {
+                            std::lock_guard<std::mutex> lock(m_pacingMutex);
+                            m_pacingQueue.push_back(std::move(sample));
+                        }
+                        m_pacingCv.notify_one();
+                    } else {
+                        std::lock_guard<std::mutex> lock(m_muxerWriteMutex);
+                        AMediaMuxer_writeSampleData(m_muxer, m_videoTrackIndex, buffer, &info);
+                    }
                     m_frameCount.fetch_add(1, std::memory_order_relaxed);
                 }
             }
@@ -258,10 +584,10 @@ void NativeRecorderEngine::encodingWorkerLoop() {
             // El formato de salida ha sido determinado por el encoder de hardware
             AMediaFormat* newFormat = AMediaCodec_getOutputFormat(m_codec);
             m_videoTrackIndex = AMediaMuxer_addTrack(m_muxer, newFormat);
-            AMediaMuxer_start(m_muxer);
-            m_isMuxerStarted.store(true);
+            m_videoFormatReady.store(true);
             AMediaFormat_delete(newFormat);
-            LOGI("Muxer iniciado con nuevo formato. Pista: %zd", m_videoTrackIndex);
+            LOGI("Pista de video registrada en C++23: índice=%zd", m_videoTrackIndex);
+            checkAndStartMuxer();
         } else if (outIndex == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
             if (m_stopRequested.load()) {
                 drainRetries++;
@@ -294,7 +620,8 @@ Java_com_velorec_recorder_ScreenRecordService_nativeInitCppRecorder(
     jint fps,
     jint bitrate,
     jstring jCodec,
-    jstring jAudio
+    jstring jAudio,
+    jint targetFd
 ) {
     const char* pathStr = env->GetStringUTFChars(jPath, nullptr);
     const char* codecStr = env->GetStringUTFChars(jCodec, nullptr);
@@ -314,7 +641,8 @@ Java_com_velorec_recorder_ScreenRecordService_nativeInitCppRecorder(
         .fps = fps,
         .bitrateBps = bitrate,
         .codecMime = codecMime,
-        .audioSource = audioStr
+        .audioSource = audioStr,
+        .targetFd = targetFd
     };
 
     env->ReleaseStringUTFChars(jPath, pathStr);
@@ -331,6 +659,49 @@ Java_com_velorec_recorder_ScreenRecordService_nativeInitCppRecorder(
     }
 
     return initResult.value();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_velorec_recorder_ScreenRecordService_nativeAddAudioTrack(
+    JNIEnv* env,
+    jobject /* thiz */,
+    jobject jCsdBuffer,
+    jint csdSize,
+    jint sampleRate,
+    jint channelCount
+) {
+    if (!g_cppEngine) return JNI_FALSE;
+    const uint8_t* csdData = nullptr;
+    if (jCsdBuffer && csdSize > 0) {
+        csdData = static_cast<const uint8_t*>(env->GetDirectBufferAddress(jCsdBuffer));
+    }
+    bool success = g_cppEngine->addAudioTrack(csdData, static_cast<size_t>(csdSize), sampleRate, channelCount);
+    return success ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_com_velorec_recorder_ScreenRecordService_nativeWriteAudioSample(
+    JNIEnv* env,
+    jobject /* thiz */,
+    jobject jBuffer,
+    jint offset,
+    jint size,
+    jlong ptsUs,
+    jint flags
+) {
+    if (!g_cppEngine || !jBuffer || size <= 0) return;
+    uint8_t* basePtr = static_cast<uint8_t*>(env->GetDirectBufferAddress(jBuffer));
+    if (basePtr) {
+        g_cppEngine->writeAudioSample(basePtr + offset, static_cast<size_t>(size), ptsUs, flags);
+    }
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_velorec_recorder_ScreenRecordService_nativeIsAudioTrackAdded(
+    JNIEnv* /* env */,
+    jobject /* thiz */
+) {
+    return (g_cppEngine && g_cppEngine->isAudioTrackAdded()) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL

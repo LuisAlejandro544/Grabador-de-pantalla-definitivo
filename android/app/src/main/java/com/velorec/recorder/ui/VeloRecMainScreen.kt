@@ -423,6 +423,7 @@ fun VeloRecMainScreen(
                         bannerText = if (remoteConfig.theme.bannerActive) remoteConfig.theme.bannerText else null,
                         availableResolutions = adaptivePresets,
                         selectedCountdownSec = selectedCountdownSec,
+                        selectedAudio = selectedAudio,
                         onResolutionChange = {
                             selectedResolution = it
                             UserPreferencesRepository.saveResolution(context, it)
@@ -430,6 +431,10 @@ fun VeloRecMainScreen(
                         onBitrateChange = {
                             selectedBitrateMbps = it
                             UserPreferencesRepository.saveBitrate(context, it)
+                        },
+                        onAudioChange = {
+                            selectedAudio = it
+                            UserPreferencesRepository.saveAudioSource(context, it)
                         },
                         onCountdownChange = {
                             selectedCountdownSec = it
@@ -507,6 +512,8 @@ fun VeloRecMainScreen(
                         selectedBitrateMbps = selectedBitrateMbps,
                         selectedFps = selectedFps,
                         selectedCountdownSec = selectedCountdownSec,
+                        selectedAudio = selectedAudio,
+                        selectedCodec = selectedCodec,
                         isRecording = isRecording,
                         accentColor = dynamicAccentColor,
                         primaryColor = dynamicPrimaryColor,

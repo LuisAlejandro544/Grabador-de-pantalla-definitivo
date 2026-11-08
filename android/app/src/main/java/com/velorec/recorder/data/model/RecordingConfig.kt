@@ -22,6 +22,21 @@ import android.os.Build
 import android.util.DisplayMetrics
 import android.view.WindowManager
 
+data class AudioSourcePreset(
+    val id: String,
+    val name: String,
+    val label: String,
+    val description: String,
+    val iconEmoji: String = "🔊"
+)
+
+val AUDIO_SOURCE_PRESETS = listOf(
+    AudioSourcePreset("internal", "Audio Interno (Juegos/Apps)", "Interno", "Captura directa del sonido del juego o app sin ruidos del ambiente", "🔊"),
+    AudioSourcePreset("both", "Mezcla Estéreo (Mic + Interno)", "Mezcla", "Graba tu voz y el sonido del juego simultáneamente", "🎧"),
+    AudioSourcePreset("mic", "Solo Micrófono", "Micrófono", "Captura únicamente tu voz mediante el micrófono del teléfono", "🎙️"),
+    AudioSourcePreset("mute", "Silencio (Mute)", "Silencio", "Genera el video sin pista de audio para máximo ahorro de espacio", "🔇")
+)
+
 data class NativeRecordingConfig(
     val engine: String = "cpp23",
     val width: Int = 1080,
@@ -29,7 +44,7 @@ data class NativeRecordingConfig(
     val fps: Int = 60,
     val bitrateBps: Int = 12_000_000,
     val codec: String = "H264",
-    val audioSource: String = "both",
+    val audioSource: String = "internal",
     val countdownSec: Int = 3
 )
 

@@ -103,7 +103,7 @@ object UserPreferencesRepository {
     }
 
     fun loadAudioSource(context: Context): String {
-        return getPrefs(context).getString(KEY_AUDIO_SOURCE, "both") ?: "both"
+        return getPrefs(context).getString(KEY_AUDIO_SOURCE, "internal") ?: "internal"
     }
 
     // =========================================================================

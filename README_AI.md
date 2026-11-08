@@ -41,11 +41,11 @@
   - `VeloRecComposeUI.kt`: Fachada modular que mantiene retrocompatibilidad total.
 - **`android/app/src/main/shaders/`**: Aceleración gráfica en GPU con shaders GLSL ES 3.20 (`glsl/`) y bytecode SPIR-V (`spirv/SpirvShaderBytecode.hpp`) para FaceCam circular antialiased, Chroma Key y Gaming Color Boost.
 - **`android/app/src/main/cpp/GpuShaderPipeline.hpp` & `.cpp`**: Tubería gráfica C++23 con `std::expected` enlazada a `GLESv3` y `EGL` para efectos de sombreado directo en GPU.
-- **`android/app/src/main/cpp/NativeRecorderEngine.hpp` & `.cpp`**: Motor C++23 con `AMediaCodec_createInputSurface` para codificación directa por hardware con cero copias y normalización PTS base 0.
+- **`android/app/src/main/cpp/NativeRecorderEngine.hpp` & `.cpp`**: Motor C++23 con `AMediaCodec_createInputSurface` para codificación directa por hardware con cero copias, normalización PTS base 0, **Buffer Pacing Asíncrono auto-detectado para eMMC (`/sys/block/mmcblk0`)** y **Afinidad de Hilos (Thread Affinity)** a núcleos de eficiencia (LITTLE, Cortex-A55) para liberar el 100% de los núcleos Big (Cortex-A75) para el videojuego.
 - **`android/app/src/main/cpp/libyuv_bridge.hpp` & `.cpp`**: Puente de integración con Google libyuv (Licencia BSD) acelerado con vectorización ARM NEON para transformaciones de color YUV420 y escalado bilineal.
 - **`android/app/src/main/cpp/CMakeLists.txt`**: Configuración CMake con `-std=c++23` y enlace a `mediandk`, `android`, `log`, `libyuv`, `oboe`, `GLESv3` y `EGL`.
 - **`go/go.mod` & `go/streamer.go`**: Motor de streaming en red y baja latencia en Go (v1.22+) con *goroutines*, colas de paquetes NAL y *Ring Buffer* de 4 MB para protocolos RTMP/SRT.
-- **`rust/Cargo.toml` & `rust/src/lib.rs`**: Motor Rust Edition 2024 con canales `crossbeam-channel`, sincronización PTS base 0 y enlaces JNI.
+- **`rust/Cargo.toml` & `rust/src/lib.rs`**: Motor Rust Edition 2024 con canales `crossbeam-channel`, sincronización PTS base 0, enlaces JNI y afinidad a núcleos LITTLE (`apply_efficiency_core_affinity`).
 - **`android/app/build.gradle.kts`**: Script Gradle que compila CMake (C++23), Cargo NDK (Rust), Go Streamer Check y Jetpack Compose con firma de depuración automática.
 - **`src/utils/recorderCore.ts`**: Lógica desacoplada de cálculo de bitrate, validación de paridad de resolución, validación de cuenta regresiva, paquetes Android y especificaciones de shaders/Go.
 - **`src/utils/recorderCore.test.ts`**: Suite de tests unitarios ejecutables con `npx --yes tsx --test`.

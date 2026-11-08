@@ -36,9 +36,12 @@ typealias RemoteThemeConfig = com.velorec.recorder.data.model.RemoteThemeConfig
 typealias RemoteAnnouncementConfig = com.velorec.recorder.data.model.RemoteAnnouncementConfig
 typealias NativeTab = com.velorec.recorder.data.model.NativeTab
 
+typealias AudioSourcePreset = com.velorec.recorder.data.model.AudioSourcePreset
+
 val RESOLUTION_PRESETS = com.velorec.recorder.data.model.RESOLUTION_PRESETS
 val BITRATE_PRESETS = com.velorec.recorder.data.model.BITRATE_PRESETS
 val FPS_PRESETS = com.velorec.recorder.data.model.FPS_PRESETS
+val AUDIO_SOURCE_PRESETS = com.velorec.recorder.data.model.AUDIO_SOURCE_PRESETS
 
 val DarkBackground = com.velorec.recorder.ui.theme.DarkBackground
 val DarkSurface = com.velorec.recorder.ui.theme.DarkSurface

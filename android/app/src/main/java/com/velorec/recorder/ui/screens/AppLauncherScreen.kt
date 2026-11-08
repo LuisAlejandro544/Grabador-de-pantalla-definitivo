@@ -108,6 +108,8 @@ fun NativeAppLauncherSection(
     selectedBitrateMbps: Int,
     selectedFps: Int,
     selectedCountdownSec: Int,
+    selectedAudio: String = "internal",
+    selectedCodec: String = "H264",
     isRecording: Boolean,
     accentColor: Color,
     primaryColor: Color,
@@ -147,13 +149,15 @@ fun NativeAppLauncherSection(
         }
     }
 
-    val currentConfig = remember(selectedEngine, selectedResolution, selectedBitrateMbps, selectedFps, selectedCountdownSec) {
+    val currentConfig = remember(selectedEngine, selectedResolution, selectedBitrateMbps, selectedFps, selectedCountdownSec, selectedCodec, selectedAudio) {
         NativeRecordingConfig(
             engine = selectedEngine,
             width = selectedResolution.width,
             height = selectedResolution.height,
             fps = selectedFps,
             bitrateBps = selectedBitrateMbps * 1_000_000,
+            codec = selectedCodec,
+            audioSource = selectedAudio,
             countdownSec = selectedCountdownSec
         )
     }
@@ -263,8 +267,14 @@ fun NativeAppLauncherSection(
                     )
                 }
 
+                val audioBadge = when (selectedAudio) {
+                    "internal" -> "Interno"
+                    "mic" -> "Mic"
+                    "mute" -> "Mute"
+                    else -> "Mezcla"
+                }
                 Text(
-                    text = "${selectedResolution.label} • ${selectedFps}fps • ${selectedBitrateMbps}M • ${if (selectedEngine == "rust2024") "Rust" else "C++23"}",
+                    text = "${selectedResolution.label} • ${selectedFps}fps • ${selectedBitrateMbps}M • $audioBadge • ${if (selectedEngine == "rust2024") "Rust" else "C++23"}",
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,

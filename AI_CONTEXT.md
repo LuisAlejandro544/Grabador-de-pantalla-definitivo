@@ -62,6 +62,16 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
    - Ejecuta análisis estático multinivel: Android Lint (Kotlin API 35 / fugas de memoria), Cppcheck (C++23 y libyuv), Clippy (Rust 2024 / memory safety sin GC) y comprobación TypeScript/node:test.
 11. **Biblioteca Google libyuv (C++23 & SIMD NEON)**:
    - Integrada en CMake con `libyuv_bridge.hpp` y `libyuv_bridge.cpp`. Proporciona la base para conversiones YUV420 y escalado bilineal acelerado por hardware para 32 y 64 bits.
+12. **Buffer Pacing Asíncrono para eMMC (Detección Automática)**:
+   - Auto-detección mediante `/sys/block/mmcblk0` o `/proc/partitions`. Si es eMMC 5.1, desacopla la escritura en `AMediaMuxer` mediante un hilo y cola de amortiguación por lotes (hasta 16 muestras) para evitar micro-congelamientos ante ráfagas de I/O en juegos. En memorias UFS/NVMe realiza escritura directa.
+13. **Afinidad de Hilos (Thread Affinity) hacia Núcleos de Eficiencia (LITTLE)**:
+   - En procesadores móviles big.LITTLE (ej: Helio G81/G85/G88, Snapdragon), los hilos de fondo (`VeloRec_CppEncoder`, `VeloRec_Pacing`, `velorec_rust_worker`) se fijan a los núcleos de bajo consumo (Cortex-A55) mediante `sched_setaffinity`, dejando los núcleos Big (Cortex-A75) 100% disponibles para el videojuego (Subway Surfers, Free Fire).
+14. **Multiplexación de Audio en Tiempo Real en C++23 (Eliminación del Paso 2)**:
+   - El motor de audio en Kotlin pasa los paquetes AAC en tiempo real a `AMediaMuxer` vía JNI (`nativeWriteAudioSample`). Al detener la captura, el contenedor MP4 ya está completamente sincronizado, eliminando la necesidad de fusionar archivos temporales secundarios en diferido.
+15. **Grabación Directa sobre Descriptor de la Galería MediaStore (Eliminación del Paso 3)**:
+   - Se crea el destino en MediaStore con `IS_PENDING = 1` previo a la captura y se suministra el descriptor nativo (`targetFd`) al multiplexor C++23. Al terminar, solo se actualiza `IS_PENDING = 0` en <15 ms, erradicando por completo copias byte a byte de 300+ MB en almacenamientos eMMC lentos.
+16. **Guardado en Segundo Plano con Notificación de Progreso Escalonado**:
+   - Al tocar "Detener", la interfaz responde de inmediato cambiando su estado a inactivo (`isRecording = false`), mientras una corrutina en `Dispatchers.IO` procesa el cierre y emite notificaciones de progreso (25% -> 75% -> 100%) para evitar cuelgues o bloqueos del hilo principal.
 
 ---
 

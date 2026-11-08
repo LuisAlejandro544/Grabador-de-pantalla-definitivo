@@ -67,8 +67,9 @@
 │           │   └── spirv/                       # Shaders en bytecode compilado SPIR-V (SpirvShaderBytecode.hpp) para Vulkan
 │           └── cpp/
 │               ├── CMakeLists.txt          # Configuración CMake para C++23 (-std=c++23, -O3), libyuv, Oboe y GLESv3/EGL
-│               ├── NativeRecorderEngine.hpp # Cabecera C++23 con std::expected, span y jthread
-│               ├── NativeRecorderEngine.cpp # AMediaCodec, AMediaMuxer, ANativeWindow y JNI
+│               ├── CMakeLists.txt          # Configuración CMake para C++23 (-std=c++23, -O3), libyuv, Oboe y GLESv3/EGL
+│               ├── NativeRecorderEngine.hpp # Cabecera C++23 con std::expected, span, eMMC Pacing y afinidad de hilos
+│               ├── NativeRecorderEngine.cpp # AMediaCodec, AMediaMuxer, ANativeWindow, Buffer Pacing asíncrono para eMMC y afinidad LITTLE
 │               ├── GpuShaderPipeline.hpp   # Tubería C++23 para sombreadores GPU (GLSL ES 3.20 y SPIR-V)
 │               ├── GpuShaderPipeline.cpp   # Implementación de compilación, enlace y uniforms de FaceCam/Gaming
 │               ├── libyuv_bridge.hpp       # Interfaz C++23 para aceleración SIMD ARM NEON de Google libyuv (32 y 64 bits)
