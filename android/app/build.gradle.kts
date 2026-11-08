@@ -124,7 +124,9 @@ android {
         checkReleaseBuilds = false
         disable.addAll(listOf(
             "GradleDependency",
-            "OldTargetApi"
+            "OldTargetApi",
+            "QueryAllPackagesPermission",
+            "ObsoleteSdkInt"
         ))
     }
 }

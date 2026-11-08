@@ -11,17 +11,20 @@
 
 precision mediump float;
 
-in vec2 vTexCoord;
-out vec4 fragColor;
+layout(location = 0) in vec2 vTexCoord;
+layout(location = 0) out vec4 fragColor;
 
-// Uniforms configurables por la tubería C++23 o Vulkan
-uniform sampler2D uCameraTexture;
-uniform vec4 uBorderColor;       // Color del borde exterior (ej. Cyan, Indigo, Ámbar)
-uniform float uBorderWidth;      // Grosor del borde normalizado (0.0 a 0.1)
-uniform bool uChromaKeyEnabled;  // Activar eliminación de pantalla verde
-uniform vec3 uKeyColor;          // Color clave a suprimir (típicamente RGB 0.0, 1.0, 0.0)
-uniform float uSimilarity;       // Tolerancia de similitud de color (ej. 0.35)
-uniform float uSmoothness;       // Suavizado del borde del chroma (ej. 0.1)
+// Uniforms configurables por la tubería C++23 o Vulkan (en UBO para compatibilidad SPIR-V)
+layout(binding = 0) uniform sampler2D uCameraTexture;
+
+layout(binding = 1) uniform FaceCamUBO {
+    vec4 uBorderColor;       // Color del borde exterior
+    vec4 uKeyColor;          // Color clave a suprimir (RGB en xyz)
+    float uBorderWidth;      // Grosor del borde normalizado (0.0 a 0.1)
+    float uSimilarity;       // Tolerancia de similitud de color
+    float uSmoothness;       // Suavizado del borde del chroma
+    int uChromaKeyEnabled;   // Activar eliminación de pantalla verde (1 = sí, 0 = no)
+};
 
 void main() {
     // Centrar coordenadas en el rango [-0.5, 0.5]
@@ -41,8 +44,8 @@ void main() {
     vec4 texColor = texture(uCameraTexture, vTexCoord);
 
     // 1. Procesamiento de Chroma Key (eliminación de pantalla verde en GPU)
-    if (uChromaKeyEnabled) {
-        float diff = distance(texColor.rgb, uKeyColor);
+    if (uChromaKeyEnabled != 0) {
+        float diff = distance(texColor.rgb, uKeyColor.rgb);
         float alpha = smoothstep(uSimilarity, uSimilarity + uSmoothness, diff);
         texColor.a *= alpha;
         if (texColor.a < 0.05) {

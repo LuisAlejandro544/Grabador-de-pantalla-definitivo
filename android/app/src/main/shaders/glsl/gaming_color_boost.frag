@@ -11,13 +11,16 @@
 
 precision mediump float;
 
-in vec2 vTexCoord;
-out vec4 fragColor;
+layout(location = 0) in vec2 vTexCoord;
+layout(location = 0) out vec4 fragColor;
 
-uniform sampler2D uScreenTexture;
-uniform float uSaturation; // 1.0 = original, 1.25 = mejora gaming recomendada, 1.5 = ultra vivo
-uniform float uContrast;   // 1.0 = original, 1.15 = contraste dinámico
-uniform float uBrightness; // 0.0 = neutro, 0.05 = realce de sombras
+layout(binding = 0) uniform sampler2D uScreenTexture;
+
+layout(binding = 1) uniform ColorBoostUBO {
+    float uSaturation; // 1.0 = original, 1.25 = mejora gaming recomendada, 1.5 = ultra vivo
+    float uContrast;   // 1.0 = original, 1.15 = contraste dinámico
+    float uBrightness; // 0.0 = neutro, 0.05 = realce de sombras
+};
 
 // Coeficientes estándar de luminancia ITU-R BT.709
 const vec3 LUMA_COEFFS = vec3(0.2126, 0.7152, 0.0722);

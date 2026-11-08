@@ -9,7 +9,7 @@
  */
 
 #include "GpuShaderPipeline.hpp"
-#include "../shaders/spirv/SpirvShaderBytecode.hpp"
+#include "shaders/SpirvShaderBytecode.hpp"
 #include <android/log.h>
 #include <utility>
 #include <vector>

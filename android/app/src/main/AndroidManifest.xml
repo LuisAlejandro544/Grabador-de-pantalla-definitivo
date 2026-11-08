@@ -6,7 +6,8 @@
     - Permiso RECORD_AUDIO para captura de micrófono o audio interno.
     - Declaración del servicio en primer plano ScreenRecordService.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permisos de captura de pantalla y servicios en primer plano -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -24,7 +25,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <!-- Permiso y consultas para listar juegos y apps instaladas en el Lanzador Rápido con Grabación Automática -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <queries>
         <intent>

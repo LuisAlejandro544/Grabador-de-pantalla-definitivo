@@ -586,11 +586,7 @@ private fun queryInstalledApplications(context: Context): List<InstalledAppItem>
 
         val isGame = try {
             val appInfo = pm.getApplicationInfo(pkg, 0)
-            val isCategoryGame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                appInfo.category == ApplicationInfo.CATEGORY_GAME
-            } else {
-                false
-            }
+            val isCategoryGame = (appInfo.category == ApplicationInfo.CATEGORY_GAME)
             isCategoryGame || (appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0 ||
                     pkg.contains("game", ignoreCase = true) ||
                     appName.contains("game", ignoreCase = true)
