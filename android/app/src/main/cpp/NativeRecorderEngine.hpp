@@ -89,6 +89,7 @@ private:
 
     std::thread m_workerThread;
     std::atomic<int64_t> m_firstFrameTimeUs{-1};
+    std::atomic<int64_t> m_lastPresentationTimeUs{-1};
     std::atomic<uint64_t> m_frameCount{0};
     std::atomic<uint64_t> m_droppedCount{0};
     std::atomic<double> m_lastLatencyMs{0.0};

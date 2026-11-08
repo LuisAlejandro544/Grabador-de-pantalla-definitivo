@@ -96,6 +96,9 @@ fun VeloRecMainScreen(
     isRecording: Boolean = false,
     isPaused: Boolean = false,
     durationSec: Int = 0,
+    isCountingDown: Boolean = false,
+    countdownRemaining: Int = 3,
+    onCancelCountdown: () -> Unit = {},
     onStartRecording: (config: NativeRecordingConfig) -> Unit = {},
     onTogglePause: () -> Unit = {},
     onStopRecording: () -> Unit = {}
@@ -113,31 +116,6 @@ fun VeloRecMainScreen(
     var selectedCodec by remember { mutableStateOf("H264") } // "H264", "HEVC", "AV1"
     var selectedAudio by remember { mutableStateOf("both") } // "both", "mic", "internal", "mute"
     var selectedCountdownSec by remember { mutableIntStateOf(3) } // 0, 3, 5, 10
-    var isCountingDown by remember { mutableStateOf(false) }
-    var countdownRemaining by remember { mutableIntStateOf(3) }
-
-    // Corrutina de cuenta regresiva previa a la captura
-    LaunchedEffect(isCountingDown) {
-        if (isCountingDown) {
-            countdownRemaining = selectedCountdownSec
-            while (countdownRemaining > 0) {
-                delay(1000L)
-                countdownRemaining -= 1
-            }
-            isCountingDown = false
-            val config = NativeRecordingConfig(
-                engine = selectedEngine,
-                width = selectedResolution.width,
-                height = selectedResolution.height,
-                fps = selectedFps,
-                bitrateBps = selectedBitrateMbps * 1_000_000,
-                codec = selectedCodec,
-                audioSource = selectedAudio,
-                countdownSec = selectedCountdownSec
-            )
-            onStartRecording(config)
-        }
-    }
 
     // Estado de configuración remota dinámica (Server-Driven UI)
     var remoteConfig by remember { mutableStateOf(RemoteUiConfig()) }
@@ -164,9 +142,9 @@ fun VeloRecMainScreen(
         )
     }
 
-    // Modal de Cuenta Regresiva
+    // Modal de Cuenta Regresiva (se visualiza tras conceder el permiso de Android)
     if (isCountingDown) {
-        Dialog(onDismissRequest = { isCountingDown = false }) {
+        Dialog(onDismissRequest = onCancelCountdown) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = DarkSurface,
@@ -216,7 +194,7 @@ fun VeloRecMainScreen(
                     Spacer(modifier = Modifier.height(20.dp))
 
                     androidx.compose.material3.Button(
-                        onClick = { isCountingDown = false },
+                        onClick = onCancelCountdown,
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                             containerColor = DarkCard
                         ),
@@ -421,21 +399,17 @@ fun VeloRecMainScreen(
                         onCountdownChange = { selectedCountdownSec = it },
                         onToggleRecord = {
                             if (!isRecording) {
-                                if (selectedCountdownSec > 0) {
-                                    isCountingDown = true
-                                } else {
-                                    val config = NativeRecordingConfig(
-                                        engine = selectedEngine,
-                                        width = selectedResolution.width,
-                                        height = selectedResolution.height,
-                                        fps = selectedFps,
-                                        bitrateBps = selectedBitrateMbps * 1_000_000,
-                                        codec = selectedCodec,
-                                        audioSource = selectedAudio,
-                                        countdownSec = 0
-                                    )
-                                    onStartRecording(config)
-                                }
+                                val config = NativeRecordingConfig(
+                                    engine = selectedEngine,
+                                    width = selectedResolution.width,
+                                    height = selectedResolution.height,
+                                    fps = selectedFps,
+                                    bitrateBps = selectedBitrateMbps * 1_000_000,
+                                    codec = selectedCodec,
+                                    audioSource = selectedAudio,
+                                    countdownSec = selectedCountdownSec
+                                )
+                                onStartRecording(config)
                             } else {
                                 onStopRecording()
                             }

@@ -354,24 +354,37 @@ class ScreenRecordService : Service() {
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // 1. Detener codificación en el motor nativo en Dispatchers.IO
+                // 1. Liberar VirtualDisplay y MediaProjection PRIMERO
+                // Esto detiene inmediatamente la inyección de cuadros de la pantalla
+                // (evitando que el cierre de la barra de notificaciones cuelgue o ensucie el final del video)
+                try {
+                    virtualDisplay?.release()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                virtualDisplay = null
+
+                try {
+                    mediaProjection?.stop()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                mediaProjection = null
+
+                // 2. Detener codificación en el motor nativo en Dispatchers.IO
+                // Al haberse detenido el VirtualDisplay, la señal de EOS drenará ordenadamente
+                // los últimos cuadros pendientes hacia el archivo MP4 y cerrará AMediaMuxer limpiamente
                 if (activeEngine == "rust2024") {
                     nativeStopRustEncoding()
                 } else {
                     nativeStopCppEncoding()
                 }
 
-                // 2. Detener motor de audio y generar archivo M4A/AAC
+                // 3. Detener motor de audio y generar archivo M4A/AAC
                 audioEngine?.stop()
                 audioEngine = null
 
-                // 3. Liberar VirtualDisplay y MediaProjection
-                virtualDisplay?.release()
-                virtualDisplay = null
-                mediaProjection?.stop()
-                mediaProjection = null
-
-                // 4. Fusionar video y audio con FFmpeg (+faststart) sin pérdida de calidad
+                // 4. Fusionar video y audio con FFmpeg puro (+faststart) sin pérdida de calidad
                 val tempVideo = tempVideoFilePath
                 val tempAudio = tempAudioFilePath
                 val finalOutput = lastOutputFilePath
@@ -382,8 +395,18 @@ class ScreenRecordService : Service() {
                         audioPath = tempAudio,
                         outputPath = finalOutput
                     )
-                    if (!mergedWithFFmpeg && tempAudio != null) {
-                        AudioMuxerHelper.mergeAudioVideo(tempVideo, tempAudio, finalOutput)
+                    if (!mergedWithFFmpeg) {
+                        if (tempAudio != null && File(tempAudio).exists() && File(tempAudio).length() > 100L) {
+                            AudioMuxerHelper.mergeAudioVideo(tempVideo, tempAudio, finalOutput)
+                        } else {
+                            // Fallback directo preservando video
+                            val src = File(tempVideo)
+                            val dst = File(finalOutput)
+                            if (src.exists() && src.length() > 0L) {
+                                src.copyTo(dst, overwrite = true)
+                                src.delete()
+                            }
+                        }
                     }
                 }
 

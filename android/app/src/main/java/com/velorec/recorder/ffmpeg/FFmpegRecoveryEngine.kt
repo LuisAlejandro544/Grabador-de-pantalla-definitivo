@@ -58,32 +58,34 @@ object FFmpegRecoveryEngine {
         return try {
             val args = mutableListOf<String>()
             args.add("-y")
-            args.add("-fflags")
-            args.add("+genpts")
             args.add("-i")
             args.add(videoPath)
 
             if (hasValidAudio && audioPath != null) {
                 args.add("-i")
                 args.add(audioPath)
+                // Video: stream copy sin recodificación para máxima velocidad y cero pérdida de fotogramas
                 args.add("-c:v")
                 args.add("copy")
+                // Audio: codificar limpiamente a AAC 192k en FFmpeg para empaquetado de contenedores MP4 sin desajustes
                 args.add("-c:a")
                 args.add("aac")
                 args.add("-b:a")
                 args.add("192k")
-                args.add("-avoid_negative_ts")
-                args.add("make_zero")
+                // Sincronización milimétrica: apad rellena con silencio si el audio es ligeramente más corto,
+                // y -shortest corta al terminar el video para evitar que la grabación quede en negro al final
+                args.add("-af")
+                args.add("apad")
+                args.add("-shortest")
                 args.add("-map")
                 args.add("0:v:0")
                 args.add("-map")
                 args.add("1:a:0?")
-                args.add("-shortest")
             } else {
                 args.add("-c:v")
                 args.add("copy")
-                args.add("-avoid_negative_ts")
-                args.add("make_zero")
+                args.add("-map")
+                args.add("0:v:0")
             }
 
             if (!isContainerMkv) {
@@ -105,7 +107,7 @@ object FFmpegRecoveryEngine {
                 }
                 true
             } else {
-                Log.w(TAG, "FFmpeg finalizó con código ($returnCode). Ejecutando fallback a AudioMuxerHelper.")
+                Log.w(TAG, "FFmpeg finalizó con código ($returnCode). Logs: ${session.allLogsAsString}. Ejecutando fallback a AudioMuxerHelper.")
                 if (hasValidAudio && audioPath != null) {
                     AudioMuxerHelper.mergeAudioVideo(videoPath, audioPath, outputPath)
                 } else {
@@ -202,10 +204,8 @@ object FFmpegRecoveryEngine {
         return try {
             val args = arrayOf(
                 "-y",
-                "-fflags", "+genpts",
                 "-i", inputPath,
                 "-c", "copy",
-                "-avoid_negative_ts", "make_zero",
                 "-movflags", "+faststart",
                 outputPath
             )

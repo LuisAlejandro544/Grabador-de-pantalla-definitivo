@@ -275,7 +275,12 @@ fun NativeGallerySection(accentColor: Color) {
                                         previewAspectRatio = (w.toFloat() / h.toFloat()).coerceIn(0.4f, 1.8f)
                                     }
                                     mp.isLooping = true
+                                    seekTo(0)
                                     start()
+                                }
+                                setOnCompletionListener { mp ->
+                                    mp.seekTo(0)
+                                    mp.start()
                                 }
                                 setOnErrorListener { _, what, extra ->
                                     android.util.Log.w("VeloRec_Gallery", "Error en VideoView: what=$what, extra=$extra")

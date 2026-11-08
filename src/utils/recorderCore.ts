@@ -234,7 +234,7 @@ export function getFfmpegLosslessMergeCommand(
   isMkv: boolean = false
 ): string {
   const movFlags = isMkv ? '' : '-movflags +faststart';
-  return `-y -fflags +genpts -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -b:a 192k -avoid_negative_ts make_zero -map 0:v:0 -map 1:a:0? -shortest ${movFlags} "${outputPath}"`.trim();
+  return `-y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -b:a 192k -af apad -shortest -map 0:v:0 -map 1:a:0? ${movFlags} "${outputPath}"`.trim();
 }
 
 /**

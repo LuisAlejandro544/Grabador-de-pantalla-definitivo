@@ -48,6 +48,9 @@ std::expected<jobject, std::string> NativeRecorderEngine::initialize(JNIEnv* env
     AMediaFormat_setInt32(m_format, AMEDIAFORMAT_KEY_I_FRAME_INTERVAL, 1); // 1 segundo entre Keyframes
     // Modo de color Surface (COLOR_FormatSurface = 0x7f000789)
     AMediaFormat_setInt32(m_format, AMEDIAFORMAT_KEY_COLOR_FORMAT, 0x7f000789);
+    // Repetición automática de cuadro si la pantalla está estática (evita videos congelados o de 1 solo frame)
+    int64_t repeatIntervalUs = (m_config.fps > 0) ? (1'000'000LL / m_config.fps) : 16'666LL;
+    AMediaFormat_setInt64(m_format, "repeat-previous-frame-after", repeatIntervalUs);
 
     // 2. Crear codificador por hardware según el MIME especificado
     m_codec = AMediaCodec_createEncoderByType(m_config.codecMime.c_str());
@@ -181,9 +184,11 @@ EngineStats NativeRecorderEngine::getStats() const noexcept {
 void NativeRecorderEngine::encodingWorkerLoop() {
     AMediaCodecBufferInfo info;
     constexpr int64_t TIMEOUT_US = 10'000; // 10ms
+    int drainRetries = 0;
+    constexpr int MAX_DRAIN_RETRIES = 50; // Hasta 500ms tras stopRequested para vaciar el encoder
 
-    while (!m_stopRequested.load() || m_isRecording.load()) {
-        if (m_isPaused.load()) {
+    while (true) {
+        if (m_isPaused.load() && !m_stopRequested.load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
             continue;
         }
@@ -193,25 +198,38 @@ void NativeRecorderEngine::encodingWorkerLoop() {
         ssize_t outIndex = AMediaCodec_dequeueOutputBuffer(m_codec, &info, TIMEOUT_US);
 
         if (outIndex >= 0) {
-            // Buffer de salida listo
+            drainRetries = 0; // Datos recibidos, reiniciar contador de espera
             size_t bufferSize = 0;
             uint8_t* buffer = AMediaCodec_getOutputBuffer(m_codec, outIndex, &bufferSize);
 
             if (buffer && info.size > 0 && m_isMuxerStarted.load()) {
-                // Sincronización y normalización de PTS a tiempo base cero
-                if (m_firstFrameTimeUs.load() < 0) {
-                    m_firstFrameTimeUs.store(info.presentationTimeUs);
-                }
-                int64_t firstTime = m_firstFrameTimeUs.load();
-                if (info.presentationTimeUs >= firstTime) {
-                    info.presentationTimeUs -= firstTime;
+                // Descartar buffers de configuración (SPS/PPS) en writeSampleData
+                // AMediaMuxer ya los tiene en el MediaFormat de addTrack; escribirlos aquí corrompe las muestras
+                if ((info.flags & 2) != 0) { // 2 = AMEDIACODEC_BUFFER_FLAG_CODEC_CONFIG
+                    LOGI("C++23: Buffer CODEC_CONFIG omitido en muxer");
                 } else {
-                    info.presentationTimeUs = 0;
-                }
+                    // Sincronización y normalización de PTS a tiempo base cero
+                    if (m_firstFrameTimeUs.load() < 0) {
+                        m_firstFrameTimeUs.store(info.presentationTimeUs);
+                    }
+                    int64_t firstTime = m_firstFrameTimeUs.load();
+                    if (info.presentationTimeUs >= firstTime) {
+                        info.presentationTimeUs -= firstTime;
+                    } else {
+                        info.presentationTimeUs = 0;
+                    }
 
-                // Escribir datos al archivo contenedor
-                AMediaMuxer_writeSampleData(m_muxer, m_videoTrackIndex, buffer, &info);
-                m_frameCount.fetch_add(1, std::memory_order_relaxed);
+                    // Garantizar estricta monotonicidad creciente en las marcas de tiempo para AMediaMuxer
+                    int64_t lastPts = m_lastPresentationTimeUs.load();
+                    if (info.presentationTimeUs <= lastPts) {
+                        info.presentationTimeUs = (lastPts >= 0) ? (lastPts + 1000) : 0;
+                    }
+                    m_lastPresentationTimeUs.store(info.presentationTimeUs);
+
+                    // Escribir datos al archivo contenedor
+                    AMediaMuxer_writeSampleData(m_muxer, m_videoTrackIndex, buffer, &info);
+                    m_frameCount.fetch_add(1, std::memory_order_relaxed);
+                }
             }
 
             AMediaCodec_releaseOutputBuffer(m_codec, outIndex, false);
@@ -235,8 +253,11 @@ void NativeRecorderEngine::encodingWorkerLoop() {
             LOGI("Muxer iniciado con nuevo formato. Pista: %zd", m_videoTrackIndex);
         } else if (outIndex == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
             if (m_stopRequested.load()) {
-                // Si ya se solicitó detener y no hay buffers pendientes, salir del ciclo
-                break;
+                drainRetries++;
+                if (drainRetries >= MAX_DRAIN_RETRIES) {
+                    LOGI("C++23: Drenado completado tras stopRequested (%d reintentos).", drainRetries);
+                    break;
+                }
             }
         }
     }

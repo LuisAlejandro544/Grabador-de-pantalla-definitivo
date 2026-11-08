@@ -38,10 +38,49 @@ class MainViewModel : ViewModel() {
     private val _pendingConfig = MutableStateFlow<NativeRecordingConfig?>(null)
     val pendingConfig: StateFlow<NativeRecordingConfig?> = _pendingConfig.asStateFlow()
 
+    // Estado de cuenta regresiva posterior a la aprobación de la notificación nativa de Android
+    private val _isCountingDown = MutableStateFlow(false)
+    val isCountingDown: StateFlow<Boolean> = _isCountingDown.asStateFlow()
+
+    private val _countdownRemaining = MutableStateFlow(3)
+    val countdownRemaining: StateFlow<Int> = _countdownRemaining.asStateFlow()
+
+    private var countdownJob: Job? = null
     private var timerJob: Job? = null
 
     fun setPendingConfig(config: NativeRecordingConfig?) {
         _pendingConfig.value = config
+    }
+
+    /**
+     * Inicia el temporizador de cuenta regresiva en pantalla UNA VEZ aprobado el diálogo nativo de MediaProjection.
+     */
+    fun startCountdown(seconds: Int, onComplete: () -> Unit) {
+        countdownJob?.cancel()
+        if (seconds <= 0) {
+            _isCountingDown.value = false
+            onComplete()
+            return
+        }
+
+        _isCountingDown.value = true
+        _countdownRemaining.value = seconds
+        countdownJob = viewModelScope.launch {
+            var remaining = seconds
+            while (remaining > 0) {
+                delay(1000L)
+                remaining -= 1
+                _countdownRemaining.value = remaining
+            }
+            _isCountingDown.value = false
+            onComplete()
+        }
+    }
+
+    fun cancelCountdown() {
+        countdownJob?.cancel()
+        countdownJob = null
+        _isCountingDown.value = false
     }
 
     fun onRecordingStarted() {
@@ -79,6 +118,7 @@ class MainViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        countdownJob?.cancel()
         timerJob?.cancel()
     }
 }

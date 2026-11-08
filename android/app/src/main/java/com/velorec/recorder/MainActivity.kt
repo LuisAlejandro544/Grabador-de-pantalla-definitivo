@@ -64,42 +64,59 @@ class MainActivity : ComponentActivity() {
                     onSurface = Color(0xFFF1F5F9)
                 )
             ) {
-                // Sincronización reactiva con el servicio en primer plano
+                // Sincronización reactiva con el servicio en primer plano y ViewModel
                 val isRecording by ScreenRecordService.isRecordingFlow.collectAsState()
                 val isPaused by ScreenRecordService.isPausedFlow.collectAsState()
                 val durationSec by ScreenRecordService.durationSecFlow.collectAsState()
                 val pendingConfig by viewModel.pendingConfig.collectAsState()
+                val isCountingDown by viewModel.isCountingDown.collectAsState()
+                val countdownRemaining by viewModel.countdownRemaining.collectAsState()
 
-                // Launcher para MediaProjection (Captura de Pantalla del Sistema Android)
+                // Launcher para MediaProjection (Diálogo nativo de captura del sistema Android)
+                // Se solicita PRIMERO al tocar "Iniciar Grabación"; tras la confirmación del usuario,
+                // inicia el contador visual en pantalla (3s/5s/10s) dando tiempo a cambiar a la app/juego.
                 val mediaProjectionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.StartActivityForResult()
                 ) { result ->
                     if (result.resultCode == Activity.RESULT_OK && result.data != null) {
                         val config = pendingConfig ?: NativeRecordingConfig()
-                        val serviceIntent = Intent(this, ScreenRecordService::class.java).apply {
-                            action = ScreenRecordService.ACTION_START
-                            putExtra(ScreenRecordService.EXTRA_RESULT_CODE, result.resultCode)
-                            putExtra(ScreenRecordService.EXTRA_RESULT_DATA, result.data)
-                            putExtra(ScreenRecordService.EXTRA_ENGINE, config.engine)
-                            putExtra(ScreenRecordService.EXTRA_WIDTH, config.width)
-                            putExtra(ScreenRecordService.EXTRA_HEIGHT, config.height)
-                            putExtra(ScreenRecordService.EXTRA_FPS, config.fps)
-                            putExtra(ScreenRecordService.EXTRA_BITRATE, config.bitrateBps)
-                            putExtra(ScreenRecordService.EXTRA_CODEC, config.codec)
-                            putExtra(ScreenRecordService.EXTRA_AUDIO, config.audioSource)
+                        val countdown = config.countdownSec
+
+                        val startServiceAction = {
+                            val serviceIntent = Intent(this, ScreenRecordService::class.java).apply {
+                                action = ScreenRecordService.ACTION_START
+                                putExtra(ScreenRecordService.EXTRA_RESULT_CODE, result.resultCode)
+                                putExtra(ScreenRecordService.EXTRA_RESULT_DATA, result.data)
+                                putExtra(ScreenRecordService.EXTRA_ENGINE, config.engine)
+                                putExtra(ScreenRecordService.EXTRA_WIDTH, config.width)
+                                putExtra(ScreenRecordService.EXTRA_HEIGHT, config.height)
+                                putExtra(ScreenRecordService.EXTRA_FPS, config.fps)
+                                putExtra(ScreenRecordService.EXTRA_BITRATE, config.bitrateBps)
+                                putExtra(ScreenRecordService.EXTRA_CODEC, config.codec)
+                                putExtra(ScreenRecordService.EXTRA_AUDIO, config.audioSource)
+                            }
+
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                ContextCompat.startForegroundService(this, serviceIntent)
+                            } else {
+                                startService(serviceIntent)
+                            }
+
+                            Toast.makeText(
+                                this,
+                                "Grabando pantalla (${config.width}x${config.height} @ ${config.fps}fps - ${config.bitrateBps / 1_000_000}Mbps)",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
 
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            ContextCompat.startForegroundService(this, serviceIntent)
+                        // Si el usuario eligió cuenta regresiva (ej. 3s), corre primero el contador antes de iniciar
+                        if (countdown > 0) {
+                            viewModel.startCountdown(countdown) {
+                                startServiceAction()
+                            }
                         } else {
-                            startService(serviceIntent)
+                            startServiceAction()
                         }
-
-                        Toast.makeText(
-                            this,
-                            "Grabando pantalla (${config.width}x${config.height} @ ${config.fps}fps - ${config.bitrateBps / 1_000_000}Mbps)",
-                            Toast.LENGTH_SHORT
-                        ).show()
                     } else {
                         Toast.makeText(this, "Permiso de captura cancelado", Toast.LENGTH_SHORT).show()
                     }
@@ -123,6 +140,9 @@ class MainActivity : ComponentActivity() {
                     isRecording = isRecording,
                     isPaused = isPaused,
                     durationSec = durationSec,
+                    isCountingDown = isCountingDown,
+                    countdownRemaining = countdownRemaining,
+                    onCancelCountdown = { viewModel.cancelCountdown() },
                     onStartRecording = { config ->
                         viewModel.setPendingConfig(config)
                         val permissionsToRequest = mutableListOf<String>()

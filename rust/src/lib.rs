@@ -104,6 +104,9 @@ impl RustRecorderEngine {
             ndk_sys::AMediaFormat_setInt32(format, key_frame_rate.as_ptr(), config.fps);
             ndk_sys::AMediaFormat_setInt32(format, key_i_frame_interval.as_ptr(), 1); // 1 segundo entre Keyframes
             ndk_sys::AMediaFormat_setInt32(format, key_color_format.as_ptr(), COLOR_FORMAT_SURFACE);
+            let key_repeat_prev = CString::new("repeat-previous-frame-after").unwrap();
+            let repeat_interval_us = if config.fps > 0 { 1_000_000 / config.fps as i64 } else { 16_666 };
+            ndk_sys::AMediaFormat_setInt64(format, key_repeat_prev.as_ptr(), repeat_interval_us);
 
             // 2. Crear codificador por hardware en NDK
             let codec = ndk_sys::AMediaCodec_createEncoderByType(mime_c.as_ptr());
@@ -231,8 +234,12 @@ impl RustRecorderEngine {
                 };
 
                 let mut first_frame_time_us: i64 = -1;
+                let mut last_presentation_time_us: i64 = -1;
+                let mut stop_requested = false;
+                let mut drain_retries = 0;
+                const MAX_DRAIN_RETRIES: i32 = 50; // Hasta 500ms tras stop
 
-                while is_recording.load(Ordering::Relaxed) {
+                while is_recording.load(Ordering::Relaxed) || stop_requested {
                     // Verificar mensajes en el canal sin bloquear
                     if let Ok(cmd) = rx_worker.try_recv() {
                         match cmd {
@@ -243,12 +250,12 @@ impl RustRecorderEngine {
                                 unsafe {
                                     ndk_sys::AMediaCodec_signalEndOfInputStream(codec);
                                 }
-                                break;
+                                stop_requested = true;
                             }
                         }
                     }
 
-                    if is_paused.load(Ordering::Relaxed) {
+                    if is_paused.load(Ordering::Relaxed) && !stop_requested {
                         thread::sleep(Duration::from_millis(20));
                         continue;
                     }
@@ -263,6 +270,7 @@ impl RustRecorderEngine {
                         );
 
                         if out_idx >= 0 {
+                            drain_retries = 0; // Datos recibidos
                             let mut buffer_size: usize = 0;
                             let buffer_ptr = ndk_sys::AMediaCodec_getOutputBuffer(
                                 codec,
@@ -271,24 +279,39 @@ impl RustRecorderEngine {
                             );
 
                             if !buffer_ptr.is_null() && buffer_info.size > 0 && muxer_started {
-                                // Normalizar PTS a base cero
-                                if first_frame_time_us < 0 {
-                                    first_frame_time_us = buffer_info.presentationTimeUs;
-                                }
-                                let mut sample_info = buffer_info;
-                                if sample_info.presentationTimeUs >= first_frame_time_us {
-                                    sample_info.presentationTimeUs -= first_frame_time_us;
+                                // Omitir buffers CODEC_CONFIG (SPS/PPS) en el muxer
+                                if (buffer_info.flags & 2) != 0 {
+                                    info!("Rust 2024: Buffer CODEC_CONFIG omitido en muxer");
                                 } else {
-                                    sample_info.presentationTimeUs = 0;
-                                }
+                                    // Normalizar PTS a base cero
+                                    if first_frame_time_us < 0 {
+                                        first_frame_time_us = buffer_info.presentationTimeUs;
+                                    }
+                                    let mut sample_info = buffer_info;
+                                    if sample_info.presentationTimeUs >= first_frame_time_us {
+                                        sample_info.presentationTimeUs -= first_frame_time_us;
+                                    } else {
+                                        sample_info.presentationTimeUs = 0;
+                                    }
 
-                                ndk_sys::AMediaMuxer_writeSampleData(
-                                    muxer,
-                                    video_track_index as usize,
-                                    buffer_ptr,
-                                    &sample_info,
-                                );
-                                frames_encoded.fetch_add(1, Ordering::Relaxed);
+                                    // Garantizar estricta monotonicidad creciente
+                                    if sample_info.presentationTimeUs <= last_presentation_time_us {
+                                        sample_info.presentationTimeUs = if last_presentation_time_us >= 0 {
+                                            last_presentation_time_us + 1000
+                                        } else {
+                                            0
+                                        };
+                                    }
+                                    last_presentation_time_us = sample_info.presentationTimeUs;
+
+                                    ndk_sys::AMediaMuxer_writeSampleData(
+                                        muxer,
+                                        video_track_index as usize,
+                                        buffer_ptr,
+                                        &sample_info,
+                                    );
+                                    frames_encoded.fetch_add(1, Ordering::Relaxed);
+                                }
                             }
 
                             ndk_sys::AMediaCodec_releaseOutputBuffer(codec, out_idx as usize, false);
@@ -308,7 +331,13 @@ impl RustRecorderEngine {
                             ndk_sys::AMediaFormat_delete(new_format);
                             info!("Rust 2024: Muxer iniciado con pista de video {}", video_track_index);
                         } else if out_idx == AMEDIACODEC_INFO_TRY_AGAIN_LATER {
-                            // Esperar siguiente frame
+                            if stop_requested {
+                                drain_retries += 1;
+                                if drain_retries >= MAX_DRAIN_RETRIES {
+                                    info!("Rust 2024: Drenado completado tras stop ({} reintentos)", drain_retries);
+                                    break;
+                                }
+                            }
                         }
                     }
                 }

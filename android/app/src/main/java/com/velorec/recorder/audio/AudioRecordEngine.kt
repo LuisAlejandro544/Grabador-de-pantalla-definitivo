@@ -17,26 +17,34 @@ import android.os.Process
 import android.util.Log
 import java.io.File
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * AudioRecordEngine.kt
  *
  * ¿QUÉ HACE ESTE ARCHIVO?
- * Motor de captura y codificación de audio en tiempo real para Android.
+ * Motor de captura y codificación de audio en tiempo real de alta fidelidad para Android.
  *
- * MODOS DE CAPTURA SOPORTADOS:
- * 1. "mic": Captura de audio de voz a través del micrófono del dispositivo móvil.
- * 2. "internal": Captura de audio interno del sistema / videojuegos / YouTube mediante
- *    'AudioPlaybackCaptureConfiguration' en Android 10+ (API 29+) utilizando el token de MediaProjection.
- * 3. "both": Mezcla estéreo simultánea en tiempo real (Micrófono + Audio Interno) con cálculo de suma
- *    saturada de 16 bits para evitar distorsión o saturación acústica (ideal para gaming y streams).
- * 4. "mute": Sin captura de audio.
- *
- * CODIFICACIÓN:
- * - Codifica los datos PCM 16-bit a formato AAC-LC estéreo (44.1 kHz, 128 kbps) mediante 'MediaCodec' por hardware.
- * - Escribe el flujo AAC en un archivo contenedor M4A mediante 'MediaMuxer'.
- * - Ejecución multihilo en prioridad URGENT_AUDIO fuera del hilo de la interfaz de usuario.
+ * CORRECCIONES CRÍTICAS IMPLEMENTADAS:
+ * 1. ByteOrder.LITTLE_ENDIAN OBLIGATORIO:
+ *    - Los codificadores AAC por hardware de Android esperan PCM 16-bit Little-Endian en arquitecturas ARM.
+ *    - ByteBuffer.allocateDirect usa Big-Endian por defecto en Java NIO; invertir los bytes convertía
+ *      cualquier sonido ambiente en ruido blanco estático de máximo volumen ("shhhhh").
+ *      Se fuerza estrictamente .order(ByteOrder.LITTLE_ENDIAN).
+ * 2. EXPANSIÓN MONO A ESTÉREO REAL:
+ *    - El 95% de los smartphones Android no soportan CHANNEL_IN_STEREO en el micrófono principal.
+ *    - Al degradar a CHANNEL_IN_MONO, los datos deben duplicarse idénticamente a los canales Izquierdo
+ *      y Derecho (L = s, R = s) en vez de tratarse como estéreo entrelazado (lo cual provocaba desfase,
+ *      cancelación de fase, duplicación de tiempo y distorsión metálica).
+ * 3. MEZCLA CONCURRENTE SIN BLOQUEOS ("both"):
+ *    - Las lecturas secuenciales bloqueantes de micrófono y audio interno sumaban 46ms de espera por ciclo,
+ *      desbordando los buffers de hardware y causando pérdida de paquetes y chasquidos.
+ *    - Se utiliza un hilo lector concurrente con cola de desacoplamiento para el audio interno,
+ *      garantizando que la falta de sonido en juegos o apps no bloquee ni distorsione la voz del micrófono.
+ * 4. TIMESTAMP MONOTÓNICO EXACTO BASADO EN MUESTRAS:
+ *    - PTS = (totalFrames * 1_000_000L) / SAMPLE_RATE, eliminando desviaciones de tiempo respecto al video.
  */
 class AudioRecordEngine(
     private val context: Context,
@@ -48,17 +56,23 @@ class AudioRecordEngine(
     companion object {
         private const val TAG = "VeloRec_AudioEngine"
         private const val SAMPLE_RATE = 44100
-        private const val CHANNEL_COUNT = 2
-        private const val BITRATE = 128_000 // 128 kbps AAC
+        private const val CHANNEL_COUNT = 2 // Estéreo AAC
+        private const val BITRATE = 128_000 // 128 kbps AAC-LC
         private const val TIMEOUT_US = 10_000L
+        private const val SAMPLES_PER_FRAME = 1024 // 1024 muestras por canal = 2048 muestras estéreo (23.2ms)
     }
 
     private val isRecording = AtomicBoolean(false)
     private val isPaused = AtomicBoolean(false)
+
     private var workerThread: Thread? = null
+    private var internalAudioReaderThread: Thread? = null
 
     private var micRecord: AudioRecord? = null
+    private var isMicMono = false
+
     private var internalRecord: AudioRecord? = null
+    private val internalAudioQueue = ConcurrentLinkedQueue<ShortArray>()
 
     private var audioEncoder: MediaCodec? = null
     private var audioMuxer: MediaMuxer? = null
@@ -80,6 +94,7 @@ class AudioRecordEngine(
         }
 
         isPaused.set(false)
+        internalAudioQueue.clear()
 
         workerThread = Thread({
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
@@ -110,6 +125,11 @@ class AudioRecordEngine(
         }
 
         try {
+            internalAudioReaderThread?.join(500)
+        } catch (_: InterruptedException) {}
+        internalAudioReaderThread = null
+
+        try {
             workerThread?.join(1500)
         } catch (e: InterruptedException) {
             Log.w(TAG, "Interrupción al esperar hilo de audio: ${e.message}")
@@ -125,7 +145,7 @@ class AudioRecordEngine(
         val shouldCaptureMic = audioSource == "mic" || audioSource == "both"
         val shouldCaptureInternal = audioSource == "internal" || audioSource == "both"
 
-        // 1. Inicializar AudioRecord para Micrófono
+        // 1. Inicializar AudioRecord para Micrófono con verificación mono/estéreo
         if (shouldCaptureMic) {
             try {
                 micRecord = AudioRecord(
@@ -133,18 +153,22 @@ class AudioRecordEngine(
                     SAMPLE_RATE,
                     AudioFormat.CHANNEL_IN_STEREO,
                     AudioFormat.ENCODING_PCM_16BIT,
-                    bufferSize * 2
+                    bufferSize * 4
                 )
                 if (micRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                    Log.w(TAG, "No se pudo iniciar micrófono en estéreo, reintentando en mono...")
+                    Log.i(TAG, "Dispositivo móvil no soporta micrófono estéreo nativo. Usando CHANNEL_IN_MONO con expansión estéreo.")
                     micRecord?.release()
                     micRecord = AudioRecord(
                         MediaRecorder.AudioSource.MIC,
                         SAMPLE_RATE,
                         AudioFormat.CHANNEL_IN_MONO,
                         AudioFormat.ENCODING_PCM_16BIT,
-                        bufferSize * 2
+                        bufferSize * 4
                     )
+                    isMicMono = true
+                } else {
+                    isMicMono = false
+                    Log.i(TAG, "Micrófono estéreo nativo inicializado con éxito.")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error al inicializar micrófono: ${e.message}", e)
@@ -170,7 +194,7 @@ class AudioRecordEngine(
                 internalRecord = AudioRecord.Builder()
                     .setAudioPlaybackCaptureConfig(playbackConfig)
                     .setAudioFormat(audioFormat)
-                    .setBufferSizeInBytes(bufferSize * 2)
+                    .setBufferSizeInBytes(bufferSize * 4)
                     .build()
 
                 if (internalRecord?.state != AudioRecord.STATE_INITIALIZED) {
@@ -189,12 +213,11 @@ class AudioRecordEngine(
 
     private fun initEncoderAndMuxer() {
         try {
-            // Asegurar directorio contenedor
             val outputFile = File(outputM4aPath)
             outputFile.parentFile?.mkdirs()
             if (outputFile.exists()) outputFile.delete()
 
-            // Formato AAC-LC
+            // Formato AAC-LC Estéreo (44.1 kHz, 128 kbps)
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, SAMPLE_RATE, CHANNEL_COUNT).apply {
                 setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
                 setInteger(MediaFormat.KEY_BIT_RATE, BITRATE)
@@ -235,15 +258,43 @@ class AudioRecordEngine(
             Log.e(TAG, "Error al arrancar AudioRecord: ${e.message}", e)
         }
 
-        val samplesPerRead = 1024 * CHANNEL_COUNT
-        val micBuffer = ShortArray(samplesPerRead)
-        val internalBuffer = ShortArray(samplesPerRead)
-        val mixedBuffer = ShortArray(samplesPerRead)
-        val pcmByteBuffer = ByteBuffer.allocateDirect(samplesPerRead * 2)
+        // Si estamos en modo mezcla simultánea ("both"), arrancamos un lector dedicado para audio interno
+        // para evitar el cuello de botella secuencial de 46ms que saturaba los buffers
+        if (audioSource == "both" && internalRecord != null) {
+            internalAudioReaderThread = Thread({
+                Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+                val buffer = ShortArray(SAMPLES_PER_FRAME * CHANNEL_COUNT)
+                while (isRecording.get()) {
+                    if (isPaused.get()) {
+                        try { Thread.sleep(20) } catch (_: InterruptedException) { break }
+                        continue
+                    }
+                    val read = internalRecord?.read(buffer, 0, buffer.size) ?: 0
+                    if (read > 0) {
+                        // Limitar cola a 10 chunks (~230ms) para descartar en caso de retraso extremo
+                        if (internalAudioQueue.size > 10) {
+                            internalAudioQueue.poll()
+                        }
+                        internalAudioQueue.offer(buffer.copyOf(read))
+                    } else {
+                        try { Thread.sleep(5) } catch (_: InterruptedException) { break }
+                    }
+                }
+            }, "VeloRecInternalAudioReader").apply { start() }
+        }
+
+        // Buffers de trabajo
+        // SAMPLES_PER_FRAME = 1024, con 2 canales = 2048 shorts (4096 bytes)
+        val stereoSamplesCount = SAMPLES_PER_FRAME * CHANNEL_COUNT
+        val micMonoBuffer = if (isMicMono) ShortArray(SAMPLES_PER_FRAME) else null
+        val micStereoBuffer = ShortArray(stereoSamplesCount)
+        val finalStereoBuffer = ShortArray(stereoSamplesCount)
+
+        // ByteBuffer con ORDEN LITTLE_ENDIAN ESTRICTO (Vital para no corromper muestras a ruido blanco)
+        val pcmByteBuffer = ByteBuffer.allocateDirect(stereoSamplesCount * 2).order(ByteOrder.LITTLE_ENDIAN)
 
         val bufferInfo = MediaCodec.BufferInfo()
-        var presentationTimeUs = 0L
-        val timeIncrementUs = (1024L * 1_000_000L) / SAMPLE_RATE
+        var totalFramesEncoded = 0L
 
         while (isRecording.get()) {
             if (isPaused.get()) {
@@ -255,19 +306,71 @@ class AudioRecordEngine(
                 continue
             }
 
-            var micReadCount = 0
-            var intReadCount = 0
+            var framesObtained = 0
 
-            if (micRecord != null) {
-                micReadCount = micRecord?.read(micBuffer, 0, samplesPerRead) ?: 0
+            when (audioSource) {
+                "mic" -> {
+                    if (isMicMono && micMonoBuffer != null) {
+                        val readMono = micRecord?.read(micMonoBuffer, 0, SAMPLES_PER_FRAME) ?: 0
+                        if (readMono > 0) {
+                            // Expansión Mono a Estéreo idéntico (L = s, R = s)
+                            for (i in 0 until readMono) {
+                                val s = micMonoBuffer[i]
+                                finalStereoBuffer[i * 2] = s
+                                finalStereoBuffer[i * 2 + 1] = s
+                            }
+                            framesObtained = readMono
+                        }
+                    } else {
+                        val readStereo = micRecord?.read(finalStereoBuffer, 0, stereoSamplesCount) ?: 0
+                        if (readStereo > 0) {
+                            framesObtained = readStereo / CHANNEL_COUNT
+                        }
+                    }
+                }
+
+                "internal" -> {
+                    val readInternal = internalRecord?.read(finalStereoBuffer, 0, stereoSamplesCount) ?: 0
+                    if (readInternal > 0) {
+                        framesObtained = readInternal / CHANNEL_COUNT
+                    }
+                }
+
+                "both" -> {
+                    // 1. Obtener audio del micrófono
+                    if (isMicMono && micMonoBuffer != null) {
+                        val readMono = micRecord?.read(micMonoBuffer, 0, SAMPLES_PER_FRAME) ?: 0
+                        if (readMono > 0) {
+                            for (i in 0 until readMono) {
+                                val s = micMonoBuffer[i]
+                                micStereoBuffer[i * 2] = s
+                                micStereoBuffer[i * 2 + 1] = s
+                            }
+                            framesObtained = readMono
+                        }
+                    } else {
+                        val readStereo = micRecord?.read(micStereoBuffer, 0, stereoSamplesCount) ?: 0
+                        if (readStereo > 0) {
+                            framesObtained = readStereo / CHANNEL_COUNT
+                        }
+                    }
+
+                    // 2. Extraer audio interno de la cola concurrente si está disponible
+                    val internalChunk = internalAudioQueue.poll()
+                    val internalSamples = internalChunk?.size ?: 0
+
+                    // 3. Mezcla Estéreo con Suma Saturada (Clamping anti-distorsión)
+                    val mixSamples = framesObtained * CHANNEL_COUNT
+                    for (i in 0 until mixSamples) {
+                        val micSample = micStereoBuffer[i].toInt()
+                        val intSample = if (i < internalSamples && internalChunk != null) internalChunk[i].toInt() else 0
+                        val mixed = (micSample + intSample).coerceIn(-32768, 32767)
+                        finalStereoBuffer[i] = mixed.toShort()
+                    }
+                }
             }
 
-            if (internalRecord != null) {
-                intReadCount = internalRecord?.read(internalBuffer, 0, samplesPerRead) ?: 0
-            }
-
-            val readCount = maxOf(micReadCount, intReadCount).coerceAtLeast(0)
-            if (readCount <= 0) {
+            if (framesObtained <= 0) {
                 try {
                     Thread.sleep(5)
                 } catch (_: InterruptedException) {
@@ -276,21 +379,18 @@ class AudioRecordEngine(
                 continue
             }
 
-            // Mezcla de Audio en PCM 16-Bit con suma saturada (Clamping anti-distorsión)
-            for (i in 0 until readCount) {
-                val micSample = if (i < micReadCount) micBuffer[i].toInt() else 0
-                val intSample = if (i < intReadCount) internalBuffer[i].toInt() else 0
-                val mixed = (micSample + intSample).coerceIn(-32768, 32767)
-                mixedBuffer[i] = mixed.toShort()
-            }
+            // Transferir muestras 16-bit PCM al ByteBuffer en formato Little-Endian
+            val totalShortsToWrite = framesObtained * CHANNEL_COUNT
+            val pcmBytesLength = totalShortsToWrite * 2
 
-            // Transferir a ByteBuffer PCM
             pcmByteBuffer.clear()
-            for (i in 0 until readCount) {
-                pcmByteBuffer.putShort(mixedBuffer[i])
+            for (i in 0 until totalShortsToWrite) {
+                pcmByteBuffer.putShort(finalStereoBuffer[i])
             }
             pcmByteBuffer.flip()
-            val pcmBytesLength = readCount * 2
+
+            // Cálculo estricto de marca de tiempo (PTS) basado en muestras reales
+            val presentationTimeUs = (totalFramesEncoded * 1_000_000L) / SAMPLE_RATE
 
             // Alimentar encoder MediaCodec
             val inputBufferIndex = encoder.dequeueInputBuffer(TIMEOUT_US)
@@ -306,7 +406,7 @@ class AudioRecordEngine(
                     presentationTimeUs,
                     0
                 )
-                presentationTimeUs += timeIncrementUs
+                totalFramesEncoded += framesObtained
             }
 
             // Drenar paquetes codificados hacia el Muxer
@@ -314,9 +414,10 @@ class AudioRecordEngine(
         }
 
         // Señal de fin de flujo de audio (EOS)
+        val finalPtsUs = (totalFramesEncoded * 1_000_000L) / SAMPLE_RATE
         val endInputIndex = encoder.dequeueInputBuffer(TIMEOUT_US)
         if (endInputIndex >= 0) {
-            encoder.queueInputBuffer(endInputIndex, 0, 0, presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+            encoder.queueInputBuffer(endInputIndex, 0, 0, finalPtsUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
         }
         drainEncoder(encoder, muxer, bufferInfo, endOfStream = true)
     }
@@ -405,3 +506,4 @@ class AudioRecordEngine(
         audioTrackIndex = -1
     }
 }
+

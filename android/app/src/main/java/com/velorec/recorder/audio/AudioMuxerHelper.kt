@@ -119,7 +119,9 @@ object AudioMuxerHelper {
                 bufferInfo.presentationTimeUs = videoExtractor.sampleTime
                 bufferInfo.flags = videoExtractor.sampleFlags
 
-                muxer.writeSampleData(muxerVideoTrack, byteBuffer, bufferInfo)
+                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                    muxer.writeSampleData(muxerVideoTrack, byteBuffer, bufferInfo)
+                }
                 videoExtractor.advance()
             }
 
@@ -135,7 +137,9 @@ object AudioMuxerHelper {
                 bufferInfo.presentationTimeUs = audioExtractor.sampleTime
                 bufferInfo.flags = audioExtractor.sampleFlags
 
-                muxer.writeSampleData(muxerAudioTrack, byteBuffer, bufferInfo)
+                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                    muxer.writeSampleData(muxerAudioTrack, byteBuffer, bufferInfo)
+                }
                 audioExtractor.advance()
             }
 
