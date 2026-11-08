@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
@@ -49,6 +51,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,6 +70,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.velorec.recorder.data.model.AUDIO_SOURCE_PRESETS
 import com.velorec.recorder.data.model.BITRATE_PRESETS
+import com.velorec.recorder.data.model.MIN_BITRATE_MBPS
+import com.velorec.recorder.data.model.MAX_SAFE_BITRATE_MBPS
+import com.velorec.recorder.data.model.getBitrateThermalAdvice
 import com.velorec.recorder.data.model.COUNTDOWN_PRESETS
 import com.velorec.recorder.data.model.RESOLUTION_PRESETS
 import com.velorec.recorder.data.model.ResolutionPreset
@@ -300,53 +308,189 @@ fun NativeRecorderViewport(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Fila 2: Selector de Tasa de Bits (Bitrate)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Speed,
-                        contentDescription = null,
-                        tint = Color(0xFF94A3B8),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = "Tasa de Bits (Bitrate de Codificación)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF94A3B8)
-                    )
+                // Fila 2: Selector de Tasa de Bits (Bitrate) Personalizado con Protección Térmica
+                val bitrateAdvice = getBitrateThermalAdvice(selectedBitrateMbps)
+                val approxMbPerMin = (selectedBitrateMbps * 60) / 8
+                val tierBadgeColor = when {
+                    selectedBitrateMbps <= 3 -> Color(0xFF10B981)
+                    selectedBitrateMbps <= 16 -> Color(0xFFF59E0B)
+                    selectedBitrateMbps <= 30 -> Color(0xFF38BDF8)
+                    selectedBitrateMbps <= 50 -> Color(0xFFA855F7)
+                    else -> Color(0xFFEF4444)
                 }
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = null,
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Tasa de Bits Personalizada",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = tierBadgeColor.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, tierBadgeColor.copy(alpha = 0.4f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(tierBadgeColor)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = bitrateAdvice.tierName,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = tierBadgeColor
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Contenedor táctil del Deslizador y Steppers
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = DarkCard,
+                    border = BorderStroke(1.dp, Color(0xFF334155))
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Botón de reducción precisa [-]
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF1E293B),
+                                border = BorderStroke(1.dp, Color(0xFF334155)),
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clickable(enabled = !isRecording && selectedBitrateMbps > MIN_BITRATE_MBPS) {
+                                        onBitrateChange((selectedBitrateMbps - 1).coerceAtLeast(MIN_BITRATE_MBPS))
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Remove,
+                                        contentDescription = "Disminuir Bitrate",
+                                        tint = if (selectedBitrateMbps > MIN_BITRATE_MBPS) Color.White else Color(0xFF64748B),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            // Deslizador continuo ergonómico
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 8.dp)
+                            ) {
+                                Slider(
+                                    value = selectedBitrateMbps.toFloat(),
+                                    onValueChange = { newValue ->
+                                        onBitrateChange(newValue.toInt().coerceIn(MIN_BITRATE_MBPS, MAX_SAFE_BITRATE_MBPS))
+                                    },
+                                    valueRange = MIN_BITRATE_MBPS.toFloat()..MAX_SAFE_BITRATE_MBPS.toFloat(),
+                                    steps = (MAX_SAFE_BITRATE_MBPS - MIN_BITRATE_MBPS - 1),
+                                    enabled = !isRecording,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = accentColor,
+                                        activeTrackColor = accentColor,
+                                        inactiveTrackColor = Color(0xFF334155)
+                                    )
+                                )
+                            }
+
+                            // Botón de aumento preciso [+]
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF1E293B),
+                                border = BorderStroke(1.dp, Color(0xFF334155)),
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clickable(enabled = !isRecording && selectedBitrateMbps < MAX_SAFE_BITRATE_MBPS) {
+                                        onBitrateChange((selectedBitrateMbps + 1).coerceAtMost(MAX_SAFE_BITRATE_MBPS))
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Aumentar Bitrate",
+                                        tint = if (selectedBitrateMbps < MAX_SAFE_BITRATE_MBPS) Color.White else Color(0xFF64748B),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Indicadores clave del rango
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = "1 Mbps (Mínimo)", fontSize = 9.sp, color = Color(0xFF64748B))
+                            Text(
+                                text = "$selectedBitrateMbps Mbps (~$approxMbPerMin MB/min)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = accentColor
+                            )
+                            Text(text = "60 Mbps (Máx Seguro)", fontSize = 9.sp, color = Color(0xFF64748B))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Fila de accesos directos rápidos (1-tap presets)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     BITRATE_PRESETS.forEach { mbps ->
                         val isSelected = selectedBitrateMbps == mbps
                         val isIdeal = mbps == 12
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(8.dp),
                             color = if (isSelected) accentColor else DarkCard,
                             border = BorderStroke(
                                 1.dp,
                                 if (isSelected) accentColor else Color(0xFF334155)
                             ),
-                            shadowElevation = if (isSelected) 3.dp else 0.dp,
+                            shadowElevation = if (isSelected) 2.dp else 0.dp,
                             modifier = Modifier.clickable(enabled = !isRecording) {
                                 onBitrateChange(mbps)
                             }
                         ) {
                             Text(
-                                text = if (isIdeal) "${mbps} Mbps ★" else "${mbps} Mbps",
-                                fontSize = 11.sp,
+                                text = if (isIdeal) "${mbps}M ★" else "${mbps}M",
+                                fontSize = 10.5.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) Color(0xFF0F172A) else Color(0xFFCBD5E1),
-                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp)
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
                             )
                         }
                     }

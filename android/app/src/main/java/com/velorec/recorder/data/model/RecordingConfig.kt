@@ -248,9 +248,55 @@ fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
     )
 }
 
-val BITRATE_PRESETS = listOf(4, 8, 12, 16, 24, 35, 50)
+const val MIN_BITRATE_MBPS = 1
+const val MAX_SAFE_BITRATE_MBPS = 60
+const val MAX_EXTREME_BITRATE_MBPS = 80
+
+val BITRATE_PRESETS = listOf(1, 4, 8, 12, 16, 24, 35, 50, 60)
 val FPS_PRESETS = listOf(24, 30, 60, 90, 120)
 val COUNTDOWN_PRESETS = listOf(0, 3, 5, 10)
+
+data class BitrateThermalAdvice(
+    val tierName: String,
+    val safetyLevel: String,
+    val advice: String,
+    val isRecommendedForPhone: Boolean
+)
+
+fun getBitrateThermalAdvice(bitrateMbps: Int): BitrateThermalAdvice {
+    return when {
+        bitrateMbps <= 3 -> BitrateThermalAdvice(
+            tierName = "Ultra Ahorro",
+            safetyLevel = "Cero Calentamiento",
+            advice = "Mínimo consumo de espacio (~7-22 MB/min) y batería. Ideal para clases, videollamadas y grabaciones muy largas.",
+            isRecommendedForPhone = true
+        )
+        bitrateMbps <= 16 -> BitrateThermalAdvice(
+            tierName = if (bitrateMbps == 12) "Zona Gamer Óptima ★" else "Zona Segura Gamer",
+            safetyLevel = "100% Fluido y Seguro",
+            advice = "Excelente nitidez en juegos de acción (Free Fire, Subway Surfers, COD Mobile) sin caídas de FPS ni sobrecalentar el móvil.",
+            isRecommendedForPhone = true
+        )
+        bitrateMbps <= 30 -> BitrateThermalAdvice(
+            tierName = "Alta Calidad",
+            safetyLevel = "Exigencia Moderada",
+            advice = "Nitidez cristalina en movimientos veloces. Recomendado para teléfonos de gama media y alta.",
+            isRecommendedForPhone = true
+        )
+        bitrateMbps <= 50 -> BitrateThermalAdvice(
+            tierName = "Calidad Profesional",
+            safetyLevel = "Exigente",
+            advice = "Tasa de datos muy alta para pantallas 2K y creadores. Requiere almacenamiento rápido.",
+            isRecommendedForPhone = true
+        )
+        else -> BitrateThermalAdvice(
+            tierName = "Límite Extremo de Hardware",
+            safetyLevel = "Riesgo de Sobrecalentamiento",
+            advice = "Tasa masiva (~375-600 MB/min). En celulares de gama baja puede provocar saturación de memoria o throttling.",
+            isRecommendedForPhone = false
+        )
+    }
+}
 
 enum class NativeTab {
     RECORDER, LAUNCHER, SETTINGS, GALLERY, BENCHMARK

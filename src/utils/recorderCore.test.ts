@@ -29,7 +29,12 @@ import {
   calculateOptimalThreadAffinity,
   calculateSavingProgress,
   estimateDirectGallerySpeedup,
-  validateDirectGalleryTarget
+  validateDirectGalleryTarget,
+  MIN_CUSTOM_BITRATE_MBPS,
+  MAX_SAFE_PHONE_BITRATE_MBPS,
+  MAX_EXTREME_HARDWARE_BITRATE_MBPS,
+  getBitrateProfile,
+  preserveBitrateOnResolutionChange
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -480,4 +485,72 @@ test('validateDirectGalleryTarget handles valid and invalid targets deterministi
   assert.equal(emptyPath.isValid, false);
   assert.match(emptyPath.reason ?? '', /ruta/i);
 });
+
+test('getBitrateProfile supports 1 Mbps minimum and evaluates thermal safety to not choke phone', () => {
+  // 1 Mbps Ultra Ahorro
+  const ultraSaving = getBitrateProfile(1);
+  assert.equal(ultraSaving.bitrateMbps, 1);
+  assert.equal(ultraSaving.isValid, true);
+  assert.equal(ultraSaving.tier, 'ultra_saving');
+  assert.equal(ultraSaving.thermalSafety, 'ultra_cool');
+  assert.equal(ultraSaving.storageUsagePerMinuteMb, 7.5); // (1 * 60) / 8 = 7.5 MB/min
+  assert.equal(ultraSaving.recommendedForPhone, true);
+
+  // Negative or 0 should clamp to 1 Mbps
+  const zeroClamp = getBitrateProfile(0);
+  assert.equal(zeroClamp.bitrateMbps, MIN_CUSTOM_BITRATE_MBPS);
+  const negClamp = getBitrateProfile(-10);
+  assert.equal(negClamp.bitrateMbps, 1);
+
+  // 12 Mbps Zona Óptima Gamer
+  const optimal12 = getBitrateProfile(12);
+  assert.equal(optimal12.bitrateMbps, 12);
+  assert.equal(optimal12.tier, 'safe_gaming');
+  assert.equal(optimal12.thermalSafety, 'optimal');
+  assert.equal(optimal12.storageUsagePerMinuteMb, 90); // (12 * 60) / 8 = 90 MB/min
+  assert.equal(optimal12.recommendedForPhone, true);
+
+  // 24 Mbps Alta Calidad
+  const high24 = getBitrateProfile(24);
+  assert.equal(high24.tier, 'high_quality');
+  assert.equal(high24.thermalSafety, 'moderate');
+  assert.equal(high24.recommendedForPhone, true);
+
+  // 50 Mbps Calidad Pro en eMMC alerta de contención
+  const proEmmc = getBitrateProfile(50, true);
+  assert.equal(proEmmc.tier, 'pro_quality');
+  assert.equal(proEmmc.thermalSafety, 'heavy');
+  assert.equal(proEmmc.recommendedForPhone, false);
+  assert.ok(proEmmc.warningMessage !== undefined);
+
+  // 60 Mbps Safe Limit
+  const maxSafe = getBitrateProfile(MAX_SAFE_PHONE_BITRATE_MBPS);
+  assert.equal(maxSafe.bitrateMbps, 60);
+
+  // 75 Mbps Extremo (alerta de sobrecalentamiento / riesgo de ahogo del hardware)
+  const extreme = getBitrateProfile(75);
+  assert.equal(extreme.tier, 'extreme_hardware');
+  assert.equal(extreme.thermalSafety, 'extreme_throttle_risk');
+  assert.equal(extreme.recommendedForPhone, false);
+  assert.ok(extreme.warningMessage !== undefined);
+
+  // Valores superiores a 80 se limitan al tope de hardware
+  const overClamp = getBitrateProfile(150);
+  assert.equal(overClamp.bitrateMbps, MAX_EXTREME_HARDWARE_BITRATE_MBPS);
+});
+
+test('preserveBitrateOnResolutionChange ensures resolution changes do not affect user custom bitrate', () => {
+  // El usuario eligió 1 Mbps (ultra ahorro) y cambia de resolución a 1080p (que recomienda 12 Mbps)
+  const preserved1 = preserveBitrateOnResolutionChange(1, 12);
+  assert.equal(preserved1, 1, 'El bitrate personalizado de 1 Mbps debe conservarse intacto al cambiar resolución');
+
+  // El usuario eligió 24 Mbps y cambia a 720p (que recomienda 8 Mbps)
+  const preserved24 = preserveBitrateOnResolutionChange(24, 8);
+  assert.equal(preserved24, 24, 'El bitrate personalizado de 24 Mbps debe conservarse intacto al cambiar resolución');
+
+  // El usuario eligió 50 Mbps y cambia a Nativa 100%
+  const preserved50 = preserveBitrateOnResolutionChange(50, 14);
+  assert.equal(preserved50, 50, 'El bitrate personalizado de 50 Mbps debe conservarse intacto al cambiar resolución');
+});
+
 

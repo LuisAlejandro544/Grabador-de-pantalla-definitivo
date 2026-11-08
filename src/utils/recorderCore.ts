@@ -790,3 +790,143 @@ export function validateDirectGalleryTarget(
   return { isValid: true };
 }
 
+// =========================================================================
+// GESTIÓN DE BITRATE PERSONALIZADO Y PROTECCIÓN TÉRMICA ("NO AHOGAR EL TELÉFONO")
+// =========================================================================
+
+export const MIN_CUSTOM_BITRATE_MBPS = 1;
+export const MAX_SAFE_PHONE_BITRATE_MBPS = 60;
+export const MAX_EXTREME_HARDWARE_BITRATE_MBPS = 80;
+export const RECOMMENDED_GAMING_BITRATE_MBPS = 12;
+
+export const EXTENDED_BITRATE_PRESETS: number[] = [1, 2, 4, 8, 12, 16, 20, 24, 35, 50, 60];
+
+export type BitrateTier =
+  | 'ultra_saving'      // 1-3 Mbps: Ultra Ahorro de espacio y batería
+  | 'safe_gaming'       // 4-16 Mbps: Zona Óptima para juegos (100% segura para cualquier teléfono)
+  | 'high_quality'      // 17-30 Mbps: Alta Definición para celulares de gama media y alta
+  | 'pro_quality'       // 31-50 Mbps: Calidad Profesional para edición y pantallas 2K
+  | 'extreme_hardware'; // 51-80 Mbps: Límite extremo del codificador por hardware
+
+export interface BitrateProfile {
+  bitrateMbps: number;
+  isValid: boolean;
+  tier: BitrateTier;
+  tierLabel: string;
+  thermalSafety: 'ultra_cool' | 'optimal' | 'moderate' | 'heavy' | 'extreme_throttle_risk';
+  advice: string;
+  storageUsagePerMinuteMb: number;
+  storageUsagePerHourMb: number;
+  recommendedForPhone: boolean;
+  warningMessage?: string;
+}
+
+/**
+ * Evalúa un bitrate personalizado (desde 1 Mbps hasta 80 Mbps) y calcula el perfil
+ * de seguridad térmica para garantizar que la codificación no sature ("ahogue")
+ * los procesadores ni las memorias de smartphones modestos.
+ */
+export function getBitrateProfile(
+  bitrateMbps: number,
+  isEmmc: boolean = false
+): BitrateProfile {
+  const cleanMbps = Math.min(
+    MAX_EXTREME_HARDWARE_BITRATE_MBPS,
+    Math.max(MIN_CUSTOM_BITRATE_MBPS, Math.round(bitrateMbps))
+  );
+
+  const storageUsagePerMinuteMb = Number(((cleanMbps * 60) / 8).toFixed(1));
+  const storageUsagePerHourMb = Number((storageUsagePerMinuteMb * 60).toFixed(0));
+
+  if (cleanMbps <= 3) {
+    return {
+      bitrateMbps: cleanMbps,
+      isValid: true,
+      tier: 'ultra_saving',
+      tierLabel: 'Ultra Ahorro',
+      thermalSafety: 'ultra_cool',
+      advice: 'Archivos diminutos (~7-22 MB/min). Cero calentamiento. Ideal para clases, tutoriales y horas de grabación.',
+      storageUsagePerMinuteMb,
+      storageUsagePerHourMb,
+      recommendedForPhone: true
+    };
+  }
+
+  if (cleanMbps <= 16) {
+    return {
+      bitrateMbps: cleanMbps,
+      isValid: true,
+      tier: 'safe_gaming',
+      tierLabel: cleanMbps === 12 ? 'Zona Gamer Óptima ★' : 'Zona Segura Gamer',
+      thermalSafety: 'optimal',
+      advice: 'Excelente nitidez en videojuegos (Free Fire, Subway Surfers, COD). Fluidez total sin caídas de FPS ni sobrecalentamiento.',
+      storageUsagePerMinuteMb,
+      storageUsagePerHourMb,
+      recommendedForPhone: true
+    };
+  }
+
+  if (cleanMbps <= 30) {
+    return {
+      bitrateMbps: cleanMbps,
+      isValid: true,
+      tier: 'high_quality',
+      tierLabel: 'Alta Calidad',
+      thermalSafety: 'moderate',
+      advice: 'Definición cristalina en movimientos rápidos. Recomendado para celulares de gama media con procesadores equilibrados.',
+      storageUsagePerMinuteMb,
+      storageUsagePerHourMb,
+      recommendedForPhone: true
+    };
+  }
+
+  if (cleanMbps <= 50) {
+    const warning = isEmmc
+      ? 'Aviso: En memorias eMMC puede generar contención de disco durante escenas intensas. Se recomienda Buffer Pacing.'
+      : undefined;
+
+    return {
+      bitrateMbps: cleanMbps,
+      isValid: true,
+      tier: 'pro_quality',
+      tierLabel: 'Calidad Profesional',
+      thermalSafety: 'heavy',
+      advice: 'Tasa de datos exigente. Destinado a pantallas 2K y exportaciones de alta gama.',
+      storageUsagePerMinuteMb,
+      storageUsagePerHourMb,
+      recommendedForPhone: !isEmmc,
+      warningMessage: warning
+    };
+  }
+
+  // 51 a 80 Mbps: Límite extremo del codificador
+  return {
+    bitrateMbps: cleanMbps,
+    isValid: true,
+    tier: 'extreme_hardware',
+    tierLabel: 'Límite Extremo de Hardware',
+    thermalSafety: 'extreme_throttle_risk',
+    advice: 'Tasa masiva (~375-600 MB/min). Puede sobrecalentar el SoC o provocar caídas de cuadros en teléfonos de gama baja.',
+    storageUsagePerMinuteMb,
+    storageUsagePerHourMb,
+    recommendedForPhone: false,
+    warningMessage: 'Precaución: Tasa muy alta. Puede sobrecalentar el dispositivo en grabaciones prolongadas.'
+  };
+}
+
+/**
+ * Garantiza que la selección de una nueva resolución NO altere ni sobrescriba
+ * el bitrate personalizado que el usuario ha configurado voluntariamente.
+ */
+export function preserveBitrateOnResolutionChange(
+  currentBitrateMbps: number,
+  _newResolutionRecommendedBitrate: number
+): number {
+  // El bitrate seleccionado por el usuario siempre tiene prioridad absoluta
+  return Math.min(
+    MAX_EXTREME_HARDWARE_BITRATE_MBPS,
+    Math.max(MIN_CUSTOM_BITRATE_MBPS, currentBitrateMbps)
+  );
+}
+
+

@@ -99,22 +99,22 @@ export const FeaturesSection: React.FC = () => {
             </div>
           </div>
 
-          {/* 5. Calidad y Resolución a tu gusto */}
+          {/* 5. Calidad, Bitrate y Resolución a tu gusto */}
           <div className="p-7 sm:p-8 rounded-3xl border border-slate-800 bg-slate-900/40 hover:border-slate-700 transition-all text-left flex flex-col justify-between group">
             <div>
               <div className="w-12 h-12 rounded-2xl bg-violet-950 border border-violet-800/80 flex items-center justify-center text-violet-400 mb-5 group-hover:scale-105 transition-transform">
                 <SlidersHorizontal className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-bold text-white mb-2">
-                Calidad desde 720p hasta 2K
+                Bitrate de 1 a 60 Mbps y Resoluciones Libres
               </h3>
               <p className="text-slate-300 text-sm leading-relaxed">
-                Tú decides: graba en modo ligero a 720p para ahorrar espacio en la memoria o en 1080p y 2K para subir tus mejores jugadas a YouTube y TikTok en máxima definición.
+                Tú tienes el control total: ajusta el bitrate desde 1 Mbps (ultra ahorro) hasta 60 Mbps con deslizador táctil y protección antiahogamiento térmico. Cambiar de resolución jamás alterará ni reseteará tu tasa de bits elegida.
               </p>
             </div>
             <div className="pt-6 mt-6 border-t border-slate-800/80 flex items-center space-x-2 text-xs font-medium text-violet-400">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Ajuste automático o manual con 1 toque</span>
+              <span>Bitrate independiente y protección contra throttling</span>
             </div>
           </div>
 

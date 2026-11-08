@@ -419,6 +419,36 @@ class ScreenRecordService : Service() {
                 projectionCallback = callback
                 projection.registerCallback(callback, mainHandler)
 
+                // =========================================================================
+                // CORRECCIÓN CRÍTICA DE AUDIO EN ANDROID 14+ (API 34/35) Y C++23:
+                // 1. En Android 14+, 'AudioPlaybackCaptureConfiguration.Builder(projection)'
+                //    DEBE invocarse ANTES de 'createVirtualDisplay'. Una vez invocado 'createVirtualDisplay',
+                //    el sistema bloquea el token de MediaProjection como sesión única y cualquier intento
+                //    posterior de enlazar captura de audio interno falla o lanza SecurityException.
+                // 2. Al arrancar 'audioEngine' antes del 'VirtualDisplay', el codificador AAC se ceba
+                //    inmediatamente y despacha 'onAudioTrackConfigured' / 'nativeAddAudioTrack'
+                //    antes de que los fotogramas de video saturen el multiplexor AMediaMuxer.
+                // =========================================================================
+                if (shouldRecordAudio) {
+                    audioEngine = AudioRecordEngine(
+                        context = this@ScreenRecordService,
+                        audioSource = audio,
+                        outputM4aPath = audioFileToEncode?.absolutePath,
+                        mediaProjection = projection
+                    ).apply {
+                        if (engine == "cpp23") {
+                            // Enrutamiento directo sin intermediación de disco ni garbage collector
+                            onAudioTrackConfigured = { csdBuffer, csdSize, sampleRate, channelCount ->
+                                nativeAddAudioTrack(csdBuffer, csdSize, sampleRate, channelCount)
+                            }
+                            onAudioSampleEncoded = { dataBuffer, offset, size, ptsUs, flags ->
+                                nativeWriteAudioSample(dataBuffer, offset, size, ptsUs, flags)
+                            }
+                        }
+                        start()
+                    }
+                }
+
                 // Señalizar al motor nativo para comenzar a codificar fotogramas ANTES del VirtualDisplay
                 // Es mandatorio que AMediaCodec_start esté activo antes de que SurfaceFlinger inyecte cuadros
                 if (engine == "rust2024") {
@@ -439,28 +469,6 @@ class ScreenRecordService : Service() {
                     null,
                     mainHandler
                 )
-
-                // Arrancar motor de captura y codificación de audio (micrófono, audio interno o mezcla estéreo)
-                // ELIMINACIÓN DEL PASO 2: Multiplexación de Audio en Tiempo Real en C++23
-                if (shouldRecordAudio) {
-                    audioEngine = AudioRecordEngine(
-                        context = this@ScreenRecordService,
-                        audioSource = audio,
-                        outputM4aPath = audioFileToEncode?.absolutePath,
-                        mediaProjection = projection
-                    ).apply {
-                        if (engine == "cpp23") {
-                            // Enrutamiento directo sin intermediación de disco ni garbage collector
-                            onAudioTrackConfigured = { csdBuffer, csdSize, sampleRate, channelCount ->
-                                nativeAddAudioTrack(csdBuffer, csdSize, sampleRate, channelCount)
-                            }
-                            onAudioSampleEncoded = { dataBuffer, offset, size, ptsUs, flags ->
-                                nativeWriteAudioSample(dataBuffer, offset, size, ptsUs, flags)
-                            }
-                        }
-                        start()
-                    }
-                }
 
             } catch (e: Exception) {
                 e.printStackTrace()

@@ -551,8 +551,10 @@ void NativeRecorderEngine::encodingWorkerLoop() {
                         {
                             std::lock_guard<std::mutex> lock(m_muxerInitMutex);
                             m_preStartVideoQueue.push_back(std::move(preSample));
-                            if (m_preStartVideoQueue.size() >= 30) {
-                                LOGI("Audio track no recibido tras 30 cuadros; forzando arranque de muxer solo-video.");
+                            // Permitir un buffer holgado de hasta 300 fotogramas (~5 segundos a 60 fps)
+                            // para dar tiempo suficiente al codificador AAC y AudioRecord en dispositivos modestos
+                            if (m_preStartVideoQueue.size() >= 300) {
+                                LOGI("Audio track no recibido tras 300 cuadros (5s); forzando arranque de muxer solo-video.");
                                 m_hasAudio.store(false);
                             }
                         }
