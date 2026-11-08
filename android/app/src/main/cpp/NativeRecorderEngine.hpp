@@ -17,9 +17,14 @@
 #include <string_view>
 #include <expected>
 #include <span>
+#include <vector>
+#include <mutex>
+#include <condition_variable>
 #include <memory>
 #include <atomic>
 #include <thread>
+#include <cstdint>
+#include <cstddef>
 #include <jni.h>
 
 #include <media/NdkMediaCodec.h>

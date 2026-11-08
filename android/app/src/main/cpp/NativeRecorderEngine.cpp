@@ -20,6 +20,8 @@
 #include <pthread.h>
 #include <sched.h>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
 
 #define LOG_TAG "VeloRec_CPP23"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -34,7 +36,7 @@ NativeRecorderEngine::NativeRecorderEngine(const RecorderConfig& config)
 }
 
 NativeRecorderEngine::~NativeRecorderEngine() {
-    stop();
+    (void)stop();
     if (m_format) {
         AMediaFormat_delete(m_format);
         m_format = nullptr;
@@ -68,66 +70,70 @@ bool NativeRecorderEngine::checkIsEmmcStorage() noexcept {
 }
 
 void NativeRecorderEngine::applyCpuAffinityForEfficiencyCores(const char* threadName) noexcept {
-    if (threadName) {
-        pthread_setname_np(pthread_self(), threadName);
-    }
+    try {
+        if (threadName) {
+            pthread_setname_np(pthread_self(), threadName);
+        }
 
-    int totalCores = static_cast<int>(sysconf(_SC_NPROCESSORS_CONF));
-    if (totalCores <= 1) {
-        return; // Dispositivo mononúcleo, no hay afinidad aplicable
-    }
+        int totalCores = static_cast<int>(sysconf(_SC_NPROCESSORS_CONF));
+        if (totalCores <= 1) {
+            return; // Dispositivo mononúcleo, no hay afinidad aplicable
+        }
 
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
 
-    // Intentar leer las frecuencias máximas de los núcleos en sysfs para distinguir LITTLE vs big
-    int efficiencyCoresFound = 0;
-    int maxFreqGlobal = 0;
-    std::vector<int> coreFreqs(totalCores, 0);
+        // Intentar leer las frecuencias máximas de los núcleos en sysfs para distinguir LITTLE vs big
+        int efficiencyCoresFound = 0;
+        int maxFreqGlobal = 0;
+        std::vector<int> coreFreqs(totalCores, 0);
 
-    for (int i = 0; i < totalCores; ++i) {
-        char path[128];
-        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
-        int fd = open(path, O_RDONLY);
-        if (fd >= 0) {
-            char buf[32];
-            ssize_t bytes = read(fd, buf, sizeof(buf) - 1);
-            close(fd);
-            if (bytes > 0) {
-                buf[bytes] = '\0';
-                coreFreqs[i] = atoi(buf);
-                if (coreFreqs[i] > maxFreqGlobal) {
-                    maxFreqGlobal = coreFreqs[i];
+        for (int i = 0; i < totalCores; ++i) {
+            char path[128];
+            snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+            int fd = open(path, O_RDONLY);
+            if (fd >= 0) {
+                char buf[32];
+                ssize_t bytes = read(fd, buf, sizeof(buf) - 1);
+                close(fd);
+                if (bytes > 0) {
+                    buf[bytes] = '\0';
+                    coreFreqs[i] = atoi(buf);
+                    if (coreFreqs[i] > maxFreqGlobal) {
+                        maxFreqGlobal = coreFreqs[i];
+                    }
                 }
             }
         }
-    }
 
-    if (maxFreqGlobal > 0) {
-        // Asignar afinidad exclusivamente a los núcleos con menor frecuencia (LITTLE cluster)
-        for (int i = 0; i < totalCores; ++i) {
-            if (coreFreqs[i] > 0 && coreFreqs[i] < maxFreqGlobal) {
-                CPU_SET(i, &cpuset);
-                efficiencyCoresFound++;
+        if (maxFreqGlobal > 0) {
+            // Asignar afinidad exclusivamente a los núcleos con menor frecuencia (LITTLE cluster)
+            for (int i = 0; i < totalCores; ++i) {
+                if (coreFreqs[i] > 0 && coreFreqs[i] < maxFreqGlobal) {
+                    CPU_SET(i, &cpuset);
+                    efficiencyCoresFound++;
+                }
             }
         }
-    }
 
-    // Estrategia de respaldo determinista para SoCs big.LITTLE (ej: Helio G81 / G85 / G88, Snapdragon):
-    if (efficiencyCoresFound == 0) {
-        int efficiencyLimit = (totalCores >= 8) ? 4 : (totalCores / 2);
-        for (int i = 0; i < efficiencyLimit; ++i) {
-            CPU_SET(i, &cpuset);
+        // Estrategia de respaldo determinista para SoCs big.LITTLE (ej: Helio G81 / G85 / G88, Snapdragon):
+        if (efficiencyCoresFound == 0) {
+            int efficiencyLimit = (totalCores >= 8) ? 4 : (totalCores / 2);
+            for (int i = 0; i < efficiencyLimit; ++i) {
+                CPU_SET(i, &cpuset);
+            }
+            efficiencyCoresFound = efficiencyLimit;
         }
-        efficiencyCoresFound = efficiencyLimit;
-    }
 
-    int result = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
-    if (result == 0) {
-        LOGI("Afinidad de hilos aplicada exitosamente para [%s]: %d nucleos LITTLE asignados de %d totales.",
-             threadName ? threadName : "Hilo", efficiencyCoresFound, totalCores);
-    } else {
-        LOGI("Nota de afinidad: sched_setaffinity no restringido por politicas del kernel (status %d).", result);
+        int result = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
+        if (result == 0) {
+            LOGI("Afinidad de hilos aplicada exitosamente para [%s]: %d nucleos LITTLE asignados de %d totales.",
+                 threadName ? threadName : "Hilo", efficiencyCoresFound, totalCores);
+        } else {
+            LOGI("Nota de afinidad: sched_setaffinity no restringido por politicas del kernel (status %d).", result);
+        }
+    } catch (...) {
+        LOGE("Excepción evitada en applyCpuAffinityForEfficiencyCores para %s", threadName ? threadName : "NDK");
     }
 }
 

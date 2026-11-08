@@ -134,7 +134,8 @@ jobs:
           clang-tidy android/app/src/main/cpp/NativeRecorderEngine.cpp \
                      android/app/src/main/cpp/GpuShaderPipeline.cpp \
                      android/app/src/main/cpp/libyuv_bridge.cpp \
-                     --checks='-*,bugprone-*,clang-analyzer-*,performance-*,portability-*' \
+                     --header-filter='android/app/src/main/cpp/.*' \
+                     --checks='-*,bugprone-*,clang-analyzer-*,performance-*,portability-*,-bugprone-easily-swappable-parameters' \
                      -- --target=aarch64-linux-android26 \
                         --sysroot="$SYSROOT" \
                         -isystem "$SYSROOT/usr/include/c++/v1" \

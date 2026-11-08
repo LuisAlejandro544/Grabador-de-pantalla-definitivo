@@ -65,8 +65,8 @@ std::expected<void, YuvError> LibYuvBridge::convertRgbaToI420(
 
     // Conversión matricial directa optimizada para YUV420 Planar (BT.601 para video móvil)
     for (int32_t y = 0; y < height; ++y) {
-        const uint8_t* srcRow = srcRgba.data() + (y * srcStride);
-        uint8_t* dstYRow = dstY.data() + (y * dstStrideY);
+        const uint8_t* srcRow = srcRgba.data() + (static_cast<ptrdiff_t>(y) * static_cast<ptrdiff_t>(srcStride));
+        uint8_t* dstYRow = dstY.data() + (static_cast<ptrdiff_t>(y) * static_cast<ptrdiff_t>(dstStrideY));
 
         for (int32_t x = 0; x < width; ++x) {
             const uint8_t r = srcRow[x * 4 + 0];
@@ -117,8 +117,8 @@ std::expected<void, YuvError> LibYuvBridge::scalePlaneBilinear(
 
     for (int32_t i = 0; i < dstDims.height; ++i) {
         const int32_t srcY = static_cast<int32_t>(static_cast<float>(i) * yRatio);
-        const uint8_t* srcRow = srcPlane.data() + (srcY * srcStride);
-        uint8_t* dstRow = dstPlane.data() + (i * dstStride);
+        const uint8_t* srcRow = srcPlane.data() + (static_cast<ptrdiff_t>(srcY) * static_cast<ptrdiff_t>(srcStride));
+        uint8_t* dstRow = dstPlane.data() + (static_cast<ptrdiff_t>(i) * static_cast<ptrdiff_t>(dstStride));
 
         for (int32_t j = 0; j < dstDims.width; ++j) {
             const int32_t srcX = static_cast<int32_t>(static_cast<float>(j) * xRatio);
