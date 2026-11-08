@@ -117,7 +117,17 @@ object AudioMuxerHelper {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = videoExtractor.sampleTime
-                bufferInfo.flags = videoExtractor.sampleFlags
+                
+                // Mapear banderas de muestra de MediaExtractor a constantes válidas de MediaCodec
+                val sampleFlags = videoExtractor.sampleFlags
+                var codecFlags = 0
+                if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                    codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+                }
+                if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME) != 0) {
+                    codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_PARTIAL_FRAME
+                }
+                bufferInfo.flags = codecFlags
 
                 if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
                     muxer.writeSampleData(muxerVideoTrack, byteBuffer, bufferInfo)
@@ -135,7 +145,17 @@ object AudioMuxerHelper {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = audioExtractor.sampleTime
-                bufferInfo.flags = audioExtractor.sampleFlags
+                
+                // Mapear banderas de muestra de audio de MediaExtractor a constantes válidas de MediaCodec
+                val sampleFlags = audioExtractor.sampleFlags
+                var codecFlags = 0
+                if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                    codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+                }
+                if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME) != 0) {
+                    codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_PARTIAL_FRAME
+                }
+                bufferInfo.flags = codecFlags
 
                 if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
                     muxer.writeSampleData(muxerAudioTrack, byteBuffer, bufferInfo)

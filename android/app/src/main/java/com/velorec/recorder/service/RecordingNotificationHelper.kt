@@ -32,18 +32,16 @@ object RecordingNotificationHelper {
     const val NOTIFICATION_ID = 8801
 
     fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Grabación de Pantalla VeloRec",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Muestra el estado activo de grabación con C++23 / Rust"
-                setShowBadge(false)
-            }
-            val manager = context.getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Grabación de Pantalla VeloRec",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Muestra el estado activo de grabación con C++23 / Rust"
+            setShowBadge(false)
         }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager?.createNotificationChannel(channel)
     }
 
     fun buildRecordingNotification(
@@ -55,11 +53,7 @@ object RecordingNotificationHelper {
         isPaused: Boolean = false
     ): Notification {
         val engineLabel = if (engine == "rust2024") "Rust 2024" else "C++23"
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
         // Intent para abrir MainActivity al presionar la notificación
         val openAppIntent = Intent(context, MainActivity::class.java).apply {

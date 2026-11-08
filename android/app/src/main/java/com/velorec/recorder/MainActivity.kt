@@ -96,11 +96,8 @@ class MainActivity : ComponentActivity() {
                                 putExtra(ScreenRecordService.EXTRA_AUDIO, config.audioSource)
                             }
 
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                ContextCompat.startForegroundService(this, serviceIntent)
-                            } else {
-                                startService(serviceIntent)
-                            }
+                            // Iniciar Foreground Service de forma segura (minSdk 26+ garantizado)
+                            ContextCompat.startForegroundService(this, serviceIntent)
 
                             Toast.makeText(
                                 this,

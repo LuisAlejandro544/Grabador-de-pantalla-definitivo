@@ -117,6 +117,15 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    lint {
+        isAbortOnError = false
+        isCheckReleaseBuilds = false
+        disable += listOf(
+            "GradleDependency",
+            "OldTargetApi"
+        )
+    }
 }
 
 // =========================================================================

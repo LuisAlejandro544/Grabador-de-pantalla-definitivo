@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -258,7 +259,7 @@ fun NativeGallerySection(accentColor: Color) {
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    var previewAspectRatio by remember { mutableStateOf(9f / 16f) }
+                    var previewAspectRatio by remember { mutableFloatStateOf(9f / 16f) }
                     var playbackFailed by remember { mutableStateOf(false) }
 
                     // Reproductor VideoView nativo de Android
