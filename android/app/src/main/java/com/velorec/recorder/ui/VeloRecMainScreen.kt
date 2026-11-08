@@ -60,6 +60,7 @@ import com.velorec.recorder.data.model.RESOLUTION_PRESETS
 import com.velorec.recorder.data.model.getAdaptivePresetsForDevice
 import com.velorec.recorder.data.model.RemoteUiConfig
 import com.velorec.recorder.data.repository.RemoteConfigRepository
+import com.velorec.recorder.data.repository.UserPreferencesRepository
 import com.velorec.recorder.ui.components.RemoteAnnouncementDialog
 import com.velorec.recorder.ui.screens.NativeBenchmarkSection
 import com.velorec.recorder.ui.screens.NativeGallerySection
@@ -107,15 +108,27 @@ fun VeloRecMainScreen(
     val adaptivePresets = remember(context) { getAdaptivePresetsForDevice(context) }
 
     var activeTab by remember { mutableStateOf(NativeTab.RECORDER) }
-    var selectedEngine by remember { mutableStateOf("cpp23") } // "cpp23" o "rust2024"
-    var selectedResolution by remember(adaptivePresets) {
-        mutableStateOf(adaptivePresets.firstOrNull { it.isNative } ?: adaptivePresets[0])
+    var selectedEngine by remember {
+        mutableStateOf(UserPreferencesRepository.loadEngine(context))
     }
-    var selectedBitrateMbps by remember { mutableIntStateOf(12) }
-    var selectedFps by remember { mutableIntStateOf(60) }
-    var selectedCodec by remember { mutableStateOf("H264") } // "H264", "HEVC", "AV1"
-    var selectedAudio by remember { mutableStateOf("both") } // "both", "mic", "internal", "mute"
-    var selectedCountdownSec by remember { mutableIntStateOf(3) } // 0, 3, 5, 10
+    var selectedResolution by remember(adaptivePresets) {
+        mutableStateOf(UserPreferencesRepository.loadResolution(context, adaptivePresets))
+    }
+    var selectedBitrateMbps by remember {
+        mutableIntStateOf(UserPreferencesRepository.loadBitrate(context))
+    }
+    var selectedFps by remember {
+        mutableIntStateOf(UserPreferencesRepository.loadFps(context))
+    }
+    var selectedCodec by remember {
+        mutableStateOf(UserPreferencesRepository.loadCodec(context))
+    }
+    var selectedAudio by remember {
+        mutableStateOf(UserPreferencesRepository.loadAudioSource(context))
+    }
+    var selectedCountdownSec by remember {
+        mutableIntStateOf(UserPreferencesRepository.loadCountdownSec(context))
+    }
 
     // Estado de configuración remota dinámica (Server-Driven UI)
     var remoteConfig by remember { mutableStateOf(RemoteUiConfig()) }
@@ -394,9 +407,18 @@ fun VeloRecMainScreen(
                         bannerText = if (remoteConfig.theme.bannerActive) remoteConfig.theme.bannerText else null,
                         availableResolutions = adaptivePresets,
                         selectedCountdownSec = selectedCountdownSec,
-                        onResolutionChange = { selectedResolution = it },
-                        onBitrateChange = { selectedBitrateMbps = it },
-                        onCountdownChange = { selectedCountdownSec = it },
+                        onResolutionChange = {
+                            selectedResolution = it
+                            UserPreferencesRepository.saveResolution(context, it)
+                        },
+                        onBitrateChange = {
+                            selectedBitrateMbps = it
+                            UserPreferencesRepository.saveBitrate(context, it)
+                        },
+                        onCountdownChange = {
+                            selectedCountdownSec = it
+                            UserPreferencesRepository.saveCountdownSec(context, it)
+                        },
                         onToggleRecord = {
                             if (!isRecording) {
                                 val config = NativeRecordingConfig(
@@ -432,13 +454,34 @@ fun VeloRecMainScreen(
                         remoteConfig = remoteConfig,
                         availableResolutions = adaptivePresets,
                         selectedCountdownSec = selectedCountdownSec,
-                        onEngineChange = { selectedEngine = it },
-                        onResolutionChange = { selectedResolution = it },
-                        onBitrateChange = { selectedBitrateMbps = it },
-                        onFpsChange = { selectedFps = it },
-                        onCodecChange = { selectedCodec = it },
-                        onAudioChange = { selectedAudio = it },
-                        onCountdownChange = { selectedCountdownSec = it }
+                        onEngineChange = {
+                            selectedEngine = it
+                            UserPreferencesRepository.saveEngine(context, it)
+                        },
+                        onResolutionChange = {
+                            selectedResolution = it
+                            UserPreferencesRepository.saveResolution(context, it)
+                        },
+                        onBitrateChange = {
+                            selectedBitrateMbps = it
+                            UserPreferencesRepository.saveBitrate(context, it)
+                        },
+                        onFpsChange = {
+                            selectedFps = it
+                            UserPreferencesRepository.saveFps(context, it)
+                        },
+                        onCodecChange = {
+                            selectedCodec = it
+                            UserPreferencesRepository.saveCodec(context, it)
+                        },
+                        onAudioChange = {
+                            selectedAudio = it
+                            UserPreferencesRepository.saveAudioSource(context, it)
+                        },
+                        onCountdownChange = {
+                            selectedCountdownSec = it
+                            UserPreferencesRepository.saveCountdownSec(context, it)
+                        }
                     )
                 }
                 NativeTab.GALLERY -> {

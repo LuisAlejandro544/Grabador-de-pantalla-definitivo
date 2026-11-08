@@ -41,20 +41,100 @@ data class ResolutionPreset(
     val label: String,
     val recommendedBitrateMbps: Int,
     val isNative: Boolean = false,
-    val scalePercent: Int = 100
+    val scalePercent: Int = 100,
+    val aspectRatioLabel: String = "",
+    val category: String = "Estándar",
+    val isCustom: Boolean = false
 )
 
 val RESOLUTION_PRESETS = listOf(
-    ResolutionPreset("native_100", "Nativa 100% (Pantalla)", 1080, 2400, "Real", 14, isNative = true, scalePercent = 100),
-    ResolutionPreset("native_fhd", "Nativa FHD Adaptada", 1080, 2400, "FHD", 12, isNative = true, scalePercent = 100),
-    ResolutionPreset("native_hd", "Nativa HD Adaptada", 720, 1600, "HD", 8, isNative = true, scalePercent = 67),
-    ResolutionPreset("native_sd", "Nativa Ahorro (Gaming)", 540, 1200, "SD", 4, isNative = true, scalePercent = 50),
-    ResolutionPreset("1080p", "1080p FHD (9:16)", 1080, 1920, "FHD", 12),
-    ResolutionPreset("720p", "720p HD (9:16)", 720, 1280, "HD", 8),
-    ResolutionPreset("480p", "480p SD (9:16)", 480, 854, "SD", 4),
-    ResolutionPreset("1440p", "1440p 2K (9:16)", 1440, 2560, "2K", 24),
-    ResolutionPreset("4k", "4K UHD (9:16)", 2160, 3840, "4K", 35)
+    ResolutionPreset("native_100", "Nativa 100% (Pantalla)", 1080, 2400, "Real", 14, isNative = true, scalePercent = 100, aspectRatioLabel = "Nativa", category = "Nativa"),
+    ResolutionPreset("native_fhd", "Nativa FHD Adaptada", 1080, 2400, "FHD", 12, isNative = true, scalePercent = 100, aspectRatioLabel = "Nativa", category = "Nativa"),
+    ResolutionPreset("native_hd", "Nativa HD Adaptada", 720, 1600, "HD", 8, isNative = true, scalePercent = 67, aspectRatioLabel = "Nativa", category = "Nativa"),
+    ResolutionPreset("native_sd", "Nativa Ahorro (Gaming)", 540, 1200, "SD", 4, isNative = true, scalePercent = 50, aspectRatioLabel = "Nativa", category = "Nativa"),
+    ResolutionPreset("1080p", "1080p FHD (9:16)", 1080, 1920, "FHD", 12, aspectRatioLabel = "9:16", category = "9:16"),
+    ResolutionPreset("720p", "720p HD (9:16)", 720, 1280, "HD", 8, aspectRatioLabel = "9:16", category = "9:16"),
+    ResolutionPreset("480p", "480p SD (9:16)", 480, 854, "SD", 4, aspectRatioLabel = "9:16", category = "9:16"),
+    ResolutionPreset("1440p", "1440p 2K (9:16)", 1440, 2560, "2K", 24, aspectRatioLabel = "9:16", category = "9:16"),
+    ResolutionPreset("4k", "4K UHD (9:16)", 2160, 3840, "4K", 35, aspectRatioLabel = "9:16", category = "9:16")
 )
+
+/**
+ * Preajustes estándar más utilizados en dispositivos Android modernos y redes sociales.
+ * Incluye formatos 20:9, 19.5:9 (13:6), 19:9, 21:9 (7:3) y 9:16 vertical universal.
+ */
+val STANDARD_POPULAR_PRESETS: List<ResolutionPreset> = listOf(
+    // 20:9 (Xiaomi, Redmi, Realme, Poco, Tecno, Samsung A)
+    ResolutionPreset("std_2400x1080", "2400 x 1080 (FHD+ 20:9)", 1080, 2400, "FHD+", 12, aspectRatioLabel = "20:9", category = "20:9"),
+    ResolutionPreset("std_1600x720", "1600 x 720 (HD+ 20:9)", 720, 1600, "HD+", 8, aspectRatioLabel = "20:9", category = "20:9"),
+    ResolutionPreset("std_1200x540", "1200 x 540 (Ahorro 20:9)", 540, 1200, "SD", 4, aspectRatioLabel = "20:9", category = "20:9"),
+
+    // 19.5:9 / 13:6 (iPhone, Galaxy S20-S24, Redmi Note)
+    ResolutionPreset("std_2340x1080", "2340 x 1080 (FHD+ 19.5:9)", 1080, 2340, "FHD+", 12, aspectRatioLabel = "19.5:9", category = "19.5:9"),
+    ResolutionPreset("std_1560x720", "1560 x 720 (HD+ 19.5:9)", 720, 1560, "HD+", 8, aspectRatioLabel = "19.5:9", category = "19.5:9"),
+    ResolutionPreset("std_1040x480", "1040 x 480 (SD+ 19.5:9)", 480, 1040, "SD", 4, aspectRatioLabel = "19.5:9", category = "19.5:9"),
+    ResolutionPreset("std_780x360", "780 x 360 (Ultra Ahorro 19.5:9)", 360, 780, "MIN", 3, aspectRatioLabel = "19.5:9", category = "19.5:9"),
+
+    // 19:9 (Galaxy S10/Note 10)
+    ResolutionPreset("std_3040x1440", "3040 x 1440 (QHD+ 19:9)", 1440, 3040, "2K+", 24, aspectRatioLabel = "19:9", category = "19:9"),
+
+    // 21:9 / 7:3 (Cinemático y Ultra Panorámico)
+    ResolutionPreset("std_2520x1080", "2520 x 1080 (Cinemático 21:9)", 1080, 2520, "21:9", 14, aspectRatioLabel = "21:9", category = "21:9"),
+
+    // 9:16 (Universal para Shorts, Reels, TikTok y YouTube)
+    ResolutionPreset("std_4k_916", "2160 x 3840 (4K UHD 9:16)", 2160, 3840, "4K", 35, aspectRatioLabel = "9:16", category = "9:16"),
+    ResolutionPreset("std_2k_916", "1440 x 2560 (2K QHD 9:16)", 1440, 2560, "2K", 24, aspectRatioLabel = "9:16", category = "9:16"),
+    ResolutionPreset("1080p", "1080 x 1920 (FHD 9:16)", 1080, 1920, "FHD", 12, aspectRatioLabel = "9:16", category = "9:16"),
+    ResolutionPreset("720p", "720 x 1280 (HD 9:16)", 720, 1280, "HD", 8, aspectRatioLabel = "9:16", category = "9:16"),
+    ResolutionPreset("480p", "480 x 854 (SD 9:16)", 480, 854, "SD", 4, aspectRatioLabel = "9:16", category = "9:16")
+)
+
+/**
+ * Crea una resolución personalizada garantizando dimensiones pares (% 2 == 0)
+ * para evitar fallos catastróficos en codificadores de hardware AMediaCodec.
+ */
+fun createCustomResolutionPreset(
+    width: Int,
+    height: Int,
+    customName: String? = null
+): ResolutionPreset {
+    val cleanW = maxOf(240, if (width % 2 == 0) width else width - 1)
+    val cleanH = maxOf(240, if (height % 2 == 0) height else height - 1)
+    val aspectDecimal = cleanH.toDouble() / cleanW.toDouble().coerceAtLeast(1.0)
+
+    val ratioLabel = when {
+        Math.abs(aspectDecimal - (20.0 / 9.0)) < 0.025 -> "20:9"
+        Math.abs(aspectDecimal - (19.5 / 9.0)) < 0.025 -> "19.5:9"
+        Math.abs(aspectDecimal - (19.0 / 9.0)) < 0.025 -> "19:9"
+        Math.abs(aspectDecimal - (21.0 / 9.0)) < 0.025 -> "21:9"
+        Math.abs(aspectDecimal - (16.0 / 9.0)) < 0.025 -> "9:16"
+        else -> String.format(java.util.Locale.US, "%.2f:1", aspectDecimal)
+    }
+
+    val recommendedBitrate = when {
+        cleanW >= 2160 -> 35
+        cleanW >= 1440 -> 24
+        cleanW >= 1080 -> 12
+        cleanW >= 720 -> 8
+        else -> 4
+    }
+
+    val name = customName ?: "Personalizada (${cleanW}x${cleanH})"
+
+    return ResolutionPreset(
+        id = "custom_${cleanW}x${cleanH}",
+        name = name,
+        width = cleanW,
+        height = cleanH,
+        label = "Custom",
+        recommendedBitrateMbps = recommendedBitrate,
+        isNative = false,
+        scalePercent = 100,
+        aspectRatioLabel = ratioLabel,
+        category = "Personalizada",
+        isCustom = true
+    )
+}
 
 /**
  * Genera resoluciones adaptadas a la relación de aspecto real de la pantalla del smartphone del usuario.
@@ -98,7 +178,9 @@ fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
             label = "Pantalla",
             recommendedBitrateMbps = if (screenWidth >= 1080) 14 else 8,
             isNative = true,
-            scalePercent = 100
+            scalePercent = 100,
+            aspectRatioLabel = "Nativa",
+            category = "Nativa"
         ),
         ResolutionPreset(
             id = "native_fhd",
@@ -108,7 +190,9 @@ fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
             label = "FHD",
             recommendedBitrateMbps = 12,
             isNative = true,
-            scalePercent = minOf(100, (1080 * 100 / screenScaleBase))
+            scalePercent = minOf(100, (1080 * 100 / screenScaleBase)),
+            aspectRatioLabel = "Nativa",
+            category = "Nativa"
         ),
         ResolutionPreset(
             id = "native_hd",
@@ -118,7 +202,9 @@ fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
             label = "HD",
             recommendedBitrateMbps = 8,
             isNative = true,
-            scalePercent = minOf(100, (720 * 100 / screenScaleBase))
+            scalePercent = minOf(100, (720 * 100 / screenScaleBase)),
+            aspectRatioLabel = "Nativa",
+            category = "Nativa"
         ),
         ResolutionPreset(
             id = "native_sd",
@@ -128,7 +214,9 @@ fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
             label = "SD",
             recommendedBitrateMbps = 4,
             isNative = true,
-            scalePercent = minOf(100, (540 * 100 / screenScaleBase))
+            scalePercent = minOf(100, (540 * 100 / screenScaleBase)),
+            aspectRatioLabel = "Nativa",
+            category = "Nativa"
         ),
         ResolutionPreset(
             id = "native_2k",
@@ -138,31 +226,9 @@ fun getAdaptivePresetsForDevice(context: Context): List<ResolutionPreset> {
             label = "2K",
             recommendedBitrateMbps = 24,
             isNative = true,
-            scalePercent = (1440 * 100 / screenScaleBase)
-        ),
-        ResolutionPreset(
-            id = "1080p",
-            name = "1080p FHD (Estándar 9:16)",
-            width = 1080,
-            height = 1920,
-            label = "FHD",
-            recommendedBitrateMbps = 12
-        ),
-        ResolutionPreset(
-            id = "720p",
-            name = "720p HD (Estándar 9:16)",
-            width = 720,
-            height = 1280,
-            label = "HD",
-            recommendedBitrateMbps = 8
-        ),
-        ResolutionPreset(
-            id = "480p",
-            name = "480p SD (Estándar 9:16)",
-            width = 480,
-            height = 854,
-            label = "SD",
-            recommendedBitrateMbps = 4
+            scalePercent = (1440 * 100 / screenScaleBase),
+            aspectRatioLabel = "Nativa",
+            category = "Nativa"
         )
     )
 }

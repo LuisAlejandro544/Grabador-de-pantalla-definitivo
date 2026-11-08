@@ -4,7 +4,7 @@
  * permitiendo ejecutar tests unitarios deterministas con node:test.
  */
 
-import { ResolutionConfig, NativeEngineType, EngineLiveMetrics } from '../types/recorder';
+import { ResolutionConfig, NativeEngineType, EngineLiveMetrics, VideoCodec, AudioSourceType } from '../types/recorder';
 
 /**
 /**
@@ -59,56 +59,224 @@ export function generateNativeResolutionPresets(
 export const NATIVE_DEFAULT_PRESETS = generateNativeResolutionPresets(1080, 2400);
 
 /**
+ * Calcula la etiqueta legible de relación de aspecto para una resolución dada.
+ */
+export function calculateAspectRatioLabel(width: number, height: number): string {
+  const cleanW = Math.max(1, width % 2 === 0 ? width : width - 1);
+  const cleanH = Math.max(1, height % 2 === 0 ? height : height - 1);
+  const aspectDecimal = cleanH / cleanW;
+
+  if (Math.abs(aspectDecimal - (20.0 / 9.0)) < 0.025) return '20:9';
+  if (Math.abs(aspectDecimal - (19.5 / 9.0)) < 0.025) return '19.5:9';
+  if (Math.abs(aspectDecimal - (19.0 / 9.0)) < 0.025) return '19:9';
+  if (Math.abs(aspectDecimal - (21.0 / 9.0)) < 0.025) return '21:9';
+  if (Math.abs(aspectDecimal - (16.0 / 9.0)) < 0.025) return '9:16';
+  return `${aspectDecimal.toFixed(2)}:1`;
+}
+
+/**
+ * Crea una configuración de resolución personalizada asegurando dimensiones pares.
+ */
+export function createCustomResolutionPreset(
+  width: number,
+  height: number,
+  customName?: string
+): ResolutionConfig {
+  const cleanW = Math.max(240, width % 2 === 0 ? width : width - 1);
+  const cleanH = Math.max(240, height % 2 === 0 ? height : height - 1);
+  const ratio = calculateAspectRatioLabel(cleanW, cleanH);
+
+  let category: 'SD' | 'HD' | 'FHD' | '2K' | '4K' | 'CUSTOM' = 'CUSTOM';
+  let recommendedBitrate = 4;
+
+  if (cleanW >= 2160) {
+    category = '4K';
+    recommendedBitrate = 36;
+  } else if (cleanW >= 1440) {
+    category = '2K';
+    recommendedBitrate = 20;
+  } else if (cleanW >= 1080) {
+    category = 'FHD';
+    recommendedBitrate = 12;
+  } else if (cleanW >= 720) {
+    category = 'HD';
+    recommendedBitrate = 6;
+  } else {
+    category = 'SD';
+    recommendedBitrate = 3;
+  }
+
+  return {
+    id: `custom-${cleanW}x${cleanH}`,
+    name: customName || `Personalizada (${cleanW}x${cleanH})`,
+    width: cleanW,
+    height: cleanH,
+    aspectRatio: ratio,
+    recommendedBitrateMbps: recommendedBitrate,
+    category,
+    isCustom: true,
+    scalePercent: 100
+  };
+}
+
+/**
+ * Lista exhaustiva de resoluciones estándar más comunes en Android y redes sociales.
+ */
+export const STANDARD_POPULAR_PRESETS: ResolutionConfig[] = [
+  // 20:9
+  {
+    id: 'std_2400x1080',
+    name: '2400 x 1080 (FHD+ 20:9)',
+    width: 1080,
+    height: 2400,
+    aspectRatio: '20:9',
+    recommendedBitrateMbps: 12,
+    category: 'FHD',
+    formatGroup: '20:9'
+  },
+  {
+    id: 'std_1600x720',
+    name: '1600 x 720 (HD+ 20:9)',
+    width: 720,
+    height: 1600,
+    aspectRatio: '20:9',
+    recommendedBitrateMbps: 8,
+    category: 'HD',
+    formatGroup: '20:9'
+  },
+  {
+    id: 'std_1200x540',
+    name: '1200 x 540 (Ahorro 20:9)',
+    width: 540,
+    height: 1200,
+    aspectRatio: '20:9',
+    recommendedBitrateMbps: 4,
+    category: 'SD',
+    formatGroup: '20:9'
+  },
+  // 19.5:9 / 13:6
+  {
+    id: 'std_2340x1080',
+    name: '2340 x 1080 (FHD+ 19.5:9)',
+    width: 1080,
+    height: 2340,
+    aspectRatio: '19.5:9',
+    recommendedBitrateMbps: 12,
+    category: 'FHD',
+    formatGroup: '19.5:9'
+  },
+  {
+    id: 'std_1560x720',
+    name: '1560 x 720 (HD+ 19.5:9)',
+    width: 720,
+    height: 1560,
+    aspectRatio: '19.5:9',
+    recommendedBitrateMbps: 8,
+    category: 'HD',
+    formatGroup: '19.5:9'
+  },
+  {
+    id: 'std_1040x480',
+    name: '1040 x 480 (SD+ 19.5:9)',
+    width: 480,
+    height: 1040,
+    aspectRatio: '19.5:9',
+    recommendedBitrateMbps: 4,
+    category: 'SD',
+    formatGroup: '19.5:9'
+  },
+  {
+    id: 'std_780x360',
+    name: '780 x 360 (Ultra Ahorro 19.5:9)',
+    width: 360,
+    height: 780,
+    aspectRatio: '19.5:9',
+    recommendedBitrateMbps: 3,
+    category: 'SD',
+    formatGroup: '19.5:9'
+  },
+  // 19:9
+  {
+    id: 'std_3040x1440',
+    name: '3040 x 1440 (QHD+ 19:9)',
+    width: 1440,
+    height: 3040,
+    aspectRatio: '19:9',
+    recommendedBitrateMbps: 24,
+    category: '2K',
+    formatGroup: '19:9'
+  },
+  // 21:9
+  {
+    id: 'std_2520x1080',
+    name: '2520 x 1080 (Cinemático 21:9)',
+    width: 1080,
+    height: 2520,
+    aspectRatio: '21:9',
+    recommendedBitrateMbps: 14,
+    category: 'FHD',
+    formatGroup: '21:9'
+  },
+  // 9:16
+  {
+    id: '2160p',
+    name: '2160 x 3840 (4K UHD 9:16)',
+    width: 2160,
+    height: 3840,
+    aspectRatio: '9:16',
+    recommendedBitrateMbps: 36,
+    category: '4K',
+    formatGroup: '9:16'
+  },
+  {
+    id: '1440p',
+    name: '1440 x 2560 (2K QHD 9:16)',
+    width: 1440,
+    height: 2560,
+    aspectRatio: '9:16',
+    recommendedBitrateMbps: 20,
+    category: '2K',
+    formatGroup: '9:16'
+  },
+  {
+    id: '1080p',
+    name: '1080 x 1920 (FHD 9:16)',
+    width: 1080,
+    height: 1920,
+    aspectRatio: '9:16',
+    recommendedBitrateMbps: 12,
+    category: 'FHD',
+    formatGroup: '9:16'
+  },
+  {
+    id: '720p',
+    name: '720 x 1280 (HD 9:16)',
+    width: 720,
+    height: 1280,
+    aspectRatio: '9:16',
+    recommendedBitrateMbps: 6,
+    category: 'HD',
+    formatGroup: '9:16'
+  },
+  {
+    id: '480p',
+    name: '480 x 854 (SD 9:16)',
+    width: 480,
+    height: 854,
+    aspectRatio: '9:16',
+    recommendedBitrateMbps: 3,
+    category: 'SD',
+    formatGroup: '9:16'
+  }
+];
+
+/**
  * Presets estándar de resoluciones optimizadas para pantallas móviles.
  * Se aseguran dimensiones pares requeridas por codificadores de hardware YUV420p.
  */
 export const RESOLUTION_PRESETS: ResolutionConfig[] = [
   NATIVE_DEFAULT_PRESETS[0], // Nativa 100% (Pantalla Completa)
-  {
-    id: '1080p',
-    name: '1080p Full HD (Recomendado)',
-    width: 1080,
-    height: 1920,
-    aspectRatio: '9:16',
-    recommendedBitrateMbps: 12,
-    category: 'FHD'
-  },
-  {
-    id: '720p',
-    name: '720p HD (Equilibrado)',
-    width: 720,
-    height: 1280,
-    aspectRatio: '9:16',
-    recommendedBitrateMbps: 6,
-    category: 'HD'
-  },
-  {
-    id: '480p',
-    name: '480p SD (Ahorro de batería)',
-    width: 480,
-    height: 854,
-    aspectRatio: '9:16',
-    recommendedBitrateMbps: 3,
-    category: 'SD'
-  },
-  {
-    id: '1440p',
-    name: '2K QHD (Máxima Nitidez)',
-    width: 1440,
-    height: 2560,
-    aspectRatio: '9:16',
-    recommendedBitrateMbps: 20,
-    category: '2K'
-  },
-  {
-    id: '2160p',
-    name: '4K Ultra HD (Profesional)',
-    width: 2160,
-    height: 3840,
-    aspectRatio: '9:16',
-    recommendedBitrateMbps: 36,
-    category: '4K'
-  }
+  ...STANDARD_POPULAR_PRESETS.filter(p => ['1080p', '720p', '480p', '1440p', '2160p'].includes(p.id))
 ];
 
 /**
@@ -325,5 +493,63 @@ export function validateCountdownSeconds(seconds: number): { valid: boolean; sec
   // Fallback seguro a 3 segundos
   return { valid: false, seconds: 3, label: '3 segundos (Recomendado)' };
 }
+
+/**
+ * Clave de persistencia para almacenamiento local de ajustes del usuario.
+ */
+export const PREFERENCES_STORAGE_KEY = 'velorec_user_preferences_v1';
+
+export interface PersistedUserPreferences {
+  engine: NativeEngineType;
+  resolutionId: string;
+  customWidth?: number;
+  customHeight?: number;
+  bitrateMbps: number;
+  fps: number;
+  codec: VideoCodec;
+  audioSource: AudioSourceType;
+  countdownSec: number;
+}
+
+export const DEFAULT_USER_PREFERENCES: PersistedUserPreferences = {
+  engine: 'cpp23',
+  resolutionId: 'native-100',
+  bitrateMbps: 12,
+  fps: 60,
+  codec: 'H264',
+  audioSource: 'both',
+  countdownSec: 3
+};
+
+/**
+ * Serializa las preferencias del usuario a formato JSON para persistencia local.
+ */
+export function serializeUserPreferences(prefs: PersistedUserPreferences): string {
+  return JSON.stringify(prefs);
+}
+
+/**
+ * Deserializa las preferencias guardadas con validación defensiva y valores por defecto.
+ */
+export function parseUserPreferences(jsonString: string | null | undefined): PersistedUserPreferences {
+  if (!jsonString) return { ...DEFAULT_USER_PREFERENCES };
+  try {
+    const parsed = JSON.parse(jsonString);
+    return {
+      engine: parsed.engine === 'rust2024' ? 'rust2024' : 'cpp23',
+      resolutionId: typeof parsed.resolutionId === 'string' ? parsed.resolutionId : 'native-100',
+      customWidth: typeof parsed.customWidth === 'number' && parsed.customWidth > 0 ? parsed.customWidth : undefined,
+      customHeight: typeof parsed.customHeight === 'number' && parsed.customHeight > 0 ? parsed.customHeight : undefined,
+      bitrateMbps: typeof parsed.bitrateMbps === 'number' && parsed.bitrateMbps > 0 ? parsed.bitrateMbps : 12,
+      fps: typeof parsed.fps === 'number' && parsed.fps > 0 ? parsed.fps : 60,
+      codec: ['H264', 'HEVC', 'AV1'].includes(parsed.codec) ? parsed.codec : 'H264',
+      audioSource: ['internal', 'mic', 'both', 'mute'].includes(parsed.audioSource) ? parsed.audioSource : 'both',
+      countdownSec: typeof parsed.countdownSec === 'number' && parsed.countdownSec >= 0 ? parsed.countdownSec : 3
+    };
+  } catch {
+    return { ...DEFAULT_USER_PREFERENCES };
+  }
+}
+
 
 

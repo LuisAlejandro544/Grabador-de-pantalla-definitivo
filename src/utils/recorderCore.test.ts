@@ -15,7 +15,13 @@ import {
   detectVideoContainer,
   COUNTDOWN_PRESETS,
   validateCountdownSeconds,
-  generateNativeResolutionPresets
+  generateNativeResolutionPresets,
+  calculateAspectRatioLabel,
+  createCustomResolutionPreset,
+  STANDARD_POPULAR_PRESETS,
+  serializeUserPreferences,
+  parseUserPreferences,
+  DEFAULT_USER_PREFERENCES
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -211,5 +217,89 @@ test('generateNativeResolutionPresets creates proportional even resolutions for 
     assert.equal(preset.height % 2, 0);
   }
 });
+
+test('calculateAspectRatioLabel correctly maps standard aspect ratios', () => {
+  assert.equal(calculateAspectRatioLabel(1080, 2400), '20:9');
+  assert.equal(calculateAspectRatioLabel(720, 1600), '20:9');
+  assert.equal(calculateAspectRatioLabel(1080, 2340), '19.5:9');
+  assert.equal(calculateAspectRatioLabel(720, 1560), '19.5:9');
+  assert.equal(calculateAspectRatioLabel(1440, 3040), '19:9');
+  assert.equal(calculateAspectRatioLabel(1080, 2520), '21:9');
+  assert.equal(calculateAspectRatioLabel(1080, 1920), '9:16');
+  assert.equal(calculateAspectRatioLabel(720, 1280), '9:16');
+});
+
+test('createCustomResolutionPreset enforces parity and sets custom metadata', () => {
+  // Odd numbers should be rounded down/adjusted to even
+  const customOdd = createCustomResolutionPreset(1081, 2399);
+  assert.equal(customOdd.width % 2, 0);
+  assert.equal(customOdd.height % 2, 0);
+  assert.equal(customOdd.width, 1080);
+  assert.equal(customOdd.height, 2398);
+  assert.equal(customOdd.isCustom, true);
+  assert.match(customOdd.id, /^custom-/);
+
+  // Even numbers remain untouched
+  const customEven = createCustomResolutionPreset(1080, 2400, 'Mi Resolución Gamer');
+  assert.equal(customEven.width, 1080);
+  assert.equal(customEven.height, 2400);
+  assert.equal(customEven.name, 'Mi Resolución Gamer');
+  assert.equal(customEven.isCustom, true);
+  assert.equal(customEven.aspectRatio, '20:9');
+  assert.ok(customEven.recommendedBitrateMbps >= 8);
+});
+
+test('STANDARD_POPULAR_PRESETS includes 20:9, 19.5:9, 19:9, 21:9, and 9:16 presets', () => {
+  assert.ok(STANDARD_POPULAR_PRESETS.length >= 10);
+  for (const preset of STANDARD_POPULAR_PRESETS) {
+    assert.equal(preset.width % 2, 0, `Width of ${preset.id} must be even`);
+    assert.equal(preset.height % 2, 0, `Height of ${preset.id} must be even`);
+    assert.ok(preset.recommendedBitrateMbps > 0);
+  }
+
+  const p20x9 = STANDARD_POPULAR_PRESETS.find(p => p.id === 'std_2400x1080');
+  assert.ok(p20x9 !== undefined);
+  assert.equal(p20x9?.aspectRatio, '20:9');
+
+  const p19_5 = STANDARD_POPULAR_PRESETS.find(p => p.id === 'std_2340x1080');
+  assert.ok(p19_5 !== undefined);
+  assert.equal(p19_5?.aspectRatio, '19.5:9');
+
+  const p19 = STANDARD_POPULAR_PRESETS.find(p => p.id === 'std_3040x1440');
+  assert.ok(p19 !== undefined);
+  assert.equal(p19?.aspectRatio, '19:9');
+
+  const p21 = STANDARD_POPULAR_PRESETS.find(p => p.id === 'std_2520x1080');
+  assert.ok(p21 !== undefined);
+  assert.equal(p21?.aspectRatio, '21:9');
+});
+
+test('serializeUserPreferences and parseUserPreferences maintain settings across sessions', () => {
+  const customSettings = {
+    engine: 'rust2024' as const,
+    resolutionId: 'custom-1200x540',
+    customWidth: 1200,
+    customHeight: 540,
+    bitrateMbps: 24,
+    fps: 90,
+    codec: 'HEVC' as const,
+    audioSource: 'mic' as const,
+    countdownSec: 5
+  };
+
+  const serialized = serializeUserPreferences(customSettings);
+  assert.equal(typeof serialized, 'string');
+
+  const restored = parseUserPreferences(serialized);
+  assert.deepEqual(restored, customSettings);
+
+  // Fallback seguro ante JSON corrupto o nulo
+  const fallbackNull = parseUserPreferences(null);
+  assert.deepEqual(fallbackNull, DEFAULT_USER_PREFERENCES);
+
+  const fallbackCorrupt = parseUserPreferences('{invalid json}');
+  assert.deepEqual(fallbackCorrupt, DEFAULT_USER_PREFERENCES);
+});
+
 
 

@@ -64,6 +64,7 @@ class ScreenRecordService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var timerJob: Job? = null
+    private var isNativeEncoderStarted = false
 
     // Parámetros de la sesión actual
     private var currentEngine: String = "cpp23"
@@ -91,6 +92,7 @@ class ScreenRecordService : Service() {
         const val EXTRA_BITRATE = "extra_bitrate"
         const val EXTRA_CODEC = "extra_codec"
         const val EXTRA_AUDIO = "extra_audio"
+        const val EXTRA_COUNTDOWN = "extra_countdown"
 
         var activeEngine: String = "cpp23"
         var lastOutputFilePath: String? = null
@@ -106,6 +108,12 @@ class ScreenRecordService : Service() {
 
         private val _durationSecFlow = MutableStateFlow(0)
         val durationSecFlow: StateFlow<Int> = _durationSecFlow.asStateFlow()
+
+        private val _isCountingDownFlow = MutableStateFlow(false)
+        val isCountingDownFlow: StateFlow<Boolean> = _isCountingDownFlow.asStateFlow()
+
+        private val _countdownRemainingFlow = MutableStateFlow(0)
+        val countdownRemainingFlow: StateFlow<Int> = _countdownRemainingFlow.asStateFlow()
 
         // Carga dinámica de las bibliotecas nativas C++23 y Rust 2024
         init {
@@ -155,44 +163,102 @@ class ScreenRecordService : Service() {
         val bitrate = intent.getIntExtra(EXTRA_BITRATE, 12_000_000)
         val codec = intent.getStringExtra(EXTRA_CODEC) ?: "H264"
         val audio = intent.getStringExtra(EXTRA_AUDIO) ?: "both"
+        val countdown = intent.getIntExtra(EXTRA_COUNTDOWN, 0)
 
         activeEngine = engine
         currentEngine = engine
         currentWidth = width
         currentHeight = height
         currentFps = fps
+        isNativeEncoderStarted = false
 
         _isRecordingFlow.value = true
         _isPausedFlow.value = false
         _durationSecFlow.value = 0
 
-        // Configuración de la notificación persistente
-        val notification = RecordingNotificationHelper.buildRecordingNotification(
+        val isMute = audio == "mute"
+
+        // Iniciar en primer plano INMEDIATAMENTE mientras la Activity está en primer plano
+        // Esto previene que Android 14+ / Tecno HiOS bloquee el micrófono cuando el usuario
+        // sale a la pantalla de inicio o a otra aplicación durante la cuenta regresiva.
+        val initialNotification = RecordingNotificationHelper.buildRecordingNotification(
             this,
             engine,
             width,
             height,
             fps,
-            isPaused = false
+            isPaused = false,
+            countdownRemaining = countdown
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                if (isMute) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                } else {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                }
             } else {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             }
-            startForeground(RecordingNotificationHelper.NOTIFICATION_ID, notification, serviceType)
+            startForeground(RecordingNotificationHelper.NOTIFICATION_ID, initialNotification, serviceType)
         } else {
-            startForeground(RecordingNotificationHelper.NOTIFICATION_ID, notification)
+            startForeground(RecordingNotificationHelper.NOTIFICATION_ID, initialNotification)
         }
-
-        // Iniciar temporizador del servicio
-        startServiceTimer()
 
         // Ejecución en hilo de fondo usando Corrutinas (Dispatchers.IO)
         serviceScope.launch(Dispatchers.IO) {
             try {
+                // Si el usuario configuró cuenta regresiva (ej. 3s o 5s), correr dentro del Foreground Service
+                if (countdown > 0) {
+                    _isCountingDownFlow.value = true
+                    var remaining = countdown
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+
+                    while (remaining > 0 && isActive && _isRecordingFlow.value) {
+                        _countdownRemainingFlow.value = remaining
+                        notificationManager?.notify(
+                            RecordingNotificationHelper.NOTIFICATION_ID,
+                            RecordingNotificationHelper.buildRecordingNotification(
+                                this@ScreenRecordService,
+                                engine,
+                                width,
+                                height,
+                                fps,
+                                isPaused = false,
+                                countdownRemaining = remaining
+                            )
+                        )
+                        delay(1000L)
+                        remaining -= 1
+                    }
+                    _isCountingDownFlow.value = false
+                    _countdownRemainingFlow.value = 0
+
+                    if (!isActive || !_isRecordingFlow.value) {
+                        // Fue cancelado por el usuario durante la cuenta atrás
+                        return@launch
+                    }
+                }
+
+                // Iniciar cronómetro de duración de la grabación
+                startServiceTimer()
+
+                // Actualizar notificación a grabación activa
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                notificationManager?.notify(
+                    RecordingNotificationHelper.NOTIFICATION_ID,
+                    RecordingNotificationHelper.buildRecordingNotification(
+                        this@ScreenRecordService,
+                        engine,
+                        width,
+                        height,
+                        fps,
+                        isPaused = false,
+                        countdownRemaining = 0
+                    )
+                )
+
                 val outputDir = getExternalFilesDir(null) ?: filesDir
                 val timestamp = System.currentTimeMillis()
                 val finalOutputFile = File(outputDir, "VeloRec_${timestamp}_${engine}.mp4")
@@ -240,6 +306,8 @@ class ScreenRecordService : Service() {
                         audio
                     )
                 }
+
+                isNativeEncoderStarted = true
 
                 // Iniciar MediaProjection del sistema
                 val projectionManager =
@@ -360,20 +428,25 @@ class ScreenRecordService : Service() {
     private fun handleStopRecording() {
         timerJob?.cancel()
         timerJob = null
+        _isCountingDownFlow.value = false
+        _countdownRemainingFlow.value = 0
         _isRecordingFlow.value = false
         _isPausedFlow.value = false
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // 1. Detener codificación en el motor nativo en Dispatchers.IO PRIMERO
+                // 1. Detener codificación en el motor nativo en Dispatchers.IO PRIMERO (si llegó a iniciarse)
                 // El motor nativo envía la señal de fin de flujo (AMediaCodec_signalEndOfInputStream)
                 // mientras la Surface y el VirtualDisplay continúan conectados y activos.
                 // Esto garantiza que el hardware drene todos los fotogramas y cierre el contenedor MP4
                 // con su átomo moov íntegro y sin corrupciones.
-                if (activeEngine == "rust2024") {
-                    nativeStopRustEncoding()
-                } else {
-                    nativeStopCppEncoding()
+                if (isNativeEncoderStarted) {
+                    if (activeEngine == "rust2024") {
+                        nativeStopRustEncoding()
+                    } else {
+                        nativeStopCppEncoding()
+                    }
+                    isNativeEncoderStarted = false
                 }
 
                 // 2. Liberar VirtualDisplay y MediaProjection tras el drenado completo del encoder
@@ -445,6 +518,8 @@ class ScreenRecordService : Service() {
         super.onDestroy()
         timerJob?.cancel()
         timerJob = null
+        _isCountingDownFlow.value = false
+        _countdownRemainingFlow.value = 0
         _isRecordingFlow.value = false
         _isPausedFlow.value = false
         audioEngine?.stop()

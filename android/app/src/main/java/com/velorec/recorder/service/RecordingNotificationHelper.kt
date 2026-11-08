@@ -50,7 +50,8 @@ object RecordingNotificationHelper {
         width: Int,
         height: Int,
         fps: Int,
-        isPaused: Boolean = false
+        isPaused: Boolean = false,
+        countdownRemaining: Int = 0
     ): Notification {
         val engineLabel = if (engine == "rust2024") "Rust 2024" else "C++23"
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -61,7 +62,7 @@ object RecordingNotificationHelper {
         }
         val openAppPendingIntent = PendingIntent.getActivity(context, 0, openAppIntent, flags)
 
-        // Intent para detener la grabación desde la barra de notificaciones
+        // Intent para detener o cancelar la grabación desde la barra de notificaciones
         val stopIntent = Intent(context, ScreenRecordService::class.java).apply {
             action = ScreenRecordService.ACTION_STOP
         }
@@ -73,24 +74,45 @@ object RecordingNotificationHelper {
         }
         val pauseResumePendingIntent = PendingIntent.getService(context, 2, pauseResumeIntent, flags)
 
+        val title = when {
+            countdownRemaining > 0 -> "Iniciando grabación en ${countdownRemaining}s..."
+            isPaused -> "Grabación en pausa"
+            else -> "Grabando pantalla"
+        }
+
+        val contentText = when {
+            countdownRemaining > 0 -> "Prepárate: motor $engineLabel | ${width}x${height} @ ${fps}fps"
+            else -> "Motor: $engineLabel | ${width}x${height} @ ${fps}fps"
+        }
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle(if (isPaused) "Grabación en pausa" else "Grabando pantalla")
-            .setContentText("Motor: $engineLabel | ${width}x${height} @ ${fps}fps")
+            .setContentTitle(title)
+            .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .addAction(
+
+        // Si la cuenta regresiva está activa, solo muestra acción de cancelar; al grabar, añade pausa/detener
+        if (countdownRemaining == 0) {
+            builder.addAction(
                 if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
                 if (isPaused) "Reanudar" else "Pausar",
                 pauseResumePendingIntent
             )
-            .addAction(
+            builder.addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Detener",
                 stopPendingIntent
             )
+        } else {
+            builder.addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Cancelar",
+                stopPendingIntent
+            )
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
