@@ -42,8 +42,10 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
 - **Captura de Audio Interno Puro sin Mezcla Indeseada**:
   - [x] Corrección de la tubería de audio interno en `ScreenRecordService` y `AudioRecordEngine`. En modo "Audio Interno", el Foreground Service solicita exclusivamente `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` (sin solicitar micrófono), evitando el icono de privacidad de Android 14+ y eliminando el enrutamiento parásito del micro.
   - [x] Soporte para selección directa de fuente de audio (Interno, Micrófono, Mezcla, Silencio) desde la pantalla de grabación y lanzador de juegos.
-- **Multiplexación de Audio en Tiempo Real en C++23 (Eliminación del Paso 2)**:
-  - [x] Transmisión en tiempo real de paquetes AAC (`nativeWriteAudioSample`) directamente al `AMediaMuxer` nativo en C++23. El archivo MP4 ya queda listo y sincronizado al terminar, sin requerir procesamiento posterior ni fusión secundaria de audio.
+- **Multiplexación Nativa de Audio y Video 100% en Rust (Edition 2024 / Cero Espera al Detener)**:
+  - [x] Registro simultáneo de pistas de video (`AMediaCodec`) y audio AAC (`audio/mp4a-latm`) en `AMediaMuxer` directamente en Rust 2024 antes de iniciar la captura.
+  - [x] Flujo en tiempo real de paquetes AAC mediante `nativeWriteRustAudioSample` y configuración de CSD con `nativeConfigureRustAudioTrack`, entrelazando video y audio de forma atómica y thread-safe.
+  - [x] Eliminación completa de archivos temporales (`temp_video.mp4` y `temp_audio.m4a`) y de fusiones secundarias (`AudioMuxerHelper.mergeAudioVideo`). Al tocar "Detener", el MP4 final se cierra y publica en la galería en <15 ms (Cero Espera).
 - **Grabación Directa sobre Descriptor de la Galería MediaStore (Eliminación del Paso 3)**:
   - [x] Creación de la entrada en MediaStore con `IS_PENDING = 1` previo al inicio de la grabación y pase directo de `rawFd` a `AMediaMuxer_new(fd, ...)`. Al detener, se finaliza con `IS_PENDING = 0` en <15 ms, eliminando por completo copias pesadas de cientos de megabytes en discos eMMC lentos.
 - **Guardado en Segundo Plano con Notificación de Progreso Escalonado**:

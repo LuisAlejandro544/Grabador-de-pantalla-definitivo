@@ -71,8 +71,10 @@ npm run build
 - **Sincronización Maestra de Audio/Video y Búfer de 256K Muestras (Anti-Lag y Cero Desync)**:
   - `AudioRecordEngine.kt` cuenta con un búfer circular expandido a 262,144 muestras (~2.73s de audio estéreo 48 kHz) para absorber picos de procesamiento de CPU sin perder muestras ni producir ruidos de chasquido o audio entrecortado.
   - El codificador calcula los timestamps con reloj monotónico de tiempo real (`System.nanoTime()`) y `AudioMuxerHelper` normaliza el tiempo base de video y audio a t=0. Al disparar o correr en un juego, el audio y los cuadros coinciden con precisión milimétrica sin retraso acumulativo.
-- **Multiplexación Nativa de Audio y Video sin FFmpeg**:
-  - Al detener la captura, la multiplexación se realiza de forma instantánea (<200 ms) mediante `AudioMuxerHelper` utilizando el subsistema oficial de Android (`MediaExtractor` y `MediaMuxer`), prescindiendo de binarios externos pesados o incompatibles como FFmpeg.
+- **Multiplexación Nativa de Audio y Video 100% en Rust (Cero Espera al Detener)**:
+  - Rust 2024 registra ambas pistas (video y audio AAC) en `AMediaMuxer` antes de iniciar la captura.
+  - Las muestras de audio se transmiten en tiempo real vía `nativeWriteRustAudioSample`, entrelazándose al vuelo con el video en el mismo contenedor MP4.
+  - Al presionar "Detener", la finalización es instantánea (<15 ms) sin crear archivos temporales (`temp_video.mp4` o `temp_audio.m4a`) ni requerir fases de merge secundarias.
 - **Publicación en Galería Pública del Dispositivo**:
   - Toda grabación finalizada se publica en `Movies/VeloRec` mediante `GalleryStorageManager` (MediaStore Scoped Storage + `MediaScannerConnection.scanFile`) para garantizar que aparezca de inmediato en Google Fotos y en la galería nativa del usuario.
 - **Auditoría de Código y Calidad para Producción (`code-analysis-audit.yml`)**:

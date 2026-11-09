@@ -400,8 +400,8 @@ class AudioRecordEngine(
         val bufferInfo = MediaCodec.BufferInfo()
         var totalFramesEncoded = 0L
 
-        // Marca de tiempo de referencia de inicio del reloj monotónico del sistema (Zero-Drift Master Clock)
-        val startNanoTime = System.nanoTime()
+        // Marca de tiempo monotónica estricta para sincronización con reloj del sistema (CLOCK_MONOTONIC)
+        var lastAudioPtsUs = -1L
 
         while (isRecording.get()) {
             if (isPaused.get()) {
@@ -412,11 +412,6 @@ class AudioRecordEngine(
                 }
                 continue
             }
-
-            // Reloj monotónico de referencia: calcular cuadros esperados según el tiempo real transcurrido
-            val elapsedNanos = System.nanoTime() - startNanoTime
-            val elapsedUs = elapsedNanos / 1000L
-            val expectedTotalFrames = (elapsedUs * actualSampleRate) / 1_000_000L
 
             var framesObtained = 0
 
@@ -444,23 +439,11 @@ class AudioRecordEngine(
                 "internal" -> {
                     val availableShorts = internalRingBuffer.available()
                     if (availableShorts >= stereoSamplesCount) {
-                        // Cuadro completo de sonido del juego disponible
+                        // Cuadro completo de sonido del juego disponible en el buffer
                         internalRingBuffer.read(finalStereoBuffer, 0, stereoSamplesCount)
                         framesObtained = SAMPLES_PER_FRAME
-                    } else if (availableShorts > 0 && totalFramesEncoded < expectedTotalFrames) {
-                        // Fragmento disponible y el tiempo real avanza: drenar y completar con silencio
-                        val readCount = internalRingBuffer.read(finalStereoBuffer, 0, availableShorts)
-                        for (i in readCount until stereoSamplesCount) {
-                            finalStereoBuffer[i] = 0
-                        }
-                        framesObtained = SAMPLES_PER_FRAME
-                    } else if (availableShorts == 0 && totalFramesEncoded < expectedTotalFrames) {
-                        // El juego está en silencio o en pantalla de carga: emitir silencio de confort
-                        // para mantener sincronía 1:1 absoluta con el reloj de video
-                        java.util.Arrays.fill(finalStereoBuffer, 0.toShort())
-                        framesObtained = SAMPLES_PER_FRAME
                     } else {
-                        // El búfer de audio va a la par del tiempo real: esperar brevemente muestras frescas del HAL
+                        // Esperar a que el lector en segundo plano entregue el siguiente paquete
                         try {
                             Thread.sleep(4)
                         } catch (_: InterruptedException) {
@@ -471,7 +454,7 @@ class AudioRecordEngine(
                 }
 
                 "both" -> {
-                    // 1. Obtener audio del micrófono
+                    // 1. Obtener audio del micrófono (bloqueante en tiempo real del hardware de audio)
                     if (isMicMono && micMonoBuffer != null) {
                         val readMono = micRecord?.read(micMonoBuffer, 0, SAMPLES_PER_FRAME) ?: 0
                         if (readMono > 0) {
@@ -489,7 +472,7 @@ class AudioRecordEngine(
                         }
                     }
 
-                    // 2. Extraer audio interno del buffer circular
+                    // 2. Extraer audio interno del buffer circular correspondiente al intervalo capturado
                     val targetShorts = if (framesObtained > 0) framesObtained * CHANNEL_COUNT else stereoSamplesCount
                     val availableInternal = internalRingBuffer.available()
                     val intReadShorts = if (availableInternal > 0) {
@@ -501,18 +484,15 @@ class AudioRecordEngine(
                         java.util.Arrays.fill(internalTempStereoBuffer, intReadShorts, targetShorts, 0.toShort())
                     }
 
-                    if (framesObtained <= 0 && totalFramesEncoded < expectedTotalFrames) {
-                        framesObtained = SAMPLES_PER_FRAME
-                        java.util.Arrays.fill(micStereoBuffer, 0.toShort())
-                    }
-
-                    // 3. Mezcla Estéreo con Suma Saturada (Clamping anti-distorsión)
-                    val mixSamples = framesObtained * CHANNEL_COUNT
-                    for (i in 0 until mixSamples) {
-                        val micSample = micStereoBuffer[i].toInt()
-                        val intSample = internalTempStereoBuffer[i].toInt()
-                        val mixed = (micSample + intSample).coerceIn(-32768, 32767)
-                        finalStereoBuffer[i] = mixed.toShort()
+                    if (framesObtained > 0) {
+                        // 3. Mezcla Estéreo con Suma Saturada (Clamping anti-distorsión)
+                        val mixSamples = framesObtained * CHANNEL_COUNT
+                        for (i in 0 until mixSamples) {
+                            val micSample = micStereoBuffer[i].toInt()
+                            val intSample = internalTempStereoBuffer[i].toInt()
+                            val mixed = (micSample + intSample).coerceIn(-32768, 32767)
+                            finalStereoBuffer[i] = mixed.toShort()
+                        }
                     }
                 }
             }
@@ -536,8 +516,17 @@ class AudioRecordEngine(
             }
             pcmByteBuffer.flip()
 
-            // Cálculo estricto de marca de tiempo (PTS) basado en muestras y frecuencia negociada
-            val presentationTimeUs = (totalFramesEncoded * 1_000_000L) / actualSampleRate
+            // Sincronización Monotónica Estricta con el Reloj del Sistema (CLOCK_MONOTONIC)
+            // Se calcula el timestamp exacto del inicio del bloque recién capturado en microsegundos
+            val nowNanos = System.nanoTime()
+            val chunkDurationUs = (framesObtained * 1_000_000L) / actualSampleRate
+            var presentationTimeUs = (nowNanos / 1000L) - chunkDurationUs
+
+            // Asegurar estricta monotonicidad creciente requerida por MediaCodec y contenedores MP4
+            if (presentationTimeUs <= lastAudioPtsUs) {
+                presentationTimeUs = lastAudioPtsUs + chunkDurationUs
+            }
+            lastAudioPtsUs = presentationTimeUs
 
             // Alimentar encoder MediaCodec
             val inputBufferIndex = encoder.dequeueInputBuffer(TIMEOUT_US)
@@ -560,8 +549,8 @@ class AudioRecordEngine(
             drainEncoder(encoder, muxer, bufferInfo, endOfStream = false)
         }
 
-        // Señal de fin de flujo de audio (EOS)
-        val finalPtsUs = (totalFramesEncoded * 1_000_000L) / actualSampleRate
+        // Señal de fin de flujo de audio (EOS) con timestamp monotónico
+        val finalPtsUs = if (lastAudioPtsUs >= 0) lastAudioPtsUs + 21333L else System.nanoTime() / 1000L
         val endInputIndex = encoder.dequeueInputBuffer(TIMEOUT_US)
         if (endInputIndex >= 0) {
             encoder.queueInputBuffer(endInputIndex, 0, 0, finalPtsUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)

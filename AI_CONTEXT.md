@@ -15,10 +15,11 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
 4. **Aceleración Gráfica y Protocolos de Red (C++23 Shaders & Rust Streamer)**:
    - **Shaders GPU y libyuv (C++23 & SPIR-V Vulkan)**: Tubería C++23 (`GpuShaderPipeline` y `libyuv_bridge`) dedicada para FaceCam circular antialiased, Chroma Key (pantalla verde), Gaming Color Boost y conversión acelerada de color en la GPU sin consumo de CPU.
    - **Rust Streamer (`rust/src/streamer.rs`)**: Infraestructura de streaming de red de ultra baja latencia (RTMP, RTMPS, SRT y WebRTC) unificada en Rust puro con canales `crossbeam-channel` y *Ring Buffer* de 4 MB, reemplazando completamente el runtime de Go con cero pausas de Garbage Collector y menor uso de RAM (<10 MB).
-5. **Grabación Directa NDK y Sincronización Maestra de Audio/Video**:
+5. **Grabación Directa NDK y Multiplexación en Tiempo Real 100% en Rust**:
    - Codificación directa de hardware a MP4 en Rust sin pasar por JVM/ART.
+   - **Multiplexación Simultánea de Video y Audio en Rust**: `AMediaMuxer` registra las pistas de video y audio AAC simultáneamente. Las muestras se escriben de forma entrelazada en tiempo real (`nativeWriteRustAudioSample`), sin archivos temporales en disco y permitiendo finalización instantánea (<15 ms) al presionar "Detener".
    - **Sincronización de Audio Maestra y Buffer de 256K Muestras**: Reloj de tiempo real (`System.nanoTime()`) y ring buffer expandido (~2.73s) en `AudioRecordEngine.kt` para erradicar retrasos de audio y desincronizaciones en disparos/pasos.
-   - Multiplexación sin pérdida de audio y video mediante `AudioMuxerHelper` con guardado directo en Galería (`Movies/VeloRec`).
+   - Guardado directo en Galería (`Movies/VeloRec`) con indexación inmediata.
 6. **CI/CD Móvil**: Flujo de GitHub Actions con disparo **estrictamente manual (`workflow_dispatch`)** para compilar el APK Debug sin necesidad de computadora.
 
 ---

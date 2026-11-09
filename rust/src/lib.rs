@@ -37,7 +37,7 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::{bounded, Sender};
 use jni::objects::{JClass, JString};
-use jni::sys::{jint, jobject};
+use jni::sys::{jint, jlong, jobject};
 use jni::JNIEnv;
 use log::{error, info, LevelFilter};
 
@@ -47,6 +47,15 @@ const AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED: isize = -2;
 const AMEDIACODEC_INFO_TRY_AGAIN_LATER: isize = -1;
 const AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM: u32 = 4;
 const TIMEOUT_US: i64 = 10_000; // 10 milisegundos
+
+extern "C" {
+    fn AMediaFormat_setBuffer(
+        format: *mut ndk_sys::AMediaFormat,
+        name: *const libc::c_char,
+        data: *const libc::c_void,
+        size: libc::size_t,
+    );
+}
 
 /// Configuración de captura y codificación provista desde Kotlin
 #[derive(Debug, Clone)]
@@ -68,25 +77,47 @@ enum RecorderCommand {
     Stop,
 }
 
+/// Muestra de audio pendiente si arriba antes de iniciar el muxer
+#[derive(Debug, Clone)]
+pub struct PendingAudioPacket {
+    pub data: Vec<u8>,
+    pub pts_us: i64,
+    pub flags: u32,
+}
+
+/// Estado compartido del multiplexor nativo AMediaMuxer entre hilos de video y audio
+pub struct SharedMuxerState {
+    pub muxer_addr: usize,
+    pub raw_fd: std::os::unix::io::RawFd,
+    pub video_track_index: i32,
+    pub audio_track_index: i32,
+    pub is_started: bool,
+    pub audio_sample_rate: i32,
+    pub audio_channel_count: i32,
+    pub audio_csd: Option<Vec<u8>>,
+    pub pending_audio: Vec<PendingAudioPacket>,
+}
+
 /// Estructura que encapsula las direcciones de memoria de hardware NDK
 /// Se almacenan como escalares usize para garantizar compatibilidad incondicional
 /// con los rasgos Send/Sync del compilador de Rust 2024 al transferirse entre hilos.
 struct NdkHardwareHandles {
     codec_addr: usize,
     native_window_addr: usize,
-    muxer_addr: usize,
-    raw_fd: std::os::unix::io::RawFd,
 }
 
-/// Estado y ejecución del motor Rust 2024
+/// Estado y ejecución del motor Rust 2024 con Multiplexación en Tiempo Real
 pub struct RustRecorderEngine {
     is_recording: Arc<AtomicBool>,
     is_paused: Arc<AtomicBool>,
     frames_encoded: Arc<AtomicU64>,
+    audio_samples_written: Arc<AtomicU64>,
     last_latency_us: Arc<AtomicI64>,
     cmd_sender: Sender<RecorderCommand>,
     worker_handle: Option<JoinHandle<()>>,
     hardware: Option<NdkHardwareHandles>,
+    shared_muxer: Arc<Mutex<SharedMuxerState>>,
+    is_mute: bool,
 }
 
 impl RustRecorderEngine {
@@ -183,40 +214,108 @@ impl RustRecorderEngine {
 
             let (cmd_tx, _cmd_rx) = bounded::<RecorderCommand>(16);
 
+            let is_mute = config.audio_source == "mute";
+
+            let shared_muxer = Arc::new(Mutex::new(SharedMuxerState {
+                muxer_addr: muxer as usize,
+                raw_fd,
+                video_track_index: -1,
+                audio_track_index: -1,
+                is_started: false,
+                audio_sample_rate: 48000,
+                audio_channel_count: 2,
+                audio_csd: None,
+                pending_audio: Vec::with_capacity(64),
+            }));
+
             let engine = Self {
                 is_recording: Arc::new(AtomicBool::new(false)),
                 is_paused: Arc::new(AtomicBool::new(false)),
                 frames_encoded: Arc::new(AtomicU64::new(0)),
+                audio_samples_written: Arc::new(AtomicU64::new(0)),
                 last_latency_us: Arc::new(AtomicI64::new(0)),
                 cmd_sender: cmd_tx,
                 worker_handle: None,
                 hardware: Some(NdkHardwareHandles {
                     codec_addr: codec as usize,
                     native_window_addr: native_window as usize,
-                    muxer_addr: muxer as usize,
-                    raw_fd,
                 }),
+                shared_muxer,
+                is_mute,
             };
 
-            info!("Rust 2024: Inicialización de hardware completada con éxito. Surface lista.");
+            info!("Rust 2024: Inicialización de hardware completada con éxito. Surface y Muxer listos (is_mute={}).", is_mute);
             Ok((engine, surface_jobject))
         }
     }
 
-    /// Comienza la codificación arrancando AMediaCodec y el hilo de muxing
+    /// Configura dinámicamente los parámetros de la pista de audio antes de iniciar el muxer
+    pub fn configure_audio(&self, sample_rate: i32, channel_count: i32, csd: Option<Vec<u8>>) {
+        if let Ok(mut muxer) = self.shared_muxer.lock() {
+            if sample_rate > 0 {
+                muxer.audio_sample_rate = sample_rate;
+            }
+            if channel_count > 0 {
+                muxer.audio_channel_count = channel_count;
+            }
+            if let Some(csd_data) = csd {
+                info!("Rust 2024: Configuración CSD-0 de audio recibida ({} bytes).", csd_data.len());
+                muxer.audio_csd = Some(csd_data);
+            }
+        }
+    }
+
+    /// Escribe una muestra de audio codificada (AAC) en tiempo real directamente en AMediaMuxer
+    pub fn write_audio_sample(&self, data: &[u8], pts_us: i64, flags: u32) {
+        if self.is_mute || data.is_empty() {
+            return;
+        }
+
+        if let Ok(mut muxer) = self.shared_muxer.lock() {
+            if muxer.is_started && muxer.audio_track_index >= 0 {
+                let mut buffer_info = ndk_sys::AMediaCodecBufferInfo {
+                    offset: 0,
+                    size: data.len() as i32,
+                    presentationTimeUs: pts_us,
+                    flags,
+                };
+                unsafe {
+                    ndk_sys::AMediaMuxer_writeSampleData(
+                        muxer.muxer_addr as *mut ndk_sys::AMediaMuxer,
+                        muxer.audio_track_index as usize,
+                        data.as_ptr() as *const libc::c_void,
+                        &mut buffer_info,
+                    );
+                }
+                self.audio_samples_written.fetch_add(1, Ordering::Relaxed);
+            } else {
+                // Buffer preventivo mientras el muxer espera el primer cuadro de video
+                if muxer.pending_audio.len() < 64 {
+                    muxer.pending_audio.push(PendingAudioPacket {
+                        data: data.to_vec(),
+                        pts_us,
+                        flags,
+                    });
+                }
+            }
+        }
+    }
+
+    /// Comienza la codificación arrancando AMediaCodec y el hilo de multiplexación simultánea
     pub fn start(&mut self) -> Result<(), String> {
         let hardware = self.hardware.take().ok_or("Hardware ya consumido o no inicializado")?;
         let is_recording = Arc::clone(&self.is_recording);
         let is_paused = Arc::clone(&self.is_paused);
         let frames_encoded = Arc::clone(&self.frames_encoded);
+        let audio_samples_written = Arc::clone(&self.audio_samples_written);
         let last_latency_us = Arc::clone(&self.last_latency_us);
+        let shared_muxer = Arc::clone(&self.shared_muxer);
+        let is_mute = self.is_mute;
         let (cmd_tx, rx_worker) = bounded::<RecorderCommand>(16);
         self.cmd_sender = cmd_tx;
 
         let codec_addr = hardware.codec_addr;
         let native_window_addr = hardware.native_window_addr;
-        let muxer_addr = hardware.muxer_addr;
-        let raw_fd = hardware.raw_fd;
 
         unsafe {
             let start_status = ndk_sys::AMediaCodec_start(codec_addr as *mut ndk_sys::AMediaCodec);
@@ -228,55 +327,47 @@ impl RustRecorderEngine {
         is_recording.store(true, Ordering::SeqCst);
         is_paused.store(false, Ordering::SeqCst);
 
-/// Aplica afinidad de hilos hacia núcleos de eficiencia (LITTLE) en procesadores ARM big.LITTLE
-/// para dejar los núcleos de alto rendimiento (Big) 100% libres para videojuegos (ej: Subway Surfers).
-fn apply_efficiency_core_affinity(thread_name: &str) {
-    if let Ok(c_name) = CString::new(thread_name) {
-        unsafe {
-            libc::pthread_setname_np(libc::pthread_self(), c_name.as_ptr());
+        // Aplica afinidad de hilos hacia núcleos de eficiencia (LITTLE) en procesadores ARM big.LITTLE
+        fn apply_efficiency_core_affinity(thread_name: &str) {
+            if let Ok(c_name) = CString::new(thread_name) {
+                unsafe {
+                    libc::pthread_setname_np(libc::pthread_self(), c_name.as_ptr());
+                }
+            }
+
+            let total_cores = unsafe { libc::sysconf(libc::_SC_NPROCESSORS_CONF) as i32 };
+            if total_cores <= 1 {
+                return;
+            }
+
+            unsafe {
+                let mut cpuset: libc::cpu_set_t = std::mem::zeroed();
+                libc::CPU_ZERO(&mut cpuset);
+
+                let efficiency_cores = if total_cores >= 8 { 4 } else { (total_cores / 2).max(1) };
+                for i in 0..efficiency_cores {
+                    libc::CPU_SET(i as usize, &mut cpuset);
+                }
+
+                let res = libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &cpuset);
+                if res == 0 {
+                    info!("Rust 2024: Afinidad aplicada para [{}] hacia {} núcleos LITTLE de {} totales.",
+                        thread_name, efficiency_cores, total_cores);
+                }
+            }
         }
-    }
-
-    let total_cores = unsafe { libc::sysconf(libc::_SC_NPROCESSORS_CONF) as i32 };
-    if total_cores <= 1 {
-        return;
-    }
-
-    unsafe {
-        let mut cpuset: libc::cpu_set_t = std::mem::zeroed();
-        libc::CPU_ZERO(&mut cpuset);
-
-        // En arquitecturas big.LITTLE (ej: Helio G81 / Snapdragon),
-        // asignamos los primeros núcleos de eficiencia (LITTLE) para dejar libres los Big cores
-        let efficiency_cores = if total_cores >= 8 { 4 } else { (total_cores / 2).max(1) };
-        for i in 0..efficiency_cores {
-            libc::CPU_SET(i as usize, &mut cpuset);
-        }
-
-        let res = libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &cpuset);
-        if res == 0 {
-            info!("Rust 2024: Afinidad aplicada para [{}] hacia {} núcleos LITTLE de {} totales.",
-                thread_name, efficiency_cores, total_cores);
-        }
-    }
-}
 
         // Hilo worker de codificación sin contención de cerrojos
-        // Captura únicamente tipos escalares (usize, i32) y Arcs que son intrínsecamente Send
         let handle = thread::Builder::new()
             .name("velorec_rust_worker".into())
             .spawn(move || {
-                info!("Rust 2024: Hilo de codificación activo.");
-                // Configurar afinidad a núcleos LITTLE y prioridad en tiempo real (nice -16)
+                info!("Rust 2024: Hilo de codificación y multiplexación activo.");
                 apply_efficiency_core_affinity("velorec_rust_worker");
                 unsafe {
                     libc::setpriority(libc::PRIO_PROCESS, 0, -16);
                 }
                 let codec = codec_addr as *mut ndk_sys::AMediaCodec;
-                let muxer = muxer_addr as *mut ndk_sys::AMediaMuxer;
                 let native_window = native_window_addr as *mut ndk_sys::ANativeWindow;
-                let mut muxer_started = false;
-                let mut video_track_index: isize = -1;
 
                 let mut buffer_info = ndk_sys::AMediaCodecBufferInfo {
                     offset: 0,
@@ -298,7 +389,6 @@ fn apply_efficiency_core_affinity(thread_name: &str) {
                             RecorderCommand::Pause => is_paused.store(true, Ordering::Relaxed),
                             RecorderCommand::Resume => is_paused.store(false, Ordering::Relaxed),
                             RecorderCommand::Stop => {
-                                // Señalizar fin de stream a MediaCodec para recibir EOS
                                 unsafe {
                                     ndk_sys::AMediaCodec_signalEndOfInputStream(codec);
                                 }
@@ -330,20 +420,21 @@ fn apply_efficiency_core_affinity(thread_name: &str) {
                                 &mut buffer_size,
                             );
 
-                            if !buffer_ptr.is_null() && buffer_info.size > 0 && muxer_started {
+                            if !buffer_ptr.is_null() && buffer_info.size > 0 {
                                 // Omitir buffers CODEC_CONFIG (SPS/PPS) en el muxer
                                 if (buffer_info.flags & 2) != 0 {
                                     info!("Rust 2024: Buffer CODEC_CONFIG omitido en muxer");
                                 } else {
-                                    // Normalizar PTS a base cero
-                                    if first_frame_time_us < 0 {
-                                        first_frame_time_us = buffer_info.presentationTimeUs;
-                                    }
                                     let mut sample_info = buffer_info;
-                                    if sample_info.presentationTimeUs >= first_frame_time_us {
-                                        sample_info.presentationTimeUs -= first_frame_time_us;
-                                    } else {
-                                        sample_info.presentationTimeUs = 0;
+                                    if is_mute {
+                                        if first_frame_time_us < 0 {
+                                            first_frame_time_us = buffer_info.presentationTimeUs;
+                                        }
+                                        if sample_info.presentationTimeUs >= first_frame_time_us {
+                                            sample_info.presentationTimeUs -= first_frame_time_us;
+                                        } else {
+                                            sample_info.presentationTimeUs = 0;
+                                        }
                                     }
 
                                     // Garantizar estricta monotonicidad creciente
@@ -356,13 +447,17 @@ fn apply_efficiency_core_affinity(thread_name: &str) {
                                     }
                                     last_presentation_time_us = sample_info.presentationTimeUs;
 
-                                    ndk_sys::AMediaMuxer_writeSampleData(
-                                        muxer,
-                                        video_track_index as usize,
-                                        buffer_ptr,
-                                        &sample_info,
-                                    );
-                                    frames_encoded.fetch_add(1, Ordering::Relaxed);
+                                    if let Ok(muxer_lock) = shared_muxer.lock() {
+                                        if muxer_lock.is_started && muxer_lock.video_track_index >= 0 {
+                                            ndk_sys::AMediaMuxer_writeSampleData(
+                                                muxer_lock.muxer_addr as *mut ndk_sys::AMediaMuxer,
+                                                muxer_lock.video_track_index as usize,
+                                                buffer_ptr,
+                                                &sample_info,
+                                            );
+                                            frames_encoded.fetch_add(1, Ordering::Relaxed);
+                                        }
+                                    }
                                 }
                             }
 
@@ -377,11 +472,74 @@ fn apply_efficiency_core_affinity(thread_name: &str) {
                             }
                         } else if out_idx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED {
                             let new_format = ndk_sys::AMediaCodec_getOutputFormat(codec);
-                            video_track_index = ndk_sys::AMediaMuxer_addTrack(muxer, new_format);
-                            ndk_sys::AMediaMuxer_start(muxer);
-                            muxer_started = true;
-                            ndk_sys::AMediaFormat_delete(new_format);
-                            info!("Rust 2024: Muxer iniciado con pista de video {}", video_track_index);
+                            if let Ok(mut muxer_lock) = shared_muxer.lock() {
+                                let muxer_ptr = muxer_lock.muxer_addr as *mut ndk_sys::AMediaMuxer;
+                                let v_idx = ndk_sys::AMediaMuxer_addTrack(muxer_ptr, new_format);
+                                muxer_lock.video_track_index = v_idx as i32;
+                                ndk_sys::AMediaFormat_delete(new_format);
+
+                                // Si hay audio, agregar la pista de audio AAC de forma estricta ANTES de start
+                                if !is_mute {
+                                    let audio_format = ndk_sys::AMediaFormat_new();
+                                    let mime_audio = CString::new("audio/mp4a-latm").unwrap();
+                                    let key_mime = CString::new("mime").unwrap();
+                                    let key_sample_rate = CString::new("sample-rate").unwrap();
+                                    let key_channel_count = CString::new("channel-count").unwrap();
+                                    let key_bitrate = CString::new("bitrate").unwrap();
+                                    let key_csd0 = CString::new("csd-0").unwrap();
+
+                                    ndk_sys::AMediaFormat_setString(audio_format, key_mime.as_ptr(), mime_audio.as_ptr());
+                                    ndk_sys::AMediaFormat_setInt32(audio_format, key_sample_rate.as_ptr(), muxer_lock.audio_sample_rate);
+                                    ndk_sys::AMediaFormat_setInt32(audio_format, key_channel_count.as_ptr(), muxer_lock.audio_channel_count);
+                                    ndk_sys::AMediaFormat_setInt32(audio_format, key_bitrate.as_ptr(), 128_000);
+
+                                    let csd_bytes = muxer_lock.audio_csd.clone().unwrap_or_else(|| {
+                                        let freq_idx: u8 = if muxer_lock.audio_sample_rate == 44100 { 4 } else { 3 };
+                                        let b0 = 0x10 | ((freq_idx >> 1) & 0x07);
+                                        let b1 = ((freq_idx & 0x01) << 7) | ((muxer_lock.audio_channel_count as u8 & 0x0F) << 3);
+                                        vec![b0, b1]
+                                    });
+
+                                    AMediaFormat_setBuffer(
+                                        audio_format,
+                                        key_csd0.as_ptr(),
+                                        csd_bytes.as_ptr() as *const libc::c_void,
+                                        csd_bytes.len(),
+                                    );
+
+                                    let a_idx = ndk_sys::AMediaMuxer_addTrack(muxer_ptr, audio_format);
+                                    muxer_lock.audio_track_index = a_idx as i32;
+                                    ndk_sys::AMediaFormat_delete(audio_format);
+                                    info!("Rust 2024: Pistas agregadas a AMediaMuxer: Video={}, Audio={}", v_idx, a_idx);
+                                } else {
+                                    info!("Rust 2024: Pista única de Video={} agregada a AMediaMuxer (Audio silenciado).", v_idx);
+                                }
+
+                                ndk_sys::AMediaMuxer_start(muxer_ptr);
+                                muxer_lock.is_started = true;
+                                info!("Rust 2024: AMediaMuxer iniciado en tiempo real. Multiplexación activa.");
+
+                                // Drenar muestras de audio previas
+                                let pending = std::mem::take(&mut muxer_lock.pending_audio);
+                                let a_track = muxer_lock.audio_track_index;
+                                for pkt in pending {
+                                    if a_track >= 0 {
+                                        let mut a_info = ndk_sys::AMediaCodecBufferInfo {
+                                            offset: 0,
+                                            size: pkt.data.len() as i32,
+                                            presentationTimeUs: pkt.pts_us,
+                                            flags: pkt.flags,
+                                        };
+                                        ndk_sys::AMediaMuxer_writeSampleData(
+                                            muxer_ptr,
+                                            a_track as usize,
+                                            pkt.data.as_ptr() as *const libc::c_void,
+                                            &mut a_info,
+                                        );
+                                        audio_samples_written.fetch_add(1, Ordering::Relaxed);
+                                    }
+                                }
+                            }
                         } else if out_idx == AMEDIACODEC_INFO_TRY_AGAIN_LATER && stop_requested {
                             drain_retries += 1;
                             if drain_retries >= MAX_DRAIN_RETRIES {
@@ -402,13 +560,17 @@ fn apply_efficiency_core_affinity(thread_name: &str) {
                         ndk_sys::ANativeWindow_release(native_window);
                     }
 
-                    if muxer_started {
-                        ndk_sys::AMediaMuxer_stop(muxer);
+                    if let Ok(mut muxer_lock) = shared_muxer.lock() {
+                        let muxer_ptr = muxer_lock.muxer_addr as *mut ndk_sys::AMediaMuxer;
+                        if muxer_lock.is_started {
+                            ndk_sys::AMediaMuxer_stop(muxer_ptr);
+                            muxer_lock.is_started = false;
+                        }
+                        ndk_sys::AMediaMuxer_delete(muxer_ptr);
+                        libc::close(muxer_lock.raw_fd);
                     }
-                    ndk_sys::AMediaMuxer_delete(muxer);
-                    libc::close(raw_fd);
                 }
-                info!("Rust 2024: Codificación finalizada limpiamente.");
+                info!("Rust 2024: Codificación y multiplexación finalizada limpiamente (Cero Espera al Detener).");
             })
             .map_err(|e| format!("Fallo al lanzar hilo Rust: {}", e))?;
 
@@ -434,8 +596,9 @@ fn apply_efficiency_core_affinity(thread_name: &str) {
         if let Some(handle) = self.worker_handle.take() {
             let _ = handle.join();
         }
-        info!("Rust 2024: Grabación detenida. Total cuadros codificados: {}",
-            self.frames_encoded.load(Ordering::Relaxed));
+        info!("Rust 2024: Grabación detenida. Total cuadros: {}, Total muestras audio: {}",
+            self.frames_encoded.load(Ordering::Relaxed),
+            self.audio_samples_written.load(Ordering::Relaxed));
     }
 }
 
@@ -552,6 +715,55 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     if let Ok(mut lock) = GLOBAL_RUST_ENGINE.lock() {
         if let Some(ref mut engine) = lock.take() {
             engine.stop();
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeConfigureRustAudioTrack<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    sample_rate: jint,
+    channel_count: jint,
+    csd_buffer: jobject,
+    csd_size: jint,
+) {
+    let csd_vec: Option<Vec<u8>> = if !csd_buffer.is_null() && csd_size > 0 {
+        if let Ok(addr) = env.get_direct_buffer_address(&jni::objects::JByteBuffer::from(csd_buffer)) {
+            Some(std::slice::from_raw_parts(addr, csd_size as usize).to_vec())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Ok(lock) = GLOBAL_RUST_ENGINE.lock() {
+        if let Some(ref engine) = *lock {
+            engine.configure_audio(sample_rate, channel_count, csd_vec);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeWriteRustAudioSample<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    byte_buffer: jobject,
+    size: jint,
+    pts_us: jlong,
+    flags: jint,
+) {
+    if size <= 0 || byte_buffer.is_null() {
+        return;
+    }
+
+    if let Ok(addr) = env.get_direct_buffer_address(&jni::objects::JByteBuffer::from(byte_buffer)) {
+        let slice = std::slice::from_raw_parts(addr, size as usize);
+        if let Ok(lock) = GLOBAL_RUST_ENGINE.lock() {
+            if let Some(ref engine) = *lock {
+                engine.write_audio_sample(slice, pts_us as i64, flags as u32);
+            }
         }
     }
 }

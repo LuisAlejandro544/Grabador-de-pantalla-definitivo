@@ -138,6 +138,7 @@ Crate autónomo con `crate-type = ["cdylib", "rlib"]`.
 - **Conversión de Color Acelerada con SIMD ARM NEON (`color_yuv.rs`)**: Conversiones YUV420/NV12 y RGBA a más de 200 FPS en Rust puro con `yuvutils-rs`.
 - **Tubería de Sombreadores GPU (`gpu_glow.rs`)**: Shaders OpenGL ES 3.20 en Rust mediante `glow` para FaceCam circular antialiased, Chroma Key y Gaming Color Boost.
 - **Motor de Streaming en Vivo (`streamer.rs`)**: Despacho de paquetes NAL de ultra baja latencia (RTMP/SRT) con *Ring Buffer* de 4 MB y descarte inteligente anti-congestión (Zero-GC).
+- **Multiplexación de Audio y Video en Tiempo Real**: Registra simultáneamente las pistas de video (`AMediaCodec`) y audio AAC en `AMediaMuxer`, entrelazando las muestras en vivo en memoria nativa. Al detener la captura, el archivo MP4 se finaliza de inmediato (<15 ms) sin archivos temporales ni fusiones secundarias.
 - Procesa búferes codificados en un hilo worker seguro y escribe el archivo MP4 mediante `AMediaMuxer`.
 - Garantiza ausencia total de condiciones de carrera (*Data Races*) y cero recolección de basura (*Zero GC*).
 

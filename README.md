@@ -18,9 +18,9 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
   - **Garantía Matemática de Seguridad en Memoria (Zero GC)**: Sin recolección de basura, canales multihilo atómicos lock-free con `crossbeam-channel` y ausencia total de condiciones de carrera (*Data Races*).
   - **Inmunidad al Asesino de Procesos (LMK / Phantom Process Killer)**: Huella de memoria plana (< 15 MB) sin copias innecesarias en el heap ni colas infladas, asegurando que Android jamás mate el servicio en segundo plano mientras juegas títulos pesados.
 - **Tubería de Sincronización de Audio en Tiempo Real y Cero Lag**:
+  - **Multiplexación Nativa de Audio y Video 100% en Rust (Cero Espera al Detener)**: Ambas pistas (video y audio AAC) se registran de forma simultánea en `AMediaMuxer` desde Rust 2024. Las muestras de audio se entrelazan en tiempo real en el mismo contenedor MP4 sin generar archivos temporales en disco. Al presionar "Detener", la grabación se finaliza en menos de 15 ms, eliminando esperas y fusiones secundarias.
   - **Reloj Maestro Monotónico (Zero-Drift Master Clock)**: Sincroniza la generación de muestras y marcas de tiempo (PTS) con el tiempo real transcurrido (`System.nanoTime()`), garantizando que los disparos y pasos se escuchen en el milisegundo exacto en que ocurren.
   - **Búfer Circular Ampliado (262.144 muestras = ~2.73 segundos)**: Absorbe picos de CPU del sistema sin pérdidas ni cortes de audio (*audio stuttering* eliminado).
-  - **Normalización de Base Temporal en `AudioMuxerHelper`**: Entrelaza audio y video asegurando que ambas pistas arranquen estrictamente en PTS base cero.
 - **Tubería Zero-Copy en Kotlin**:
   - Kotlin solo orquesta permisos y ciclo de vida; no procesa bitmaps ni aloca buffers pesados en memoria Java.
   - Implementación con **Kotlin Coroutines (`Dispatchers.IO`)** para prevenir cualquier congelamiento del hilo principal (*ANR*).

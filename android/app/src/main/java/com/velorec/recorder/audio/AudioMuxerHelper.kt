@@ -108,14 +108,65 @@ object AudioMuxerHelper {
             val bufferInfo = MediaCodec.BufferInfo()
 
             // =========================================================================
-            // ENTRELAZADO CRÍTICO DE MUESTRAS (INTERLEAVING):
-            // En grabaciones largas (como partidas de Free Fire de varios minutos),
-            // escribir primero todo el video y luego todo el audio provoca que MediaMuxer
-            // aborte por desbordamiento de búfer o discrepancia de marcas de tiempo en el NDK.
-            // Se entrelazan alternativamente las muestras de video y audio según presentationTimeUs.
+            // SINCRONIZACIÓN MAESTRA DE AUDIO/VIDEO (CERO DESYNC / ANTI-LAG):
+            // Tanto el codificador de video en Rust 2024 como AudioRecordEngine estampan
+            // las muestras utilizando el reloj monotónico en tiempo real (CLOCK_MONOTONIC).
+            // 
+            // 1. ANCLAJE UNIFICADO (baseAnchorTime):
+            //    En lugar de normalizar video y audio con puntos de referencia separados (lo
+            //    que adelantaba el audio ~300-400 ms debido al tiempo de inicialización de
+            //    VirtualDisplay y la inyección previa), ambos flujos se anclan exactamente
+            //    al timestamp del PRIMER fotograma de video visible.
+            //
+            // 2. RECORTE DE PRE-ROLL DE AUDIO:
+            //    Cualquier muestra de audio capturada antes de que el primer fotograma de
+            //    pantalla esté disponible se descarta para que el video y el audio comiencen
+            //    en el milisegundo exacto (t = 0).
+            //
+            // 3. ENTRELAZADO ESTRICTO (INTERLEAVING):
+            //    Se intercalan muestras de video y audio según presentationTimeUs para
+            //    prevenir desbordamientos en el búfer interno del MediaMuxer del NDK.
             // =========================================================================
             videoExtractor.selectTrack(videoTrackIndexInExtractor)
             audioExtractor.selectTrack(audioTrackIndexInExtractor)
+
+            val rawFirstVideoTime = videoExtractor.sampleTime
+            val rawFirstAudioTime = audioExtractor.sampleTime
+
+            // Detectar si ambos flujos operan en el reloj monotónico del sistema (diferencia < 15 segundos y timestamps > 0)
+            val isMonotonicSharedClock = rawFirstVideoTime > 0L && rawFirstAudioTime > 0L &&
+                kotlin.math.abs(rawFirstVideoTime - rawFirstAudioTime) < 15_000_000L
+
+            val baseAnchorTime = if (isMonotonicSharedClock) {
+                rawFirstVideoTime
+            } else {
+                -1L
+            }
+
+            Log.i(
+                TAG,
+                "Sincronización A/V: rawFirstVideoTime=$rawFirstVideoTime, rawFirstAudioTime=$rawFirstAudioTime, " +
+                    "isMonotonicSharedClock=$isMonotonicSharedClock, baseAnchorTime=$baseAnchorTime"
+            )
+
+            // Si comparten reloj monotónico, descartar muestras de audio capturadas antes del primer frame de video
+            if (isMonotonicSharedClock && baseAnchorTime > 0L) {
+                var droppedAudioFrames = 0
+                while (true) {
+                    val audioPts = audioExtractor.sampleTime
+                    if (audioPts < 0L) break
+                    // Dejar un margen de 10 ms para absorber el tamaño de cuadro AAC (~21 ms)
+                    if (audioPts < baseAnchorTime - 10_000L) {
+                        audioExtractor.advance()
+                        droppedAudioFrames++
+                    } else {
+                        break
+                    }
+                }
+                if (droppedAudioFrames > 0) {
+                    Log.i(TAG, "Descartadas $droppedAudioFrames muestras de audio previas al inicio del video para sincronización perfecta.")
+                }
+            }
 
             var firstVideoSampleTime = -1L
             var firstAudioSampleTime = -1L
@@ -137,16 +188,24 @@ object AudioMuxerHelper {
                 if (videoDone && audioDone) break
 
                 val normVideoTime = if (!videoDone && rawVideoTime != Long.MAX_VALUE) {
-                    if (firstVideoSampleTime < 0) firstVideoSampleTime = rawVideoTime
-                    maxOf(0L, rawVideoTime - firstVideoSampleTime)
+                    if (isMonotonicSharedClock) {
+                        maxOf(0L, rawVideoTime - baseAnchorTime)
+                    } else {
+                        if (firstVideoSampleTime < 0) firstVideoSampleTime = rawVideoTime
+                        maxOf(0L, rawVideoTime - firstVideoSampleTime)
+                    }
                 } else Long.MAX_VALUE
 
                 val normAudioTime = if (!audioDone && rawAudioTime != Long.MAX_VALUE) {
-                    if (firstAudioSampleTime < 0) firstAudioSampleTime = rawAudioTime
-                    maxOf(0L, rawAudioTime - firstAudioSampleTime)
+                    if (isMonotonicSharedClock) {
+                        maxOf(0L, rawAudioTime - baseAnchorTime)
+                    } else {
+                        if (firstAudioSampleTime < 0) firstAudioSampleTime = rawAudioTime
+                        maxOf(0L, rawAudioTime - firstAudioSampleTime)
+                    }
                 } else Long.MAX_VALUE
 
-                // Escribir la muestra que tenga la marca de tiempo menor para mantener sincronización estricta
+                // Escribir la muestra con menor timestamp para mantener entrelazado y sincronización estricta
                 if (!videoDone && (audioDone || normVideoTime <= normAudioTime)) {
                     byteBuffer.clear()
                     val sampleSize = videoExtractor.readSampleData(byteBuffer, 0)
@@ -253,10 +312,92 @@ object AudioMuxerHelper {
     }
 
     /**
-     * Fallback seguro: Si la pista de audio falló, renombra o copia el archivo de video
-     * a la ruta de salida para garantizar que la grabación nunca se pierda.
+     * Fallback seguro: Si la pista de audio falló, normaliza el video a base cero y lo guarda
+     * en la ruta de salida para garantizar que la grabación nunca se pierda y sea reproducible
+     * en cualquier galería o reproductor.
      */
     private fun safeFallbackVideoOnly(videoFile: File, outputFile: File): Boolean {
+        var extractor: MediaExtractor? = null
+        var muxer: MediaMuxer? = null
+        try {
+            extractor = MediaExtractor().apply { setDataSource(videoFile.absolutePath) }
+            var videoTrackIdx = -1
+            var videoFormat: MediaFormat? = null
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("video/")) {
+                    videoTrackIdx = i
+                    videoFormat = format
+                    break
+                }
+            }
+
+            if (videoTrackIdx >= 0 && videoFormat != null) {
+                extractor.selectTrack(videoTrackIdx)
+                val tempRemuxFile = File(outputFile.parentFile, "remux_${System.currentTimeMillis()}.mp4")
+                muxer = MediaMuxer(tempRemuxFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                val muxerTrack = muxer.addTrack(videoFormat)
+                muxer.start()
+
+                val buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY_BYTES)
+                val bufferInfo = MediaCodec.BufferInfo()
+                var firstPts = -1L
+                var lastPts = -1L
+
+                while (true) {
+                    val sampleTime = extractor.sampleTime
+                    if (sampleTime < 0) break
+                    if (firstPts < 0) firstPts = sampleTime
+
+                    buffer.clear()
+                    val sampleSize = extractor.readSampleData(buffer, 0)
+                    if (sampleSize < 0) break
+
+                    bufferInfo.offset = 0
+                    bufferInfo.size = sampleSize
+                    var pts = maxOf(0L, sampleTime - firstPts)
+                    if (pts <= lastPts) {
+                        pts = if (lastPts >= 0) lastPts + 1000L else 0L
+                    }
+                    lastPts = pts
+                    bufferInfo.presentationTimeUs = pts
+
+                    val sampleFlags = extractor.sampleFlags
+                    var codecFlags = 0
+                    if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                        codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+                    }
+                    bufferInfo.flags = codecFlags
+                    muxer.writeSampleData(muxerTrack, buffer, bufferInfo)
+                    extractor.advance()
+                }
+
+                muxer.stop()
+                muxer.release()
+                muxer = null
+                extractor.release()
+                extractor = null
+
+                if (tempRemuxFile.exists() && tempRemuxFile.length() > 0L) {
+                    if (outputFile.exists()) outputFile.delete()
+                    val renamed = tempRemuxFile.renameTo(outputFile)
+                    if (!renamed) {
+                        tempRemuxFile.copyTo(outputFile, overwrite = true)
+                        tempRemuxFile.delete()
+                    }
+                    videoFile.delete()
+                    Log.i(TAG, "Fallback seguro: video remuxed a base 0 exitosamente.")
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Aviso en remux de fallback: ${e.message}, intentando preservación directa.")
+        } finally {
+            try { extractor?.release() } catch (_: Exception) {}
+            try { muxer?.release() } catch (_: Exception) {}
+        }
+
         return try {
             if (videoFile.exists()) {
                 if (videoFile.absolutePath != outputFile.absolutePath) {
@@ -267,7 +408,7 @@ object AudioMuxerHelper {
                         videoFile.delete()
                     }
                 }
-                Log.i(TAG, "Fallback seguro aplicado: video preservado sin pista de audio.")
+                Log.i(TAG, "Fallback seguro aplicado: video preservado directamente.")
                 true
             } else {
                 false

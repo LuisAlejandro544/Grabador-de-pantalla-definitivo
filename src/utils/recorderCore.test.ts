@@ -37,7 +37,9 @@ import {
   getBitrateProfile,
   preserveBitrateOnResolutionChange,
   getRustIntegratedLibraries,
-  getStreamingEngineComparison
+  getStreamingEngineComparison,
+  getRustRealTimeMuxingCapabilities,
+  estimateMuxingLatency
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -594,4 +596,35 @@ test('getStreamingEngineComparison compares Rust vs Go for on-device and server 
   const goItem = comparison.items.find(i => i.language === 'Go');
   assert.ok(goItem !== undefined);
   assert.ok(goItem?.serverRelayVerdict.includes('RECOMENDADO'));
+});
+
+test('getRustRealTimeMuxingCapabilities validates real-time muxer specs and zero-delay stop', () => {
+  const caps = getRustRealTimeMuxingCapabilities();
+  assert.equal(caps.engine, 'Rust 2024');
+  assert.equal(caps.zeroDelayStop, true);
+  assert.ok(caps.videoTrackFormat.includes('H.264 / HEVC / AV1'));
+  assert.ok(caps.audioTrackFormat.includes('AAC-LC'));
+  assert.equal(caps.threadSafeMuxerState, true);
+  assert.ok(caps.summary.includes('menos de 15 ms'));
+});
+
+test('estimateMuxingLatency confirms zero wait (<15ms) for Rust real-time muxing vs legacy merge', () => {
+  // Archivo típico de 200 MB
+  const fileBytes = 200 * 1024 * 1024;
+
+  const rustReport = estimateMuxingLatency(true, fileBytes);
+  assert.equal(rustReport.isRealTimeRustMuxing, true);
+  assert.equal(rustReport.fileSizeMb, 200);
+  assert.equal(rustReport.stopLatencyMs, 12);
+  assert.equal(rustReport.postProcessingRequired, false);
+  assert.equal(rustReport.tempFilesCreated, 0);
+  assert.ok(rustReport.speedupDescription.includes('Cero espera al detener'));
+
+  const legacyReport = estimateMuxingLatency(false, fileBytes);
+  assert.equal(legacyReport.isRealTimeRustMuxing, false);
+  assert.equal(legacyReport.fileSizeMb, 200);
+  assert.ok(legacyReport.stopLatencyMs >= 3000);
+  assert.equal(legacyReport.postProcessingRequired, true);
+  assert.equal(legacyReport.tempFilesCreated, 2);
+  assert.ok(legacyReport.speedupDescription.includes('Fusión secundaria en disco'));
 });

@@ -326,27 +326,15 @@ class ScreenRecordService : Service() {
                 val finalOutputFile = File(outputDir, displayName)
                 lastOutputFilePath = finalOutputFile.absolutePath
 
-                val videoFileToEncode = if (shouldRecordAudio) {
-                    File(outputDir, "temp_video_${timestamp}.mp4").also { 
-                        tempVideoFilePath = it.absolutePath 
-                    }
-                } else {
-                    tempVideoFilePath = null
-                    finalOutputFile
-                }
-
-                val audioFileToEncode = if (shouldRecordAudio) {
-                    File(outputDir, "temp_audio_${timestamp}.m4a").also { 
-                        tempAudioFilePath = it.absolutePath 
-                    }
-                } else {
-                    tempAudioFilePath = null
-                    null
-                }
+                // Con Multiplexación en Tiempo Real 100% en Rust:
+                // Rust escribe el video y el audio directamente en finalOutputFile en tiempo real,
+                // eliminando archivos temporales en disco y evitando la fusión secundaria al detener.
+                tempVideoFilePath = null
+                tempAudioFilePath = null
 
                 // Inicializar motor nativo en Rust 2024 y obtener la Surface de hardware (Zero-Copy)
                 val nativeSurface: Surface = nativeInitRustRecorder(
-                    videoFileToEncode.absolutePath,
+                    finalOutputFile.absolutePath,
                     width,
                     height,
                     fps,
@@ -398,14 +386,30 @@ class ScreenRecordService : Service() {
                     mainHandler
                 )
 
-                // Iniciar Audio simultáneamente con VirtualDisplay para sincronización estricta Audio/Video
+                // Iniciar Audio simultáneamente conectando los callbacks al muxer en tiempo real de Rust 2024
                 if (shouldRecordAudio) {
                     audioEngine = AudioRecordEngine(
                         context = this@ScreenRecordService,
                         audioSource = audio,
-                        outputM4aPath = audioFileToEncode?.absolutePath,
+                        outputM4aPath = null, // Multiplexación directa en el contenedor MP4 de Rust
                         mediaProjection = projection
                     ).apply {
+                        onAudioTrackConfigured = { csdBuffer, csdSize, sampleRate, channelCount ->
+                            try {
+                                nativeConfigureRustAudioTrack(sampleRate, channelCount, csdBuffer, csdSize)
+                            } catch (e: Exception) {
+                                Log.e("ScreenRecordService", "Error configurando pista de audio en Rust: ${e.message}")
+                            }
+                        }
+                        onAudioSampleEncoded = { dataBuffer, _, size, ptsUs, flags ->
+                            try {
+                                if (isNativeEncoderStarted) {
+                                    nativeWriteRustAudioSample(dataBuffer, size, ptsUs, flags)
+                                }
+                            } catch (e: Exception) {
+                                Log.e("ScreenRecordService", "Error enviando muestra de audio a Rust: ${e.message}")
+                            }
+                        }
                         start()
                     }
                 }
@@ -555,7 +559,10 @@ class ScreenRecordService : Service() {
                     )
                 )
 
-                // 5. Fusión de audio y video con sincronización estricta y publicación en la Galería pública
+                // 5. Publicación inmediata en Galería (CERO ESPERA AL DETENER):
+                // Gracias a la multiplexación simultánea en Rust 2024, el archivo MP4 ya contiene
+                // ambas pistas (video y audio) entrelazadas y sincronizadas en tiempo real.
+                // No se requieren copias masivas de disco ni demoras de post-procesamiento.
                 val tempVideo = tempVideoFilePath
                 val tempAudio = tempAudioFilePath
                 val finalOutput = lastOutputFilePath
@@ -582,7 +589,7 @@ class ScreenRecordService : Service() {
                 tempVideoFilePath = null
                 tempAudioFilePath = null
 
-                // Publicar en la Galería nativa del usuario ('Movies/VeloRec')
+                // Publicar directamente en la Galería nativa del usuario ('Movies/VeloRec')
                 val finalFile = lastOutputFilePath?.let { File(it) }
                 if (finalFile != null && finalFile.exists() && finalFile.length() > 0L) {
                     val publishedFile = GalleryStorageManager.publishVideoToGallery(
@@ -595,7 +602,7 @@ class ScreenRecordService : Service() {
                     } else {
                         lastFileSizeBytes = finalFile.length()
                     }
-                    Log.i("ScreenRecordService", "Grabación Rust 2024 guardada en Galería: ${lastOutputFilePath} (${lastFileSizeBytes} bytes)")
+                    Log.i("ScreenRecordService", "Grabación Rust 2024 (Multiplexada en vivo) guardada en Galería: ${lastOutputFilePath} (${lastFileSizeBytes} bytes)")
                 } else {
                     Log.w("ScreenRecordService", "Archivo final no encontrado o vacío tras finalizar captura.")
                 }
@@ -663,4 +670,16 @@ class ScreenRecordService : Service() {
     private external fun nativePauseRustEncoding()
     private external fun nativeResumeRustEncoding()
     private external fun nativeStopRustEncoding()
+    private external fun nativeConfigureRustAudioTrack(
+        sampleRate: Int,
+        channelCount: Int,
+        csdBuffer: ByteBuffer?,
+        csdSize: Int
+    )
+    private external fun nativeWriteRustAudioSample(
+        buffer: ByteBuffer,
+        size: Int,
+        ptsUs: Long,
+        flags: Int
+    )
 }
