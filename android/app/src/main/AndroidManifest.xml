@@ -47,14 +47,14 @@
         android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
-        <!-- Declaración del servicio en primer plano para MediaProjection y Micrófono en Android 14+ -->
-        <!-- android:process=":recorder" aísla el servicio en su propio proceso Linux del sistema operativo,
-             inmunizando la grabación de pantalla ante pausas del Garbage Collector (GC) o consumos de memoria de la UI -->
+        <!-- Declaración del servicio en primer plano para MediaProjection y Micrófono en Android 14+ (API 34/35) -->
+        <!-- Ejecutado en el proceso principal para cumplir con la política estricta de seguridad de Android 14+,
+             donde el token de MediaProjection otorgado por la Activity solo es válido dentro del mismo UID/PID y
+             para garantizar reactividad directa de StateFlow sin serialización IPC propensa a fallos -->
         <service
             android:name=".ScreenRecordService"
             android:enabled="true"
             android:exported="false"
-            android:process=":recorder"
             android:foregroundServiceType="mediaProjection|microphone" />
 
         <activity

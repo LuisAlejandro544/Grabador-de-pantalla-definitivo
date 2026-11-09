@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.widget.Toast
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
@@ -151,13 +153,20 @@ class ScreenRecordService : Service() {
             _countdownRemainingFlow.value = countdownRemaining
         }
 
-        // Carga dinámica de las bibliotecas nativas C++23 y Rust 2024
+        // Carga dinámica independiente de bibliotecas nativas C++23 y Rust 2024
+        // Se protegen de forma aislada para que la ausencia de una no impida la carga de la otra
         init {
             try {
                 System.loadLibrary("velorec_cpp23")
+                Log.i("ScreenRecordService", "Biblioteca C++23 (velorec_cpp23) cargada con éxito")
+            } catch (t: Throwable) {
+                Log.w("ScreenRecordService", "Aviso: velorec_cpp23 no disponible: ${t.message}")
+            }
+            try {
                 System.loadLibrary("velorec_rust2024")
-            } catch (e: UnsatisfiedLinkError) {
-                e.printStackTrace()
+                Log.i("ScreenRecordService", "Biblioteca Rust 2024 (velorec_rust2024) cargada con éxito")
+            } catch (t: Throwable) {
+                Log.w("ScreenRecordService", "Aviso: velorec_rust2024 no disponible: ${t.message}")
             }
         }
     }
@@ -207,8 +216,6 @@ class ScreenRecordService : Service() {
 
     private fun handleStartRecording(intent: Intent) {
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
-        val resultData = IntentCompat.getParcelableExtra(intent, EXTRA_RESULT_DATA, Intent::class.java) ?: return
-
         val engine = intent.getStringExtra(EXTRA_ENGINE) ?: "rust2024"
         val width = intent.getIntExtra(EXTRA_WIDTH, 1080)
         val height = intent.getIntExtra(EXTRA_HEIGHT, 1920)
@@ -231,6 +238,8 @@ class ScreenRecordService : Service() {
         _durationSecFlow.value = 0
         notifyStateChanged()
 
+        // 1. INICIAR FOREGROUND SERVICE INMEDIATAMENTE (Cumplimiento estricto con Android 8+ y 14+)
+        // Previene la excepción ForegroundServiceDidNotStartInTimeException del sistema operativo
         val initialNotification = RecordingNotificationHelper.buildRecordingNotification(
             this,
             engine,
@@ -254,6 +263,19 @@ class ScreenRecordService : Service() {
             startForeground(RecordingNotificationHelper.NOTIFICATION_ID, initialNotification, serviceType)
         } else {
             startForeground(RecordingNotificationHelper.NOTIFICATION_ID, initialNotification)
+        }
+
+        // 2. Extraer de forma segura el token resultData compatible con todas las versiones de Android
+        val resultData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(EXTRA_RESULT_DATA)
+        } ?: run {
+            Log.e("ScreenRecordService", "Token de MediaProjection (resultData) es nulo o inválido.")
+            Toast.makeText(this, "Permiso de captura cancelado o no disponible", Toast.LENGTH_SHORT).show()
+            handleStopRecording()
+            return
         }
 
         serviceScope.launch(Dispatchers.IO) {
@@ -303,6 +325,9 @@ class ScreenRecordService : Service() {
                 )
 
                 val outputDir = getExternalFilesDir(null) ?: filesDir
+                if (!outputDir.exists()) {
+                    outputDir.mkdirs()
+                }
                 val timestamp = System.currentTimeMillis()
                 val shouldRecordAudio = audio != "mute"
 
@@ -330,6 +355,10 @@ class ScreenRecordService : Service() {
                     getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                 val projection = projectionManager.getMediaProjection(resultCode, resultData)
                 if (projection == null) {
+                    Log.e("ScreenRecordService", "MediaProjection es nulo tras solicitarlo al sistema.")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(applicationContext, "No se pudo obtener el servicio de captura de pantalla", Toast.LENGTH_SHORT).show()
+                    }
                     handleStopRecording()
                     return@launch
                 }
@@ -349,15 +378,15 @@ class ScreenRecordService : Service() {
                 // Instalar manejadores de señales de emergencia en Rust para evitar archivos corruptos
                 try {
                     nativeInstallEmergencySignalHandler()
-                } catch (e: UnsatisfiedLinkError) {
-                    Log.w("VeloRec_Service", "nativeInstallEmergencySignalHandler no disponible: ${e.message}")
+                } catch (t: Throwable) {
+                    Log.w("VeloRec_Service", "nativeInstallEmergencySignalHandler no disponible: ${t.message}")
                 }
 
                 // Señalizar al motor Rust para comenzar a codificar fotogramas
                 nativeStartRustEncoding()
 
                 // Crear VirtualDisplay conectado directamente a la Surface nativa de hardware
-                val densityDpi = resources.displayMetrics.densityDpi
+                val densityDpi = resources.displayMetrics.densityDpi.coerceAtLeast(1)
                 virtualDisplay = projection.createVirtualDisplay(
                     "VeloRec-Capture",
                     width,
@@ -380,8 +409,8 @@ class ScreenRecordService : Service() {
                         onAudioTrackConfigured = { csdBuffer, csdSize, sampleRate, channelCount ->
                             try {
                                 nativeConfigureRustAudioTrack(sampleRate, channelCount, csdBuffer, csdSize)
-                            } catch (e: Exception) {
-                                Log.e("ScreenRecordService", "Error configurando pista de audio en Rust: ${e.message}")
+                            } catch (t: Throwable) {
+                                Log.e("ScreenRecordService", "Error configurando pista de audio en Rust: ${t.message}")
                             }
                         }
                         onAudioSampleEncoded = { dataBuffer, _, size, ptsUs, flags ->
@@ -389,16 +418,20 @@ class ScreenRecordService : Service() {
                                 if (isNativeEncoderStarted) {
                                     nativeWriteRustAudioSample(dataBuffer, size, ptsUs, flags)
                                 }
-                            } catch (e: Exception) {
-                                Log.e("ScreenRecordService", "Error enviando muestra de audio a Rust: ${e.message}")
+                            } catch (t: Throwable) {
+                                Log.e("ScreenRecordService", "Error enviando muestra de audio a Rust: ${t.message}")
                             }
                         }
                         start()
                     }
                 }
 
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (t: Throwable) {
+                Log.e("ScreenRecordService", "Excepción crítica durante inicio de grabación: ${t.message}", t)
+                withContext(Dispatchers.Main) {
+                    val errorMsg = t.localizedMessage ?: "Fallo al inicializar codificador nativo"
+                    Toast.makeText(applicationContext, "Error al iniciar grabación: $errorMsg", Toast.LENGTH_LONG).show()
+                }
                 handleStopRecording()
             }
         }
