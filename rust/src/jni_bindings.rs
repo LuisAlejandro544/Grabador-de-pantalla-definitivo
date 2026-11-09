@@ -128,7 +128,7 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
 
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeConfigureRustAudioTrack<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     _class: JClass<'local>,
     sample_rate: jint,
     channel_count: jint,
@@ -139,7 +139,7 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
         let jobj = unsafe { jni::objects::JObject::from_raw(csd_buffer) };
         let byte_buf = jni::objects::JByteBuffer::from(jobj);
         if let Ok(addr) = env.get_direct_buffer_address(&byte_buf) {
-            Some(std::slice::from_raw_parts(addr, csd_size as usize).to_vec())
+            Some(unsafe { std::slice::from_raw_parts(addr, csd_size as usize).to_vec() })
         } else {
             None
         }
@@ -156,7 +156,7 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
 
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeWriteRustAudioSample<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     _class: JClass<'local>,
     byte_buffer: jobject,
     size: jint,
@@ -170,7 +170,7 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     let jobj = unsafe { jni::objects::JObject::from_raw(byte_buffer) };
     let byte_buf = jni::objects::JByteBuffer::from(jobj);
     if let Ok(addr) = env.get_direct_buffer_address(&byte_buf) {
-        let slice = std::slice::from_raw_parts(addr, size as usize);
+        let slice = unsafe { std::slice::from_raw_parts(addr, size as usize) };
         if let Ok(lock) = GLOBAL_RUST_ENGINE.lock() {
             if let Some(ref engine) = *lock {
                 engine.write_audio_sample(slice, pts_us as i64, flags as u32);

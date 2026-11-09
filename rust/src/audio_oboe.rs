@@ -14,8 +14,8 @@ use std::sync::Arc;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{info, warn};
 use oboe::{
-    AudioInputCallback, AudioStream, AudioStreamAsync, AudioStreamBuilder,
-    DataCallbackResult, PerformanceMode, SharingMode,
+    AudioInputCallback, AudioInputStreamSafe, AudioStreamAsync, AudioStreamBuilder,
+    DataCallbackResult, Input, PerformanceMode, SharingMode, Stereo,
 };
 
 /// Configuración para el flujo de captura de audio con Oboe
@@ -54,42 +54,37 @@ pub struct VeloRecOboeCallback {
 }
 
 impl AudioInputCallback for VeloRecOboeCallback {
-    type FrameType = (i16, i16);
+    type FrameType = (i16, Stereo);
 
     fn on_audio_ready(
         &mut self,
-        _stream: &mut dyn AudioStream,
-        frames: &[Self::FrameType],
+        _stream: &mut dyn AudioInputStreamSafe,
+        audio_data: &[i16],
     ) -> DataCallbackResult {
-        let mut samples = Vec::with_capacity(frames.len() * 2);
-        for frame in frames {
-            samples.push(frame.0);
-            samples.push(frame.1);
-        }
-
         let now_us = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
             Ok(d) => d.as_micros() as i64,
             Err(_) => 0,
         };
 
         let packet = PcmAudioPacket {
-            samples,
+            samples: audio_data.to_vec(),
             presentation_time_us: now_us,
             channel_count: self.channel_count,
             sample_rate: self.sample_rate,
         };
 
-        self.total_frames_captured.fetch_add(frames.len() as u64, Ordering::Relaxed);
+        let frames = audio_data.len() as u64 / 2;
+        self.total_frames_captured.fetch_add(frames, Ordering::Relaxed);
         let _ = self.sender.try_send(packet);
 
         DataCallbackResult::Continue
     }
 
-    fn on_error_before_close(&mut self, _stream: &mut dyn AudioStream, error: oboe::Error) {
+    fn on_error_before_close(&mut self, _stream: &mut dyn AudioInputStreamSafe, error: oboe::Error) {
         log::error!("OboeAudioEngine: Error en stream Oboe antes de cerrar: {:?}", error);
     }
 
-    fn on_error_after_close(&mut self, _stream: &mut dyn AudioStream, error: oboe::Error) {
+    fn on_error_after_close(&mut self, _stream: &mut dyn AudioInputStreamSafe, error: oboe::Error) {
         log::warn!("OboeAudioEngine: Stream Oboe cerrado tras error: {:?}", error);
     }
 }
@@ -101,7 +96,7 @@ pub struct OboeAudioEngine {
     total_frames_captured: Arc<AtomicU64>,
     packet_sender: Sender<PcmAudioPacket>,
     packet_receiver: Receiver<PcmAudioPacket>,
-    active_stream: Option<AudioStreamAsync<oboe::Input, VeloRecOboeCallback>>,
+    active_stream: Option<AudioStreamAsync<Input, VeloRecOboeCallback>>,
 }
 
 impl OboeAudioEngine {
@@ -145,8 +140,9 @@ impl OboeAudioEngine {
             sample_rate: self.config.sample_rate,
         };
 
-        let mut builder = AudioStreamBuilder::default();
-        builder.set_channel_count(self.config.channel_count)
+        let builder = AudioStreamBuilder::default()
+            .set_input()
+            .set_channel_count::<Stereo>()
             .set_sample_rate(self.config.sample_rate)
             .set_format::<i16>()
             .set_performance_mode(PerformanceMode::LowLatency)
