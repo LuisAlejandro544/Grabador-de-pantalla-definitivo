@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{info, warn};
 use oboe::{
-    AudioInputCallback, AudioInputStreamSafe, AudioStreamAsync, AudioStreamBuilder,
+    AudioInputCallback, AudioInputStreamSafe, AudioStream, AudioStreamAsync, AudioStreamBuilder,
     DataCallbackResult, Input, PerformanceMode, SharingMode, Stereo,
 };
 
@@ -59,21 +59,27 @@ impl AudioInputCallback for VeloRecOboeCallback {
     fn on_audio_ready(
         &mut self,
         _stream: &mut dyn AudioInputStreamSafe,
-        audio_data: &[i16],
+        audio_data: &[(i16, i16)],
     ) -> DataCallbackResult {
+        let mut samples = Vec::with_capacity(audio_data.len() * 2);
+        for frame in audio_data {
+            samples.push(frame.0);
+            samples.push(frame.1);
+        }
+
         let now_us = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
             Ok(d) => d.as_micros() as i64,
             Err(_) => 0,
         };
 
         let packet = PcmAudioPacket {
-            samples: audio_data.to_vec(),
+            samples,
             presentation_time_us: now_us,
             channel_count: self.channel_count,
             sample_rate: self.sample_rate,
         };
 
-        let frames = audio_data.len() as u64 / 2;
+        let frames = audio_data.len() as u64;
         self.total_frames_captured.fetch_add(frames, Ordering::Relaxed);
         let _ = self.sender.try_send(packet);
 

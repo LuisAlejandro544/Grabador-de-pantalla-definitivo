@@ -9,8 +9,6 @@
 //!    para evitar errores de submuestreo de croma (Chroma Subsampling) y barras verdes en codificadores de hardware.
 //! 4. Rinde a más de 200 FPS en smartphones modernos con cero asignaciones de memoria innecesarias.
 
-use log::info;
-
 /// Formato de color YUV soportado por el subsistema de hardware
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum YuvColorFormat {
