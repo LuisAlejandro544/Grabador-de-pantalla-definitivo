@@ -157,6 +157,9 @@ impl YuvColorConverter {
             }
         }
 
+        Ok(rgba_out)
+    }
+
     /// Convierte un fotograma RGBA a formato I420 (YUV420 planar con planos Y, U y V separados)
     /// Reemplaza completamente convertRgbaToI420 de Google libyuv C++.
     pub fn rgba_to_i420(

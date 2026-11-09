@@ -346,6 +346,13 @@ class ScreenRecordService : Service() {
                 projectionCallback = callback
                 projection.registerCallback(callback, mainHandler)
 
+                // Instalar manejadores de señales de emergencia en Rust para evitar archivos corruptos
+                try {
+                    nativeInstallEmergencySignalHandler()
+                } catch (e: UnsatisfiedLinkError) {
+                    Log.w("VeloRec_Service", "nativeInstallEmergencySignalHandler no disponible: ${e.message}")
+                }
+
                 // Señalizar al motor Rust para comenzar a codificar fotogramas
                 nativeStartRustEncoding()
 
@@ -592,6 +599,18 @@ class ScreenRecordService : Service() {
         }
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+            Log.w("VeloRec_Service", "Aviso de presión de memoria del sistema (level=$level). Ejecutando purga nativa en Rust...")
+            try {
+                nativeForceMemoryTrim()
+            } catch (e: UnsatisfiedLinkError) {
+                Log.w("VeloRec_Service", "nativeForceMemoryTrim no disponible: ${e.message}")
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         sessionTimer?.cancel()
@@ -641,4 +660,7 @@ class ScreenRecordService : Service() {
         ptsUs: Long,
         flags: Int
     )
+    private external fun nativeForceMemoryTrim(): Int
+    private external fun nativeInstallEmergencySignalHandler()
+    private external fun nativeGetResilienceTelemetry(): String
 }

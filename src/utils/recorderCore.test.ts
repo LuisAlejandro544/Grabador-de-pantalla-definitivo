@@ -42,7 +42,10 @@ import {
   estimateMuxingLatency,
   getRustOboeArchitectureSpecs,
   calculateAudioSyncOffset,
-  getRustYuvMigrationSpecs
+  getRustYuvMigrationSpecs,
+  parseResilienceTelemetry,
+  calculateOomKillRisk,
+  getRustResilienceGuardianSpecs
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -700,4 +703,61 @@ test('getRustYuvMigrationSpecs confirms 100% Rust yuvutils-rs migration and C++ 
   assert.ok(specs.simdAcceleration.includes('ARM NEON'));
   assert.ok(specs.fpsThroughput >= 200);
   assert.ok(specs.summary.includes('Google libyuv fue migrado 100% a Rust 2024'));
+});
+
+test('parseResilienceTelemetry parses JSON from Rust guardian with defensive fallbacks', () => {
+  const json = JSON.stringify({
+    rss_kb: 14336,
+    vmsize_kb: 70000,
+    oom_score: 150,
+    oom_score_adj: 100,
+    system_available_ram_mb: 850,
+    total_trims: 3,
+    risk_level: 'OPTIMAL_HEALTHY'
+  });
+
+  const parsed = parseResilienceTelemetry(json);
+  assert.equal(parsed.rssKb, 14336);
+  assert.equal(parsed.rssMb, 14);
+  assert.equal(parsed.oomScore, 150);
+  assert.equal(parsed.oomScoreAdj, 100);
+  assert.equal(parsed.systemAvailableRamMb, 850);
+  assert.equal(parsed.totalTrims, 3);
+  assert.equal(parsed.riskLevel, 'OPTIMAL_HEALTHY');
+
+  // Fallback defensivo para null / string corrupto
+  const fallback = parseResilienceTelemetry(null);
+  assert.equal(fallback.riskLevel, 'OPTIMAL_HEALTHY');
+  assert.ok(fallback.rssMb <= 15);
+});
+
+test('calculateOomKillRisk detects LMK danger zones and provides recommendations', () => {
+  // Escenario 1: Normal en juego ligero o pantalla de inicio
+  const safe = calculateOomKillRisk(120, 1200);
+  assert.equal(safe.isSafe, true);
+  assert.equal(safe.riskRating, 'Bajo');
+
+  // Escenario 2: Presión moderada durante partida de Free Fire / Subway Surfers
+  const moderate = calculateOomKillRisk(450, 160);
+  assert.equal(moderate.isSafe, true);
+  assert.equal(moderate.riskRating, 'Moderado');
+  assert.ok(moderate.recommendation.includes('RSS protegida'));
+
+  // Escenario 3: Presión crítica (memoria disponible < 80 MB o oom_score > 700)
+  const critical = calculateOomKillRisk(750, 60);
+  assert.equal(critical.isSafe, false);
+  assert.equal(critical.riskRating, 'Crítico');
+  assert.ok(critical.recommendation.includes('malloc_trim'));
+});
+
+test('getRustResilienceGuardianSpecs exposes anti-LMK and real-time scheduling architecture', () => {
+  const specs = getRustResilienceGuardianSpecs();
+  assert.equal(specs.engine, 'Rust 2024 Resilience Guardian');
+  assert.equal(specs.zeroDataLossGuarantee, true);
+  assert.ok(specs.antiLmkTechniques.some(t => t.includes('malloc_trim')));
+  assert.ok(specs.antiLmkTechniques.some(t => t.includes('nice -16')));
+  assert.ok(specs.antiLmkTechniques.some(t => t.includes('SYS_ioprio_set')));
+  assert.ok(specs.antiLmkTechniques.some(t => t.includes('mlock')));
+  assert.ok(specs.antiLmkTechniques.some(t => t.includes('SIGTERM')));
+  assert.deepEqual(specs.supportedArchitectures, ['arm64-v8a', 'armeabi-v7a', 'x86_64']);
 });

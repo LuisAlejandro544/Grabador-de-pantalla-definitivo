@@ -178,3 +178,68 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
         }
     }
 }
+
+// Instancia global del guardián de resiliencia anti-LMK
+pub static GLOBAL_RESILIENCE: Mutex<Option<crate::resilience::ResilienceGuardian>> = Mutex::new(None);
+
+#[inline]
+fn get_or_init_guardian<'a>() -> std::sync::MutexGuard<'a, Option<crate::resilience::ResilienceGuardian>> {
+    let mut lock = GLOBAL_RESILIENCE.lock().unwrap();
+    if lock.is_none() {
+        *lock = Some(crate::resilience::ResilienceGuardian::new());
+    }
+    lock
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeForceMemoryTrim(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jint {
+    let guardian_lock = get_or_init_guardian();
+    if let Some(ref guardian) = *guardian_lock {
+        if guardian.force_memory_trim() { 1 } else { 0 }
+    } else {
+        0
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeInstallEmergencySignalHandler(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) {
+    let guardian_lock = get_or_init_guardian();
+    if let Some(ref guardian) = *guardian_lock {
+        guardian.install_emergency_signal_handler();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeGetResilienceTelemetry<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> jni::sys::jstring {
+    let guardian_lock = get_or_init_guardian();
+    let report = if let Some(ref guardian) = *guardian_lock {
+        guardian.get_memory_health()
+    } else {
+        crate::resilience::ResilienceGuardian::new().get_memory_health()
+    };
+
+    let json = format!(
+        "{{\"rss_kb\":{},\"vmsize_kb\":{},\"oom_score\":{},\"oom_score_adj\":{},\"system_available_ram_mb\":{},\"total_trims\":{},\"risk_level\":\"{}\"}}",
+        report.rss_kb,
+        report.vmsize_kb,
+        report.oom_score,
+        report.oom_score_adj,
+        report.system_available_ram_mb,
+        report.total_trims_performed,
+        report.risk_level
+    );
+
+    match env.new_string(json) {
+        Ok(j_str) => j_str.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}

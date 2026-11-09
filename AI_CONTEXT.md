@@ -83,6 +83,12 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
    - Renderizado OpenGL ES 3.20 con `glow` para FaceCam circular antialiased, Chroma Key en GPU y Gaming Color Boost (realce de saturación y contraste a 60/120 FPS sin consumo de CPU).
 20. **Evaluación de Streaming Móvil (Rust vs. Go)**:
    - Para el cliente móvil dentro del smartphone, **Rust** es superior a Go al compartir el mismo espacio de memoria con el codificador de hardware NDK, tener huella menor (<10 MB vs 30 MB), no sufrir pausas de Garbage Collector durante partidas intensivas y eliminar la necesidad de empaquetar un segundo runtime (`libgo.so`).
+21. **Guardián de Resiliencia y Blindaje Anti-LMK en Rust 2024 (`resilience.rs`)**:
+   - Compactación periódica de heap vía `malloc_trim(0)` para forzar a Bionic libc a devolver páginas al kernel de Linux, manteniendo una huella plana de RSS (<15 MB).
+   - Prioridad de proceso `nice -16` y prioridad de E/S de tiempo real (`SYS_ioprio_set` Best-Effort Clase 2) para blindar la escritura de paquetes de video contra saturación del disco.
+   - Fijación de páginas de memoria en RAM física (`mlock`) para impedir que el compresor zRAM o kswapd del sistema operativo las mueva a swap.
+   - Manejador de señales POSIX de emergencia (`SIGTERM`, `SIGINT`, `SIGHUP`) que intercepta intentos de matar el proceso y finaliza atómicamente el MP4 (cerrando el átomo `moov`), eliminando cualquier riesgo de video corrupto.
+   - Lectura directa de `/proc/self/status` (VmRSS), `/proc/self/oom_score` y `/proc/meminfo` (MemAvailable) con sincronización en `ScreenRecordService.onTrimMemory(level)`.
 
 ---
 

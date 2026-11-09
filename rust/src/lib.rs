@@ -24,6 +24,7 @@ pub mod encoder;
 pub mod gpu_glow;
 pub mod jni_bindings;
 pub mod muxer;
+pub mod resilience;
 pub mod streamer;
 
 pub use audio_oboe::{OboeAudioConfig, OboeAudioEngine, PcmAudioPacket};
@@ -37,6 +38,7 @@ pub use encoder::{
 pub use gpu_glow::{FaceCamShaderParams, GamingColorBoostParams, GlowGpuPipeline, GlowShaderEffect};
 pub use jni_bindings::GLOBAL_RUST_ENGINE;
 pub use muxer::{PendingAudioPacket, SharedMuxerState};
+pub use resilience::{MemoryHealthReport, ResilienceGuardian};
 pub use streamer::{RustStreamEngine, StreamConfig, StreamPacketType, StreamStats};
 
 #[cfg(test)]

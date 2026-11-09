@@ -304,9 +304,7 @@ impl RustRecorderEngine {
             .spawn(move || {
                 info!("Rust 2024: Hilo de codificación y multiplexación activo.");
                 apply_efficiency_core_affinity("velorec_rust_worker");
-                unsafe {
-                    libc::setpriority(libc::PRIO_PROCESS, 0, -16);
-                }
+                crate::resilience::ResilienceGuardian::boost_thread_priority("velorec_rust_worker");
                 let codec = codec_addr as *mut ndk_sys::AMediaCodec;
                 let native_window = native_window_addr as *mut ndk_sys::ANativeWindow;
 
@@ -376,7 +374,14 @@ impl RustRecorderEngine {
                                                 buffer_ptr,
                                                 &sample_info,
                                             );
-                                            frames_encoded.fetch_add(1, Ordering::Relaxed);
+                                            let current_frames = frames_encoded.fetch_add(1, Ordering::Relaxed);
+                                            if current_frames > 0 && current_frames % 300 == 0 {
+                                                if let Ok(lock) = crate::jni_bindings::GLOBAL_RESILIENCE.lock() {
+                                                    if let Some(ref guardian) = *lock {
+                                                        guardian.force_memory_trim();
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }

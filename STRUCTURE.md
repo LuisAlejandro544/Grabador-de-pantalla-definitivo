@@ -101,6 +101,7 @@
 │       ├── audio_oboe.rs               # Integración de Google Oboe para captura de audio nativo (<10ms)
 │       ├── color_yuv.rs                # Conversión de color YUV420/NV12 y RGBA con SIMD ARM NEON (yuvutils-rs)
 │       ├── gpu_glow.rs                 # Tubería de sombreadores GPU OpenGL ES 3.20 en Rust puro (glow)
+│       ├── resilience.rs               # Guardián anti-LMK, malloc_trim, prioridad nice -16, ioprio y señales de emergencia
 │       └── streamer.rs                 # Motor de streaming en vivo (RTMP/SRT) en Rust con Ring Buffer (Zero-GC)
 │
 ├── src/                                # Código fuente de la página web oficial (Landing Page)
@@ -166,6 +167,7 @@ Crate autónomo con `crate-type = ["cdylib", "rlib"]` estructurado de forma modu
 - **`audio_oboe.rs`**: Captura de audio de ultra baja latencia (<10 ms) con AAudio/OpenSL ES.
 - **`color_yuv.rs`**: Conversión de color acelerada con SIMD ARM NEON (yuvutils-rs).
 - **`gpu_glow.rs`**: Sombreadores GPU OpenGL ES 3.20 en Rust puro (glow).
+- **`resilience.rs`**: Guardián de resiliencia anti-LMK, purga periódica `malloc_trim(0)`, prioridad `nice -16`, E/S de tiempo real `SYS_ioprio_set`, fijación de memoria física `mlock` y manejador de señales de emergencia (`SIGTERM`/`SIGINT`).
 - **`streamer.rs`**: Motor de streaming en vivo RTMP/SRT de ultra baja latencia con Ring Buffer (Zero-GC).
 
 ### 3. `/android/.../ui` (Componentes y Pantallas Jetpack Compose Material 3)

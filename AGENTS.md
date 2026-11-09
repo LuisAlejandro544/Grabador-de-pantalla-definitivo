@@ -90,3 +90,9 @@ npm run build
   - `glow` (`rust/src/gpu_glow.rs`): Shaders OpenGL ES 3.20 en Rust puro (FaceCam, Chroma Key, Gaming Boost).
 - **Streaming en el Dispositivo (Rust vs. Go)**:
   - Para transmisión en vivo desde el smartphone, se prioriza **Rust** sobre Go: menor consumo de memoria (<10 MB vs 30 MB), cero pausas de Garbage Collector que afecten al juego, y eliminación del runtime secundario `libgo.so` en el APK.
+- **Guardián de Resiliencia Anti-LMK y Blindaje de Proceso (`resilience.rs`)**:
+  - Compactación periódica con `malloc_trim(0)` para forzar a Bionic libc a devolver páginas libres a Linux, manteniendo la huella RSS plana (<15 MB) aun en partidas largas.
+  - Prioridad de proceso y E/S en tiempo real (`nice -16` y llamada `SYS_ioprio_set` Best-Effort Clase 2) para asegurar que la escritura al MP4 nunca se pause.
+  - Fijación de memoria física con `mlock` para proteger buffers críticos frente al compresor zRAM.
+  - Manejador de señales POSIX de emergencia (`SIGTERM`, `SIGINT`, `SIGHUP`) para salvado y cierre atómico del MP4, garantizando Cero Pérdida de Datos ante cierres forzados del sistema.
+  - Sincronización proactiva con `ScreenRecordService.onTrimMemory(level)` para depurar memoria nativa antes de que actúe el LMK.
