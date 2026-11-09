@@ -14,10 +14,10 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
-use log::{error, info, warn};
+use log::info;
 
 /// Capacidad predeterminada de la cola de paquetes
 pub const DEFAULT_PACKET_QUEUE_SIZE: usize = 1024;

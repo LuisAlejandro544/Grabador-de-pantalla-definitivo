@@ -12,7 +12,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use log::{error, info, warn};
+use log::{info, warn};
 
 /// Configuración para el flujo de captura de audio con Oboe
 #[derive(Debug, Clone)]

@@ -9,7 +9,7 @@
 //! 3. Sustituye la dependencia de código C++ para gráficos sin añadir sobrecarga ni consumo de CPU.
 //! 4. Es 100% compatible con chips gráficos móviles Qualcomm Adreno, ARM Mali e Imagination PowerVR.
 
-use log::{error, info};
+use log::info;
 
 /// Tipo de efecto visual acelerado por GPU
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

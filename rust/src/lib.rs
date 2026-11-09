@@ -48,7 +48,7 @@ const AMEDIACODEC_INFO_TRY_AGAIN_LATER: isize = -1;
 const AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM: u32 = 4;
 const TIMEOUT_US: i64 = 10_000; // 10 milisegundos
 
-extern "C" {
+unsafe extern "C" {
     fn AMediaFormat_setBuffer(
         format: *mut ndk_sys::AMediaFormat,
         name: *const libc::c_char,
@@ -283,7 +283,7 @@ impl RustRecorderEngine {
                     ndk_sys::AMediaMuxer_writeSampleData(
                         muxer.muxer_addr as *mut ndk_sys::AMediaMuxer,
                         muxer.audio_track_index as usize,
-                        data.as_ptr() as *const libc::c_void,
+                        data.as_ptr(),
                         &mut buffer_info,
                     );
                 }
@@ -533,7 +533,7 @@ impl RustRecorderEngine {
                                         ndk_sys::AMediaMuxer_writeSampleData(
                                             muxer_ptr,
                                             a_track as usize,
-                                            pkt.data.as_ptr() as *const libc::c_void,
+                                            pkt.data.as_ptr(),
                                             &mut a_info,
                                         );
                                         audio_samples_written.fetch_add(1, Ordering::Relaxed);
@@ -729,7 +729,9 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     csd_size: jint,
 ) {
     let csd_vec: Option<Vec<u8>> = if !csd_buffer.is_null() && csd_size > 0 {
-        if let Ok(addr) = env.get_direct_buffer_address(&jni::objects::JByteBuffer::from(csd_buffer)) {
+        let jobj = unsafe { jni::objects::JObject::from_raw(csd_buffer) };
+        let byte_buf = jni::objects::JByteBuffer::from(jobj);
+        if let Ok(addr) = env.get_direct_buffer_address(&byte_buf) {
             Some(std::slice::from_raw_parts(addr, csd_size as usize).to_vec())
         } else {
             None
@@ -758,7 +760,9 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
         return;
     }
 
-    if let Ok(addr) = env.get_direct_buffer_address(&jni::objects::JByteBuffer::from(byte_buffer)) {
+    let jobj = unsafe { jni::objects::JObject::from_raw(byte_buffer) };
+    let byte_buf = jni::objects::JByteBuffer::from(jobj);
+    if let Ok(addr) = env.get_direct_buffer_address(&byte_buf) {
         let slice = std::slice::from_raw_parts(addr, size as usize);
         if let Ok(lock) = GLOBAL_RUST_ENGINE.lock() {
             if let Some(ref engine) = *lock {
