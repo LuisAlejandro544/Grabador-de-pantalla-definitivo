@@ -39,7 +39,10 @@ import {
   getRustIntegratedLibraries,
   getStreamingEngineComparison,
   getRustRealTimeMuxingCapabilities,
-  estimateMuxingLatency
+  estimateMuxingLatency,
+  getRustOboeArchitectureSpecs,
+  calculateAudioSyncOffset,
+  getRustYuvMigrationSpecs
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -627,4 +630,74 @@ test('estimateMuxingLatency confirms zero wait (<15ms) for Rust real-time muxing
   assert.equal(legacyReport.postProcessingRequired, true);
   assert.equal(legacyReport.tempFilesCreated, 2);
   assert.ok(legacyReport.speedupDescription.includes('Fusión secundaria en disco'));
+});
+
+test('getRustOboeArchitectureSpecs confirms 100% Rust oboe crate integration and C++ removal', () => {
+  const specs = getRustOboeArchitectureSpecs();
+  assert.equal(specs.runtime, 'Rust 2024');
+  assert.equal(specs.cppOboeRemoved, true);
+  assert.equal(specs.oboeCrateIntegrated, true);
+  assert.equal(specs.latencyTargetMs, 8);
+  assert.ok(specs.audioBackends.some(b => b.includes('AAudio')));
+  assert.ok(specs.summary.includes('eliminando dependencias de Oboe en C++23'));
+});
+
+test('calculateAudioSyncOffset accurately models zero-drift and backlog prevention in games', () => {
+  const sampleRate = 48000;
+  const startUs = 1000000; // t = 1.0s
+
+  // 1. Camino feliz: audio sincronizado perfectamente con el reloj de muestras
+  // Tras 48000 muestras (1 segundo exacto), currentMonoUs avanza 1s (1_000_000 us)
+  const normalSync = calculateAudioSyncOffset(
+    startUs,
+    startUs + 1_000_000,
+    48000,
+    sampleRate,
+    2048, // 1 cuadro en buffer (21.3 ms)
+    6144
+  );
+  assert.equal(normalSync.isAligned, true);
+  assert.equal(normalSync.actionTaken, 'normal');
+  assert.equal(normalSync.backlogDroppedShorts, 0);
+  assert.equal(normalSync.safePtsUs, startUs + 1_000_000);
+
+  // 2. Mitigación de Lag Acumulado (Subway Surfers):
+  // Si la CPU tuvo un pico y el ring buffer acumuló 12000 shorts (~125 ms de audio viejo atrasado)
+  const backlogRecovery = calculateAudioSyncOffset(
+    startUs,
+    startUs + 5_000_000,
+    240000,
+    sampleRate,
+    12000, // backlog excesivo
+    6144
+  );
+  assert.equal(backlogRecovery.actionTaken, 'drop_old_backlog');
+  assert.equal(backlogRecovery.backlogDroppedShorts, 12000 - 2048); // Descartó 9952 shorts viejos
+  assert.equal(backlogRecovery.isAligned, false);
+
+  // 3. Resincronización ante pausas o silencios del juego (>35ms de diferencia con el reloj real)
+  const silenceRecovery = calculateAudioSyncOffset(
+    startUs,
+    startUs + 1_500_000, // El reloj avanzó 1.5s pero el juego solo mandó 1.0s de audio por pausa
+    48000, // 1.0s de audio
+    sampleRate,
+    2048,
+    6144
+  );
+  assert.equal(silenceRecovery.actionTaken, 'resync_timebase');
+  assert.equal(silenceRecovery.driftUs, 500_000); // 500 ms de gap detectado
+  assert.equal(silenceRecovery.safePtsUs, startUs + 1_500_000); // Reancla el PTS al tiempo real actual
+});
+
+test('getRustYuvMigrationSpecs confirms 100% Rust yuvutils-rs migration and C++ libyuv removal', () => {
+  const specs = getRustYuvMigrationSpecs();
+  assert.equal(specs.runtime, 'Rust 2024');
+  assert.equal(specs.cppLibyuvRemoved, true);
+  assert.equal(specs.crate, 'yuvutils-rs');
+  assert.ok(specs.supportedFormats.includes('RGBA to NV12'));
+  assert.ok(specs.supportedFormats.includes('RGBA to I420'));
+  assert.ok(specs.supportedFormats.includes('Bilinear Plane Scaling'));
+  assert.ok(specs.simdAcceleration.includes('ARM NEON'));
+  assert.ok(specs.fpsThroughput >= 200);
+  assert.ok(specs.summary.includes('Google libyuv fue migrado 100% a Rust 2024'));
 });

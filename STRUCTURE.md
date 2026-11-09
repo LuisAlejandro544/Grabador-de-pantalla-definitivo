@@ -47,7 +47,10 @@
 │           │   ├── storage/
 │           │   │   └── GalleryStorageManager.kt # Publicación en Galería nativa (Movies/VeloRec) vía MediaStore
 │           │   ├── service/
-│           │   │   └── RecordingNotificationHelper.kt # Gestión de canal y notificaciones de Foreground Service
+│           │   │   ├── RecordingNotificationHelper.kt # Gestión de canal y notificaciones de Foreground Service
+│           │   │   ├── HardwareStorageDetector.kt     # Detección de tecnología de almacenamiento (eMMC vs UFS/NVMe)
+│           │   │   ├── RecordingCountdownHelper.kt    # Temporizador de cuenta atrás previo en primer plano
+│           │   │   └── RecordingSessionTimer.kt       # Cronómetro de sesión asíncrono y desacoplado
 │           │   └── ui/
 │           │       ├── MainViewModel.kt     # ViewModel de retención de estado de grabación y cronómetro
 │           │       ├── VeloRecMainScreen.kt # Scaffold principal, TopAppBar y navegación inferior
@@ -55,11 +58,26 @@
 │           │       │   └── Color.kt         # Paleta oscura Material 3 y parseColorSafe
 │           │       ├── components/
 │           │       │   ├── MetricBadge.kt   # Componente de telemetría de hardware
-│           │       │   └── RemoteAnnouncementDialog.kt # Diálogo modal para anuncios remotos
+│           │       │   ├── RemoteAnnouncementDialog.kt # Diálogo modal para anuncios remotos
+│           │       │   └── recorder/        # Módulos desacoplados del visor de grabación
+│           │       │       ├── QuickQualityCard.kt     # Tarjeta de ajustes rápidos de resolución, bitrate y audio
+│           │       │       ├── RecorderHudCard.kt      # Visor tipo HUD con cronómetro y animaciones de pulso
+│           │       │       ├── HardwareTelemetryRow.kt # Fila de métricas de CPU, latencia, RAM y Zero-Copy
+│           │       │       └── RecorderActionButtons.kt# Botones ergonómicos de gran área táctil (REC / Pausa)
 │           │       └── screens/
-│           │           ├── RecorderScreen.kt    # Pantalla de visor de captura, chips y botones REC
+│           │           ├── RecorderScreen.kt    # Orquestador modular del visor principal de captura
 │           │           ├── AppLauncherScreen.kt # Lanzador rápido de juegos y apps descargadas con 1-Click REC
-│           │           ├── SettingsScreen.kt    # Ajustes de hardware, códec, audio y GitHub
+│           │           ├── SettingsScreen.kt    # Orquestador de navegación modular con BackHandler
+│           │           ├── settings/            # Subpantallas técnicas independientes y desacopladas
+│           │           │   ├── SettingsCommon.kt             # Tipos comunes, enum SettingsSubScreen y SubScreenHeader
+│           │           │   ├── SettingsMainMenu.kt           # Menú principal con accesos y estado Server-Driven UI
+│           │           │   ├── ResolutionSettingsSubScreen.kt# Pestañas Nativas, Estándar y Personalizada (Paridad)
+│           │           │   ├── BitrateSettingsSubScreen.kt   # Deslizador continuo 1-60M, cálculo de espacio y antiahogamiento
+│           │           │   ├── FpsSettingsSubScreen.kt       # Presets 24, 30, 60, 90 y 120 FPS
+│           │           │   ├── CodecSettingsSubScreen.kt     # Códecs por hardware H.264, HEVC y AV1
+│           │           │   ├── AudioSettingsSubScreen.kt     # Fuentes de audio: interno, mic, mezcla y silencio
+│           │           │   ├── CountdownSettingsSubScreen.kt # Temporizadores 0s, 3s, 5s y 10s
+│           │           │   └── EngineSettingsSubScreen.kt    # Motor NDK Rust 2024 Zero-Copy vs C++23
 │           │           ├── GalleryScreen.kt     # Galería de videos grabados con FileProvider
 │           │           └── BenchmarkScreen.kt   # Telemetría comparativa C++23 vs Rust 2024
 │           ├── shaders/                         # Aceleración gráfica por hardware en GPU
@@ -75,7 +93,11 @@
 ├── rust/                               # Motor nativo unificado en Rust (Edition 2024)
 │   ├── Cargo.toml                      # Manifiesto de Rust con edition = "2024", oboe, yuvutils-rs y glow
 │   └── src/
-│       ├── lib.rs                      # Hardware encoder NDK AMediaCodec, ANativeWindow y crossbeam
+│       ├── lib.rs                      # Fachada raíz del crate cdylib con reexportaciones y pruebas unitarias
+│       ├── encoder.rs                  # Hardware encoder NDK AMediaCodec, ANativeWindow y bucle worker
+│       ├── muxer.rs                    # AMediaMuxer, SharedMuxerState, T0 PTS normalizado y búfer preventivo
+│       ├── cpu_affinity.rs             # Afinidad a núcleos de bajo consumo LITTLE (sched_setaffinity)
+│       ├── jni_bindings.rs             # Firmas JNI exportadas para Java_com_velorec_recorder_ScreenRecordService_*
 │       ├── audio_oboe.rs               # Integración de Google Oboe para captura de audio nativo (<10ms)
 │       ├── color_yuv.rs                # Conversión de color YUV420/NV12 y RGBA con SIMD ARM NEON (yuvutils-rs)
 │       ├── gpu_glow.rs                 # Tubería de sombreadores GPU OpenGL ES 3.20 en Rust puro (glow)
@@ -120,7 +142,7 @@
 
 ---
 
-## 🔍 Explicación de Carpetas Clave
+## 🔍 Explicación de Carpetas y Módulos Clave
 
 ### 1. `/android` (Capa Android Nativa Completa)
 Contiene la configuración de Gradle Kotlin DSL (`build.gradle.kts`) lista para compilar de forma autónoma:
@@ -128,29 +150,43 @@ Contiene la configuración de Gradle Kotlin DSL (`build.gradle.kts`) lista para 
 - **Configuración Raíz y Módulos**: `settings.gradle.kts` y `build.gradle.kts` vinculando el módulo `:app`.
 - **CMake**: Compila la tubería gráfica `GpuShaderPipeline.cpp` y Google `libyuv_bridge.cpp` con el estándar C++23 (`-std=c++23`).
 - **Cargo NDK**: Compila el módulo Rust generando las bibliotecas `.so` para arquitecturas de 64 bits (`arm64-v8a`), 32 bits (`armeabi-v7a`) y `x86_64`.
-- **Servicios**: `ScreenRecordService.kt` hereda de `android.app.Service` y maneja `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` con Corrutinas Kotlin (`Dispatchers.IO`).
+- **Servicio y Módulos de Soporte**:
+  - `ScreenRecordService.kt`: Servicio en primer plano `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` con Corrutinas Kotlin (`Dispatchers.IO`) y enlaces nativos NDK.
+  - `service/HardwareStorageDetector.kt`: Detección de tecnología de almacenamiento físico (eMMC vs UFS).
+  - `service/RecordingCountdownHelper.kt`: Cuenta atrás previa no bloqueante en el Foreground Service.
+  - `service/RecordingSessionTimer.kt`: Cronómetro de duración desacoplado.
 
 ### 2. `/rust` (Motor Rust Edition 2024 con Hardware Encoder y Módulos de Alto Rendimiento)
-Crate autónomo con `crate-type = ["cdylib", "rlib"]`.
-- Configurado con `edition = "2024"` y dependencias NDK (`ndk = "0.9.0"`, `ndk-sys = "0.6.0"`, `crossbeam-channel = "0.5.14"`, `libc = "0.2"`).
-- Implementa la tubería **Zero-Copy**: crea el codificador de hardware mediante `AMediaCodec_createEncoderByType`, obtiene la superficie nativa con `AMediaCodec_createInputSurface` y la entrega a Android vía `ANativeWindow_toSurface`.
-- **Integración de Google Oboe (`audio_oboe.rs`)**: Captura de audio de ultra baja latencia (<10 ms) con soporte dual AAudio/OpenSL ES.
-- **Conversión de Color Acelerada con SIMD ARM NEON (`color_yuv.rs`)**: Conversiones YUV420/NV12 y RGBA a más de 200 FPS en Rust puro con `yuvutils-rs`.
-- **Tubería de Sombreadores GPU (`gpu_glow.rs`)**: Shaders OpenGL ES 3.20 en Rust mediante `glow` para FaceCam circular antialiased, Chroma Key y Gaming Color Boost.
-- **Motor de Streaming en Vivo (`streamer.rs`)**: Despacho de paquetes NAL de ultra baja latencia (RTMP/SRT) con *Ring Buffer* de 4 MB y descarte inteligente anti-congestión (Zero-GC).
-- **Multiplexación de Audio y Video en Tiempo Real**: Registra simultáneamente las pistas de video (`AMediaCodec`) y audio AAC en `AMediaMuxer`, entrelazando las muestras en vivo en memoria nativa. Al detener la captura, el archivo MP4 se finaliza de inmediato (<15 ms) sin archivos temporales ni fusiones secundarias.
-- Procesa búferes codificados en un hilo worker seguro y escribe el archivo MP4 mediante `AMediaMuxer`.
-- Garantiza ausencia total de condiciones de carrera (*Data Races*) y cero recolección de basura (*Zero GC*).
+Crate autónomo con `crate-type = ["cdylib", "rlib"]` estructurado de forma modular:
+- **`lib.rs`**: Fachada raíz y orquestador del crate que reexporta todos los tipos y preserva pruebas unitarias.
+- **`encoder.rs`**: Inicialización de `AMediaCodec` de hardware, `AMediaFormat`, creación de la `ANativeWindow Surface` (Zero-Copy) y bucle worker con `crossbeam-channel`.
+- **`muxer.rs`**: Estado compartido `SharedMuxerState` para `AMediaMuxer`, entrelazado de video y audio AAC en tiempo real y sincronización PTS T0 estricta.
+- **`cpu_affinity.rs`**: Fijación de hilos a núcleos LITTLE (Cortex-A55) mediante `sched_setaffinity`.
+- **`jni_bindings.rs`**: Implementación de firmas exportadas JNI (`Java_com_velorec_recorder_ScreenRecordService_*`) con `#[unsafe(no_mangle)]` cumpliendo con Rust Edition 2024.
+- **`audio_oboe.rs`**: Captura de audio de ultra baja latencia (<10 ms) con AAudio/OpenSL ES.
+- **`color_yuv.rs`**: Conversión de color acelerada con SIMD ARM NEON (yuvutils-rs).
+- **`gpu_glow.rs`**: Sombreadores GPU OpenGL ES 3.20 en Rust puro (glow).
+- **`streamer.rs`**: Motor de streaming en vivo RTMP/SRT de ultra baja latencia con Ring Buffer (Zero-GC).
 
-
-### 3. `/src/components` (Diseño Modular UI)
-Cumpliendo con la regla de diseño modular:
-- Cada pantalla principal reside en su propio archivo independiente.
-- La navegación está desacoplada del renderizado de video.
-- La galería y el reproductor de video cuentan con su propio ciclo de vida.
-- El visor de código nativo permite auditar tanto C++23 como Rust 2024 y los scripts Gradle.
+### 3. `/android/.../ui` (Componentes y Pantallas Jetpack Compose Material 3)
+- **`screens/RecorderScreen.kt`**: Orquestador visual del visor principal de captura.
+- **`components/recorder/`**:
+  - `QuickQualityCard.kt`: Ajustes rápidos de resolución, bitrate continuo y audio.
+  - `RecorderHudCard.kt`: HUD de cámara con animaciones de pulso y cronómetro en vivo.
+  - `HardwareTelemetryRow.kt`: Métricas en vivo de CPU, latencia NDK, RAM y Zero-Copy.
+  - `RecorderActionButtons.kt`: Botones táctiles ergonómicos de gran área de toque.
+- **`screens/SettingsScreen.kt`**: Orquestador de ajustes con soporte para el botón atrás del sistema (`BackHandler`).
+- **`screens/settings/`**: Subpantallas técnicas independientes:
+  - `SettingsCommon.kt`: Tipos compartidos, enums y encabezado `SubScreenHeader`.
+  - `SettingsMainMenu.kt`: Menú principal con accesos rápidos.
+  - `ResolutionSettingsSubScreen.kt`: Pestañas de resoluciones nativas, estándar y personalizada con paridad YUV420p.
+  - `BitrateSettingsSubScreen.kt`: Control fino de 1 a 60 Mbps, nivel térmico y calculadora de almacenamiento.
+  - `FpsSettingsSubScreen.kt`: Tasas de 24 a 120 FPS.
+  - `CodecSettingsSubScreen.kt`: Códecs por hardware H.264, HEVC y AV1.
+  - `AudioSettingsSubScreen.kt`: Fuentes de audio (interno, mic, mezcla y silencio).
+  - `CountdownSettingsSubScreen.kt`: Temporizador de 0s a 10s.
+  - `EngineSettingsSubScreen.kt`: Comparativa y especificaciones de Rust 2024 vs C++23.
 
 ### 4. `/src/utils` (Lógica Pura y Pruebas)
 - `recorderCore.ts`: Funciones puras de cálculo de bitrate, almacenamiento, paridad de resolución y latencia.
 - `recorderCore.test.ts`: Pruebas unitarias deterministas ejecutadas con `npx --yes tsx --test`.
-- `zipExport.ts`: Compila dinámicamente todo el proyecto nativo en un archivo ZIP descargable con un solo toque desde el celular.

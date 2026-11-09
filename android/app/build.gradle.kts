@@ -246,13 +246,12 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
 
-    // Captura y reproducción de audio de ultra baja latencia en C++23 (Apache-2.0)
-    // Conmuta automáticamente entre AAudio (API 26+) y OpenSL ES para micrófono y audio interno
-    implementation("com.google.oboe:oboe:1.9.0")
+    // Captura y reproducción de audio de ultra baja latencia (<10 ms) gestionada 100% en Rust 2024 (oboe crate)
+    // Se elimina la dependencia AAR prefab en C++ para evitar duplicación binaria y desincronización de hilos.
 
-    // Nota de Bibliotecas Nativas NDK (C++23):
-    // Google libyuv (Licencia BSD) y Oboe se integran a través de CMake (src/main/cpp/CMakeLists.txt)
-    // para aceleración vectorial SIMD ARM NEON en conversiones de color YUV420/NV12 y escalado de pantalla.
+    // Nota de Bibliotecas Nativas NDK:
+    // C++23 se reserva exclusivamente para sombreadores GPU (GpuShaderPipeline con GLSL ES 3.20/SPIR-V Vulkan).
+    // libyuv (conversión YUV/NV12 y SIMD NEON) y Oboe se gestionan 100% en Rust 2024 (color_yuv.rs / audio_oboe.rs).
 
     // Kotlin Coroutines para evitar bloqueos en el hilo de la interfaz de usuario
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")

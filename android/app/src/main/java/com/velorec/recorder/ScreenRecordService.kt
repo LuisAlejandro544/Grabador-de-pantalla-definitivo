@@ -14,19 +14,20 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import android.view.Surface
 import androidx.core.content.IntentCompat
 import com.velorec.recorder.audio.AudioMuxerHelper
 import com.velorec.recorder.audio.AudioRecordEngine
+import com.velorec.recorder.service.HardwareStorageDetector
+import com.velorec.recorder.service.RecordingCountdownHelper
 import com.velorec.recorder.service.RecordingNotificationHelper
+import com.velorec.recorder.service.RecordingSessionTimer
 import com.velorec.recorder.storage.GalleryStorageManager
-import com.velorec.recorder.storage.DirectGalleryRecordingTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,7 +36,6 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
-import android.util.Log
 
 /**
  * ScreenRecordService.kt
@@ -50,19 +50,21 @@ import android.util.Log
  *    - Devuelve 'START_STICKY' en 'onStartCommand' para evitar que el sistema cierre el servicio
  *      al cambiar a otra aplicación o videojuego.
  *    - Declara 'FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'.
- * 3. Delega la creación de canales, notificaciones fijas y controles en la barra de estado
- *    a 'RecordingNotificationHelper'.
- * 4. Tubería ZERO-COPY Y GUARDADO DIRECTO EN GALERÍA:
- *    - Obtiene la Surface de hardware directamente del codificador nativo en C++23 o Rust 2024.
- *    - Vincula esa Surface con el VirtualDisplay de MediaProjection.
- *    - Grabación directa sobre el descriptor de archivo de la Galería (MediaStore IS_PENDING = 1)
- *      evitando copias de disco de 300+ MB al detener la grabación.
- *    - Multiplexación de Audio en Tiempo Real en C++23 con AMediaMuxer entrelazado.
+ * 3. ARQUITECTURA MODULAR DESACOPLADA:
+ *    - Delega notificaciones y canales a 'RecordingNotificationHelper'.
+ *    - Delega cuenta regresiva a 'RecordingCountdownHelper'.
+ *    - Delega el cronómetro de sesión a 'RecordingSessionTimer'.
+ *    - Delega detección de eMMC a 'HardwareStorageDetector'.
+ * 4. Tubería ZERO-COPY Y MULTIPLEXACIÓN EN TIEMPO REAL:
+ *    - Obtiene la Surface de hardware directamente del codificador nativo en Rust 2024.
+ *    - Vincula la Surface con el VirtualDisplay de MediaProjection.
+ *    - Multiplexa video y audio AAC simultáneamente en Rust (<15 ms al detener).
+ *    - Publica directamente en 'Movies/VeloRec' vía 'GalleryStorageManager'.
  * 5. Corrutinas ('Dispatchers.IO'): Todas las llamadas al NDK se ejecutan fuera del hilo de UI
  *    para prevenir congelamientos ANR.
  * 6. Sincronización Reactiva de Estado:
- *    - Expone 'isRecordingFlow', 'isPausedFlow' y 'durationSecFlow' para que la UI de Jetpack Compose
- *      refleje el estado real aunque la Activity haya sido pausada o recreada.
+ *    - Expone 'isRecordingFlow', 'isPausedFlow' y 'durationSecFlow' para que la UI de Compose
+ *      refleje el estado real aunque la Activity haya sido recreada.
  */
 class ScreenRecordService : Service() {
 
@@ -71,7 +73,7 @@ class ScreenRecordService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var projectionCallback: MediaProjection.Callback? = null
     private val isStopping = AtomicBoolean(false)
-    private var timerJob: Job? = null
+    private var sessionTimer: RecordingSessionTimer? = null
     private var isNativeEncoderStarted = false
 
     // Parámetros de la sesión actual (Rust 2024 como motor nativo exclusivo)
@@ -164,8 +166,7 @@ class ScreenRecordService : Service() {
 
     /**
      * Emite un broadcast explícito con el estado actual del servicio para que
-     * el proceso principal de la UI (MainActivity) se sincronice reactivamente sin importar
-     * que el servicio corra en un proceso separado (:recorder).
+     * el proceso principal de la UI (MainActivity) se sincronice reactivamente.
      */
     private fun notifyStateChanged() {
         try {
@@ -201,8 +202,6 @@ class ScreenRecordService : Service() {
             ACTION_STOP -> handleStopRecording()
             ACTION_QUERY_STATUS -> notifyStateChanged()
         }
-        // START_STICKY para asegurar que el Foreground Service no sea terminado
-        // abruptamente cuando el usuario sale de la aplicación a jugar o ver videos
         return Service.START_STICKY
     }
 
@@ -210,7 +209,7 @@ class ScreenRecordService : Service() {
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
         val resultData = IntentCompat.getParcelableExtra(intent, EXTRA_RESULT_DATA, Intent::class.java) ?: return
 
-        val engine = intent.getStringExtra(EXTRA_ENGINE) ?: "cpp23"
+        val engine = intent.getStringExtra(EXTRA_ENGINE) ?: "rust2024"
         val width = intent.getIntExtra(EXTRA_WIDTH, 1080)
         val height = intent.getIntExtra(EXTRA_HEIGHT, 1920)
         val fps = intent.getIntExtra(EXTRA_FPS, 60)
@@ -232,11 +231,6 @@ class ScreenRecordService : Service() {
         _durationSecFlow.value = 0
         notifyStateChanged()
 
-        val isMute = audio == "mute"
-
-        // Iniciar en primer plano INMEDIATAMENTE mientras la Activity está en primer plano
-        // Esto previene que Android 14+ / Tecno HiOS bloquee el micrófono cuando el usuario
-        // sale a la pantalla de inicio o a otra aplicación durante la cuenta regresiva.
         val initialNotification = RecordingNotificationHelper.buildRecordingNotification(
             this,
             engine,
@@ -262,45 +256,35 @@ class ScreenRecordService : Service() {
             startForeground(RecordingNotificationHelper.NOTIFICATION_ID, initialNotification)
         }
 
-        // Ejecución en hilo de fondo usando Corrutinas (Dispatchers.IO)
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // Si el usuario configuró cuenta regresiva (ej. 3s o 5s), correr dentro del Foreground Service
+                // Ejecución modular de cuenta regresiva
                 if (countdown > 0) {
                     _isCountingDownFlow.value = true
-                    var remaining = countdown
-                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-
-                    while (remaining > 0 && isActive && _isRecordingFlow.value) {
-                        _countdownRemainingFlow.value = remaining
-                        notifyStateChanged()
-                        notificationManager?.notify(
-                            RecordingNotificationHelper.NOTIFICATION_ID,
-                            RecordingNotificationHelper.buildRecordingNotification(
-                                this@ScreenRecordService,
-                                engine,
-                                width,
-                                height,
-                                fps,
-                                isPaused = false,
-                                countdownRemaining = remaining
-                            )
-                        )
-                        delay(1000L)
-                        remaining -= 1
-                    }
+                    val completed = RecordingCountdownHelper.runCountdown(
+                        context = this@ScreenRecordService,
+                        countdownSec = countdown,
+                        engine = engine,
+                        width = width,
+                        height = height,
+                        fps = fps,
+                        onTick = { remaining ->
+                            _countdownRemainingFlow.value = remaining
+                            notifyStateChanged()
+                        },
+                        isStillActive = { _isRecordingFlow.value && !isStopping.get() }
+                    )
                     _isCountingDownFlow.value = false
                     _countdownRemainingFlow.value = 0
                     notifyStateChanged()
 
-                    if (!isActive || !_isRecordingFlow.value) {
-                        // Fue cancelado por el usuario durante la cuenta atrás
+                    if (!completed || !isActive || !_isRecordingFlow.value) {
                         notifyStateChanged()
                         return@launch
                     }
                 }
 
-                // Iniciar cronómetro de duración de la grabación
+                // Iniciar cronómetro de duración de la sesión
                 startServiceTimer()
 
                 // Actualizar notificación a grabación activa
@@ -326,9 +310,6 @@ class ScreenRecordService : Service() {
                 val finalOutputFile = File(outputDir, displayName)
                 lastOutputFilePath = finalOutputFile.absolutePath
 
-                // Con Multiplexación en Tiempo Real 100% en Rust:
-                // Rust escribe el video y el audio directamente en finalOutputFile en tiempo real,
-                // eliminando archivos temporales en disco y evitando la fusión secundaria al detener.
                 tempVideoFilePath = null
                 tempAudioFilePath = null
 
@@ -345,7 +326,6 @@ class ScreenRecordService : Service() {
 
                 isNativeEncoderStarted = true
 
-                // Iniciar MediaProjection del sistema
                 val projectionManager =
                     getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                 val projection = projectionManager.getMediaProjection(resultCode, resultData)
@@ -355,11 +335,7 @@ class ScreenRecordService : Service() {
                 }
                 mediaProjection = projection
 
-                // =========================================================================
-                // CORRECCIÓN CRÍTICA DE ANDROID 14+ (API 34 / 35):
-                // En Android 14+, registrar MediaProjection.Callback con un Handler en el Looper
-                // principal es OBLIGATORIO antes de llamar a createVirtualDisplay.
-                // =========================================================================
+                // Callback obligatorio en Android 14+ con Handler en Looper principal
                 val mainHandler = Handler(Looper.getMainLooper())
                 val callback = object : MediaProjection.Callback() {
                     override fun onStop() {
@@ -373,7 +349,7 @@ class ScreenRecordService : Service() {
                 // Señalizar al motor Rust para comenzar a codificar fotogramas
                 nativeStartRustEncoding()
 
-                // Crear VirtualDisplay conectado directamente a la Surface nativa de hardware ya activa (Zero-Copy)
+                // Crear VirtualDisplay conectado directamente a la Surface nativa de hardware
                 val densityDpi = resources.displayMetrics.densityDpi
                 virtualDisplay = projection.createVirtualDisplay(
                     "VeloRec-Capture",
@@ -391,7 +367,7 @@ class ScreenRecordService : Service() {
                     audioEngine = AudioRecordEngine(
                         context = this@ScreenRecordService,
                         audioSource = audio,
-                        outputM4aPath = null, // Multiplexación directa en el contenedor MP4 de Rust
+                        outputM4aPath = null,
                         mediaProjection = projection
                     ).apply {
                         onAudioTrackConfigured = { csdBuffer, csdSize, sampleRate, channelCount ->
@@ -422,16 +398,14 @@ class ScreenRecordService : Service() {
     }
 
     private fun startServiceTimer() {
-        timerJob?.cancel()
-        timerJob = serviceScope.launch(Dispatchers.Default) {
-            while (isActive) {
-                delay(1000L)
-                if (_isRecordingFlow.value && !_isPausedFlow.value) {
-                    _durationSecFlow.value += 1
-                    notifyStateChanged()
-                }
+        sessionTimer?.cancel()
+        sessionTimer = RecordingSessionTimer(serviceScope) { duration ->
+            if (_isRecordingFlow.value && !_isPausedFlow.value) {
+                _durationSecFlow.value = duration
+                notifyStateChanged()
             }
         }
+        sessionTimer?.start()
     }
 
     private fun handlePauseRecording() {
@@ -445,7 +419,7 @@ class ScreenRecordService : Service() {
                     nativePauseRustEncoding()
                 }
             } catch (e: Exception) {
-                Log.e("ScreenRecordService", "Error al pausar motor de codificación nativo: ${e.message}", e)
+                Log.e("ScreenRecordService", "Error al pausar motor nativo: ${e.message}", e)
             }
         }
     }
@@ -461,7 +435,7 @@ class ScreenRecordService : Service() {
                     nativeResumeRustEncoding()
                 }
             } catch (e: Exception) {
-                Log.e("ScreenRecordService", "Error al reanudar motor de codificación nativo: ${e.message}", e)
+                Log.e("ScreenRecordService", "Error al reanudar motor nativo: ${e.message}", e)
             }
         }
     }
@@ -480,22 +454,19 @@ class ScreenRecordService : Service() {
     }
 
     private fun handleStopRecording() {
-        // Prevenir reentrancia y carreras concurrentes si el usuario presiona 'Detener' múltiples veces
-        // o si MediaProjection.Callback.onStop() se activa simultáneamente
         if (!isStopping.compareAndSet(false, true)) {
             Log.w("ScreenRecordService", "handleStopRecording ya en ejecución, ignorando llamada redundante")
             return
         }
 
-        timerJob?.cancel()
-        timerJob = null
+        sessionTimer?.cancel()
+        sessionTimer = null
         _isCountingDownFlow.value = false
         _countdownRemainingFlow.value = 0
         _isRecordingFlow.value = false
         _isPausedFlow.value = false
         notifyStateChanged()
 
-        // Notificación visual de guardado en la barra de estado con porcentaje inicial (25%)
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.notify(
             RecordingNotificationHelper.NOTIFICATION_ID,
@@ -509,7 +480,7 @@ class ScreenRecordService : Service() {
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                // 1. Detener PRIMERO el motor de audio mientras MediaProjection sigue activo
+                // 1. Detener audio mientras MediaProjection sigue activo
                 try {
                     audioEngine?.stop()
                 } catch (e: Exception) {
@@ -517,7 +488,7 @@ class ScreenRecordService : Service() {
                 }
                 audioEngine = null
 
-                // 2. Detener codificación en el motor Rust en Dispatchers.IO
+                // 2. Detener codificador en Rust
                 if (isNativeEncoderStarted) {
                     try {
                         nativeStopRustEncoding()
@@ -535,7 +506,7 @@ class ScreenRecordService : Service() {
                 }
                 virtualDisplay = null
 
-                // 4. Desregistrar el callback para evitar reentrancias circulares y detener MediaProjection
+                // 4. Desregistrar callback y detener MediaProjection
                 try {
                     val cb = projectionCallback
                     if (cb != null) {
@@ -548,7 +519,7 @@ class ScreenRecordService : Service() {
                 projectionCallback = null
                 mediaProjection = null
 
-                // Actualizar progreso al 75% mientras se finaliza la publicación en la Galería
+                // Progreso al 75%
                 notificationManager?.notify(
                     RecordingNotificationHelper.NOTIFICATION_ID,
                     RecordingNotificationHelper.buildSavingNotification(
@@ -559,10 +530,7 @@ class ScreenRecordService : Service() {
                     )
                 )
 
-                // 5. Publicación inmediata en Galería (CERO ESPERA AL DETENER):
-                // Gracias a la multiplexación simultánea en Rust 2024, el archivo MP4 ya contiene
-                // ambas pistas (video y audio) entrelazadas y sincronizadas en tiempo real.
-                // No se requieren copias masivas de disco ni demoras de post-procesamiento.
+                // 5. Publicación inmediata en Galería (CERO ESPERA AL DETENER)
                 val tempVideo = tempVideoFilePath
                 val tempAudio = tempAudioFilePath
                 val finalOutput = lastOutputFilePath
@@ -589,7 +557,7 @@ class ScreenRecordService : Service() {
                 tempVideoFilePath = null
                 tempAudioFilePath = null
 
-                // Publicar directamente en la Galería nativa del usuario ('Movies/VeloRec')
+                // Publicar en la Galería nativa ('Movies/VeloRec')
                 val finalFile = lastOutputFilePath?.let { File(it) }
                 if (finalFile != null && finalFile.exists() && finalFile.length() > 0L) {
                     val publishedFile = GalleryStorageManager.publishVideoToGallery(
@@ -602,7 +570,7 @@ class ScreenRecordService : Service() {
                     } else {
                         lastFileSizeBytes = finalFile.length()
                     }
-                    Log.i("ScreenRecordService", "Grabación Rust 2024 (Multiplexada en vivo) guardada en Galería: ${lastOutputFilePath} (${lastFileSizeBytes} bytes)")
+                    Log.i("ScreenRecordService", "Grabación guardada en Galería: $lastOutputFilePath ($lastFileSizeBytes bytes)")
                 } else {
                     Log.w("ScreenRecordService", "Archivo final no encontrado o vacío tras finalizar captura.")
                 }
@@ -626,8 +594,8 @@ class ScreenRecordService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        timerJob?.cancel()
-        timerJob = null
+        sessionTimer?.cancel()
+        sessionTimer = null
         _isCountingDownFlow.value = false
         _countdownRemainingFlow.value = 0
         _isRecordingFlow.value = false
@@ -640,18 +608,9 @@ class ScreenRecordService : Service() {
     }
 
     /**
-     * Detección estricta de tecnología de almacenamiento (eMMC vs UFS/NVMe)
-     * en dispositivos Android mediante inspección de particiones y bloques Linux.
+     * Detección delegada a HardwareStorageDetector.
      */
-    private fun isEmmcStorageDetected(): Boolean {
-        return try {
-            File("/sys/block/mmcblk0").exists() ||
-            File("/sys/class/block/mmcblk0").exists() ||
-            File("/proc/partitions").takeIf { it.exists() }?.readText()?.contains("mmcblk0") == true
-        } catch (_: Exception) {
-            false
-        }
-    }
+    fun isEmmcStorageDetected(): Boolean = HardwareStorageDetector.isEmmcStorageDetected()
 
     // ==========================================
     // FIRMAS JNI PARA MOTOR RUST (EDITION 2024)

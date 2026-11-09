@@ -20,9 +20,9 @@ add_compile_options(
     -fdata-sections
 )
 
-# Definir biblioteca compartida .so para aceleración visual y conversiones SIMD NEON
+# Definir biblioteca compartida .so para aceleración gráfica de sombreadores GPU en C++23
+# Nota: libyuv y la conversión de color fueron migradas 100% a Rust (color_yuv.rs / yuvutils-rs)
 add_library(velorec_cpp23 SHARED
-    libyuv_bridge.cpp
     GpuShaderPipeline.cpp
 )
 
@@ -32,30 +32,18 @@ target_include_directories(velorec_cpp23 PRIVATE
 )
 
 # Enlace con bibliotecas esenciales del NDK de Android
-# mediandk: AMediaCodec, AMediaMuxer, AMediaFormat
 # android: ANativeWindow, ANativeWindow_toSurface
 # log: __android_log_print
-# GLESv3 & EGL: Tubería de sombreadores GPU (GLSL ES 3.20 y SPIR-V)
+# GLESv3 & EGL: Tubería de sombreadores GPU (GLSL ES 3.20 y SPIR-V Vulkan)
 target_link_libraries(velorec_cpp23 PRIVATE
     android
-    mediandk
     log
     GLESv3
     EGL
 )
 
-# Integración con Google Oboe (AAR Prefab) para captura y procesado de audio en C++23
-find_package(oboe CONFIG QUIET)
-if(oboe_FOUND)
-    target_link_libraries(velorec_cpp23 PRIVATE oboe::oboe)
-endif()
-
-# Integración con Google libyuv (Licencia BSD) para transformaciones de color aceleradas por hardware
-find_package(libyuv CONFIG QUIET)
-if(libyuv_FOUND)
-    target_link_libraries(velorec_cpp23 PRIVATE libyuv::yuv)
-    target_compile_definitions(velorec_cpp23 PRIVATE HAS_LIBYUV=1)
-endif()
+# Tubería C++23 dedicada exclusivamente a sombreadores GPU (FaceCam antialiased, Chroma Key y Gaming Boost)
+# Tanto la captura de audio Oboe como las conversiones de color YUV/SIMD NEON se gestionan 100% en Rust 2024
 
 # Optimización de tamaño eliminando símbolos no utilizados
 set_target_properties(velorec_cpp23 PROPERTIES

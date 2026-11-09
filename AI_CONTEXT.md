@@ -13,12 +13,14 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
 3. **Motor de Grabación Nativo Exclusivo (Hardware NDK)**:
    - **Rust (Edition 2024)**: Motor central de grabación de pantalla con `crossbeam-channel`, seguridad de memoria estricta y huella de memoria plana (<15 MB RSS) inmune a Low Memory Killer (LMK). Cero recolección de basura (GC-Free).
 4. **Aceleración Gráfica y Protocolos de Red (C++23 Shaders & Rust Streamer)**:
-   - **Shaders GPU y libyuv (C++23 & SPIR-V Vulkan)**: Tubería C++23 (`GpuShaderPipeline` y `libyuv_bridge`) dedicada para FaceCam circular antialiased, Chroma Key (pantalla verde), Gaming Color Boost y conversión acelerada de color en la GPU sin consumo de CPU.
+   - **Shaders GPU (C++23 & SPIR-V Vulkan)**: Tubería C++23 (`GpuShaderPipeline`) dedicada exclusivamente para FaceCam circular antialiased, Chroma Key (pantalla verde) y Gaming Color Boost mediante shaders GPU (GLSL ES 3.20 y SPIR-V Vulkan). `libyuv` fue migrado al 100% a Rust 2024 (`rust/src/color_yuv.rs` con `yuvutils-rs` y aceleración SIMD ARM NEON).
    - **Rust Streamer (`rust/src/streamer.rs`)**: Infraestructura de streaming de red de ultra baja latencia (RTMP, RTMPS, SRT y WebRTC) unificada en Rust puro con canales `crossbeam-channel` y *Ring Buffer* de 4 MB, reemplazando completamente el runtime de Go con cero pausas de Garbage Collector y menor uso de RAM (<10 MB).
 5. **Grabación Directa NDK y Multiplexación en Tiempo Real 100% en Rust**:
    - Codificación directa de hardware a MP4 en Rust sin pasar por JVM/ART.
    - **Multiplexación Simultánea de Video y Audio en Rust**: `AMediaMuxer` registra las pistas de video y audio AAC simultáneamente. Las muestras se escriben de forma entrelazada en tiempo real (`nativeWriteRustAudioSample`), sin archivos temporales en disco y permitiendo finalización instantánea (<15 ms) al presionar "Detener".
-   - **Sincronización de Audio Maestra y Buffer de 256K Muestras**: Reloj de tiempo real (`System.nanoTime()`) y ring buffer expandido (~2.73s) en `AudioRecordEngine.kt` para erradicar retrasos de audio y desincronizaciones en disparos/pasos.
+   - **Sincronización de Audio Maestra y Erradicación Total de Desync (Zero-Drift & Anti-Lag)**: Reloj continuo de muestras matemáticas respaldado por la base temporal T0 unificada en Rust `SharedMuxerState`, con purga de backlog en el búfer circular (`discardOldestIfExceeds`) ante picos de CPU, erradicando retrasos acumulados en partidas de Subway Surfers o Free Fire.
+   - **Google Oboe 100% en Rust**: Captura de audio de ultra baja latencia (<10 ms con AAudio/OpenSL ES) administrada exclusivamente en Rust (crate `oboe`), eliminando la dependencia prefab AAR de Oboe en C++23.
+   - **Conversión de Color y Escalado YUV 100% en Rust (`yuvutils-rs`)**: Conversiones de color NV12, I420 y RGBA junto a escalado bilineal en `rust/src/color_yuv.rs` con aceleración vectorial SIMD ARM NEON (32/64 bits), erradicando la dependencia de Google libyuv en C++23 y agilizando la compilación CMake.
    - Guardado directo en Galería (`Movies/VeloRec`) con indexación inmediata.
 6. **CI/CD Móvil**: Flujo de GitHub Actions con disparo **estrictamente manual (`workflow_dispatch`)** para compilar el APK Debug sin necesidad de computadora.
 

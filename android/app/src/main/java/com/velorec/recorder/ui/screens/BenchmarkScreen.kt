@@ -122,7 +122,7 @@ fun NativeBenchmarkSection(selectedEngine: String, accentColor: Color) {
                     text = "• Estándar: ISO C++23 (-std=c++23, -O3)\n" +
                            "• Shaders: GLSL ES 3.20 y SPIR-V Vulkan\n" +
                            "• Efectos: FaceCam circular y Gaming Color Boost en GPU\n" +
-                           "• Conversión de color acelerada con Google libyuv (SIMD NEON)",
+                           "• Conversión de color: Rust 2024 yuvutils-rs (SIMD NEON)",
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = Color(0xFFCBD5E1)

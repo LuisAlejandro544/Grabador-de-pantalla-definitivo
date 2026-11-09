@@ -16,11 +16,11 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
 - [x] **Motor Central de Grabación Nativo Rust (Edition 2024) [MOTOR PRINCIPAL]**:
   - Implementación con `edition = "2024"`, canales `crossbeam-channel` y bindings JNI seguros.
   - Cero condiciones de carrera, sin recolector de basura (GC-Free) y huella de memoria plana (<15 MB RSS) totalmente inmune a muertes por Low Memory Killer (LMK) o Phantom Process Killer de Android mientras se juegan títulos pesados.
-- [x] **Tubería Gráfica C++23 Especializada para Shaders de GPU y libyuv**:
-  - Compilado con `-std=c++23` con `GpuShaderPipeline` para FaceCam antialiased, Chroma Key en GPU, Gaming Color Boost y Google libyuv (SIMD NEON) para conversiones de color y escalado bilineal a 60/120 FPS sin consumo de CPU.
-- [x] **Sincronización Maestra de Audio/Video y Buffer Expandido Anti-Lag**:
-  - Búfer circular de audio de 262,144 muestras (~2.73s de audio estéreo 48 kHz) que previene caídas de paquetes y chasquidos bajo alta carga de CPU.
-  - Reloj monotónico de tiempo real (`System.nanoTime()`) y normalización base cero en `AudioMuxerHelper` para sincronización milimétrica instantánea entre disparos, pasos y video.
+- [x] **Tubería Gráfica C++23 Exclusiva para Shaders de GPU (libyuv migrado a Rust)**:
+  - Compilado con `-std=c++23` con `GpuShaderPipeline` (GLSL ES 3.20 y SPIR-V Vulkan) para FaceCam antialiased, Chroma Key en GPU y Gaming Color Boost a 60/120 FPS sin consumo de CPU. La conversión de color y escalado se migraron 100% a Rust 2024 (`yuvutils-rs`).
+- [x] **Sincronización Maestra de Audio/Video y Erradicación Total de Desync (Zero-Drift & Anti-Lag)**:
+  - Reloj continuo de muestras matemáticas (`Continuous Sample Clock`) respaldado por la base temporal maestra T0 unificada en Rust `SharedMuxerState`, garantizando que el audio y el video comiencen exactamente en t=0 us.
+  - Purga proactiva de backlog en el búfer circular (`discardOldestIfExceeds`) ante picos de CPU y lecturas sin bloqueo (timeout 0 ms), eliminando el retraso acumulado donde el sonido se quedaba desfasado varios segundos en partidas rápidas (ej. Subway Surfers, Free Fire).
 - [x] **Publicación Directa en la Galería del Sistema (`Movies/VeloRec`)**:
   - Guardado automático mediante MediaStore API (Scoped Storage) e indexación instantánea con `MediaScannerConnection` para visibilidad inmediata en Google Fotos, Galería Samsung, Xiaomi, etc.
 - [x] **Lanzador Rápido de Juegos y Apps con 1-Click REC (`NativeAppLauncherSection.kt`)**:
@@ -50,8 +50,8 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
   - [x] Creación de la entrada en MediaStore con `IS_PENDING = 1` previo al inicio de la grabación y pase directo de `rawFd` a `AMediaMuxer_new(fd, ...)`. Al detener, se finaliza con `IS_PENDING = 0` en <15 ms, eliminando por completo copias pesadas de cientos de megabytes en discos eMMC lentos.
 - **Guardado en Segundo Plano con Notificación de Progreso Escalonado**:
   - [x] Desacople total del hilo de UI al presionar "Detener", con retroalimentación progresiva en la barra de estado (25% -> 75% -> 100%), eliminando cualquier sensación de lentitud o congelamiento.
-- [x] **Integración de Ecosistema Avanzado de Rust (oboe, yuvutils-rs, glow)**:
-  - Crate `oboe` (`audio_oboe.rs`) para audio nativo de latencia de estudio (<10 ms).
+- [x] **Oboe 100% en Rust (oboe crate) y Descarte de C++ Oboe**:
+  - Crate `oboe` (`audio_oboe.rs`) para audio nativo de latencia de estudio (<10 ms con AAudio/OpenSL ES) gestionado 100% en Rust, eliminando dependencias de Oboe en C++23.
   - Crate `yuvutils-rs` (`color_yuv.rs`) con aceleración vectorial SIMD ARM NEON para 32 y 64 bits.
   - Crate `glow` (`gpu_glow.rs`) para sombreadores GPU OpenGL ES 3.20 multiplataforma en Rust puro.
 - [x] **Suite de Pruebas Unitarias Deterministas**:

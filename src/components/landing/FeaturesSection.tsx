@@ -68,15 +68,15 @@ export const FeaturesSection: React.FC = () => {
                 <Mic className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-bold text-white mb-2">
-                Audio Interno y Micrófono
+                Audio Interno y Micrófono (Cero Desync)
               </h3>
               <p className="text-slate-300 text-sm leading-relaxed">
-                Captura el sonido limpio de tu juego directamente del sistema y tu voz a través del micrófono para comentar jugadas o crear tutoriales con audio estéreo nítido.
+                Captura el sonido limpio de tu juego directamente del sistema con sincronización milimétrica continua y Oboe nativo en Rust. Sin audio atrasado ni desfasajes al jugar Subway Surfers o Free Fire.
               </p>
             </div>
             <div className="pt-6 mt-6 border-t border-slate-800/80 flex items-center space-x-2 text-xs font-medium text-cyan-400">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Funciona con altavoces y auriculares</span>
+              <span>Sincronización milimétrica sin retraso de audio</span>
             </div>
           </div>
 

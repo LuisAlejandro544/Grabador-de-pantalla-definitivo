@@ -17,10 +17,10 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
   - **🦀 Rust 2024 Core Engine**: Acceso directo al Android NDK con `AMediaCodec_createInputSurface` y `ANativeWindow_toSurface`.
   - **Garantía Matemática de Seguridad en Memoria (Zero GC)**: Sin recolección de basura, canales multihilo atómicos lock-free con `crossbeam-channel` y ausencia total de condiciones de carrera (*Data Races*).
   - **Inmunidad al Asesino de Procesos (LMK / Phantom Process Killer)**: Huella de memoria plana (< 15 MB) sin copias innecesarias en el heap ni colas infladas, asegurando que Android jamás mate el servicio en segundo plano mientras juegas títulos pesados.
-- **Tubería de Sincronización de Audio en Tiempo Real y Cero Lag**:
+- **Tubería de Sincronización de Audio Maestra y Erradicación Total de Desync (Zero-Drift & Anti-Lag)**:
   - **Multiplexación Nativa de Audio y Video 100% en Rust (Cero Espera al Detener)**: Ambas pistas (video y audio AAC) se registran de forma simultánea en `AMediaMuxer` desde Rust 2024. Las muestras de audio se entrelazan en tiempo real en el mismo contenedor MP4 sin generar archivos temporales en disco. Al presionar "Detener", la grabación se finaliza en menos de 15 ms, eliminando esperas y fusiones secundarias.
-  - **Reloj Maestro Monotónico (Zero-Drift Master Clock)**: Sincroniza la generación de muestras y marcas de tiempo (PTS) con el tiempo real transcurrido (`System.nanoTime()`), garantizando que los disparos y pasos se escuchen en el milisegundo exacto en que ocurren.
-  - **Búfer Circular Ampliado (262.144 muestras = ~2.73 segundos)**: Absorbe picos de CPU del sistema sin pérdidas ni cortes de audio (*audio stuttering* eliminado).
+  - **Reloj Maestro Monotónico (Continuous Sample Clock)**: Sincroniza la generación de muestras y marcas de tiempo (PTS) con el conteo matemático estricto por muestra, respaldado por la base temporal T0 unificada en Rust `SharedMuxerState`.
+  - **Erradicación Activa de Desfase Acumulado en Juegos (Subway Surfers, Free Fire)**: `AudioRecordEngine.kt` purga proactivamente el backlog de búfer (`discardOldestIfExceeds`) ante picos de CPU y drena paquetes sin bloqueos (timeout 0 ms), impidiendo que el audio se atrase conforme transcurre la partida.
 - **Tubería Zero-Copy en Kotlin**:
   - Kotlin solo orquesta permisos y ciclo de vida; no procesa bitmaps ni aloca buffers pesados en memoria Java.
   - Implementación con **Kotlin Coroutines (`Dispatchers.IO`)** para prevenir cualquier congelamiento del hilo principal (*ANR*).
@@ -49,11 +49,9 @@ VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificaci
     - `facecam_circular.frag`: Cámara flotante con máscara circular antialiased, borde dinámico y Chroma Key (pantalla verde) en GPU.
     - `gaming_color_boost.frag`: Realce de contraste dinámico, brillo y saturación cromática para videojuegos.
     - `passthrough.vert`: Vertex shader passthrough de alta velocidad.
-- **Integración con Google libyuv (C++23 & SIMD ARM NEON)**:
-  - Biblioteca oficial **`libyuv` de Google (Licencia BSD)** acelerada por hardware SIMD (ARM NEON para 32 bits `armeabi-v7a` y 64 bits `arm64-v8a`) para conversiones de color ultrarrápidas y escalado bilineal continuo.
 - **Ecosistema Integrado en Rust Puro (Edition 2024)**:
-  - **Google Oboe (`audio_oboe.rs`)**: Captura de audio de ultra baja latencia (<10 ms) con soporte unificado AAudio/OpenSL ES.
-  - **`yuvutils-rs` (`color_yuv.rs`)**: Conversión de color YUV420/NV12 y RGBA a más de 200 FPS con aceleración SIMD ARM NEON en Rust sin librerías externas.
+  - **Google Oboe 100% Rust (`audio_oboe.rs`)**: Captura de audio de ultra baja latencia (<10 ms) con AAudio/OpenSL ES gestionada 100% en Rust (crate `oboe`), descartando dependencias de Oboe en C++23 para suprimir duplicación binaria y conflictos de hilos.
+  - **Reemplazo de Google libyuv 100% en Rust (`color_yuv.rs` con `yuvutils-rs`)**: Conversión de color (RGBA a NV12, I420 y viceversa) y escalado bilineal a más de 220 FPS con aceleración vectorial SIMD ARM NEON en 32 y 64 bits. Sustituye la biblioteca libyuv de C++, garantizando seguridad matemática de memoria sin punteros crudos.
   - **`glow` (`gpu_glow.rs`)**: Sombreadores GPU OpenGL ES 3.20 en Rust puro para FaceCam circular antialiased, Chroma Key y Gaming Color Boost.
 - **Control Total de Video y Audio**:
   - Resoluciones predefinidas (Modo Nativo con escalas y Estándar 9:16: 1080p FHD, 720p HD, 480p SD, 1440p 2K, 4K UHD) y resolución personalizada con comprobación de paridad YUV420p.

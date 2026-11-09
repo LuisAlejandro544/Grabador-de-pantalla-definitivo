@@ -74,7 +74,7 @@ jobs:
           components: clippy
 
       # 6. Instalar herramientas de auditoría de C/C++ (cppcheck y clang-tidy)
-      - name: 🛠️ Instalar cppcheck y clang-tidy para análisis estático de C++23 y libyuv
+      - name: 🛠️ Instalar cppcheck y clang-tidy para análisis estático de C++23 (GpuShaderPipeline)
         run: |
           sudo apt-get update -y
           sudo apt-get install -y cppcheck clang-tidy
@@ -116,7 +116,7 @@ jobs:
           cargo test --target aarch64-linux-android --no-run 2>&1 | tee ../audit_output/rust_test_report.txt || true
           cd ..
 
-      # 9. Auditoría Estática de C++23 y libyuv (cppcheck y Clang-Tidy)
+      # 9. Auditoría Estática de C++23 (cppcheck y Clang-Tidy)
       - name: ⚡ [C++23 & NDK] Análisis estático de fugas de memoria, punteros y Clang-Tidy
         if: ${{ contains(inputs.audit_level, 'C++23') || contains(inputs.audit_level, 'Completo') || contains(inputs.audit_level, 'NDK') }}
         run: |
@@ -129,10 +129,9 @@ jobs:
                    --error-exitcode=0 \
                    android/app/src/main/cpp/ 2>&1 | tee audit_output/cppcheck_report.txt || true
 
-          echo "=== 2. Análisis estático avanzado con Clang-Tidy para C++23 ==="
+          echo "=== 2. Análisis estático avanzado con Clang-Tidy para C++23 (GpuShaderPipeline) ==="
           SYSROOT="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
           clang-tidy android/app/src/main/cpp/GpuShaderPipeline.cpp \
-                     android/app/src/main/cpp/libyuv_bridge.cpp \
                      --header-filter='android/app/src/main/cpp/.*' \
                      --checks='-*,bugprone-*,clang-analyzer-*,performance-*,portability-*,-bugprone-easily-swappable-parameters' \
                      -- --target=aarch64-linux-android26 \
@@ -210,7 +209,7 @@ jobs:
           |---|---|---|---|
           | **TypeScript & Core** | `tsc --noEmit` & `node:test` | ✅ Superado | Tipos estrictos, paridad par YUV420p y cálculo de bitrate |
           | **Rust (Edition 2024)** | `cargo clippy`, `cargo check` & `tests` | ✅ Superado | Memory safety sin Garbage Collector, ausencia de data races |
-          | **C++23 & libyuv** | `cppcheck`, `clang-tidy` & Clang NDK | ✅ Superado | std::expected, std::span, comprobación de leaks de ANativeWindow |
+          | **C++23 Shaders** | `cppcheck`, `clang-tidy` & Clang NDK | ✅ Superado | std::expected, std::span, comprobación de leaks de ANativeWindow |
           | **Kotlin & Android** | Android Lint (`NewApi` API 26 a 35) | ✅ Superado | Permisos MediaProjection API 35, ciclo de vida y Foreground Service |
           | **Binarios & Empaquetado** | `aapt2 dump badging` & `permissions` | ✅ Verificado | Validación de arquitecturas (arm64/armeabi/x86_64) y minSdk 26 |
 

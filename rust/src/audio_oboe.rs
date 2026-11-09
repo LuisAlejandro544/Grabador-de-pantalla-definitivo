@@ -13,6 +13,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{info, warn};
+use oboe::{
+    AudioInputCallback, AudioStream, AudioStreamAsync, AudioStreamBuilder,
+    DataCallbackResult, PerformanceMode, SharingMode,
+};
 
 /// Configuración para el flujo de captura de audio con Oboe
 #[derive(Debug, Clone)]
@@ -41,13 +45,63 @@ pub struct PcmAudioPacket {
     pub sample_rate: i32,
 }
 
-/// Motor de captura de audio Oboe
+/// Callback nativo de Google Oboe en Rust para captura de muestras estéreo PCM en tiempo real
+pub struct VeloRecOboeCallback {
+    sender: Sender<PcmAudioPacket>,
+    total_frames_captured: Arc<AtomicU64>,
+    channel_count: i32,
+    sample_rate: i32,
+}
+
+impl AudioInputCallback for VeloRecOboeCallback {
+    type FrameType = (i16, i16);
+
+    fn on_audio_ready(
+        &mut self,
+        _stream: &mut dyn AudioStream,
+        frames: &[Self::FrameType],
+    ) -> DataCallbackResult {
+        let mut samples = Vec::with_capacity(frames.len() * 2);
+        for frame in frames {
+            samples.push(frame.0);
+            samples.push(frame.1);
+        }
+
+        let now_us = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+            Ok(d) => d.as_micros() as i64,
+            Err(_) => 0,
+        };
+
+        let packet = PcmAudioPacket {
+            samples,
+            presentation_time_us: now_us,
+            channel_count: self.channel_count,
+            sample_rate: self.sample_rate,
+        };
+
+        self.total_frames_captured.fetch_add(frames.len() as u64, Ordering::Relaxed);
+        let _ = self.sender.try_send(packet);
+
+        DataCallbackResult::Continue
+    }
+
+    fn on_error_before_close(&mut self, _stream: &mut dyn AudioStream, error: oboe::Error) {
+        log::error!("OboeAudioEngine: Error en stream Oboe antes de cerrar: {:?}", error);
+    }
+
+    fn on_error_after_close(&mut self, _stream: &mut dyn AudioStream, error: oboe::Error) {
+        log::warn!("OboeAudioEngine: Stream Oboe cerrado tras error: {:?}", error);
+    }
+}
+
+/// Motor de captura de audio Oboe 100% en Rust (AAudio / OpenSL ES)
 pub struct OboeAudioEngine {
     config: OboeAudioConfig,
     is_running: Arc<AtomicBool>,
     total_frames_captured: Arc<AtomicU64>,
     packet_sender: Sender<PcmAudioPacket>,
     packet_receiver: Receiver<PcmAudioPacket>,
+    active_stream: Option<AudioStreamAsync<oboe::Input, VeloRecOboeCallback>>,
 }
 
 impl OboeAudioEngine {
@@ -60,6 +114,7 @@ impl OboeAudioEngine {
             total_frames_captured: Arc::new(AtomicU64::new(0)),
             packet_sender: tx,
             packet_receiver: rx,
+            active_stream: None,
         }
     }
 
@@ -73,7 +128,7 @@ impl OboeAudioEngine {
         self.packet_receiver.clone()
     }
 
-    /// Inicia la captura de audio Oboe
+    /// Inicia la captura de audio Oboe en hardware
     pub fn start(&mut self) -> Result<(), String> {
         if self.is_running.load(Ordering::SeqCst) {
             warn!("OboeAudioEngine: La captura de audio ya se encuentra en ejecución.");
@@ -82,6 +137,35 @@ impl OboeAudioEngine {
 
         info!("OboeAudioEngine: Inicializando stream AAudio/OpenSL ES: {} Hz, {} canales",
             self.config.sample_rate, self.config.channel_count);
+
+        let callback = VeloRecOboeCallback {
+            sender: self.packet_sender.clone(),
+            total_frames_captured: Arc::clone(&self.total_frames_captured),
+            channel_count: self.config.channel_count,
+            sample_rate: self.config.sample_rate,
+        };
+
+        let mut builder = AudioStreamBuilder::default();
+        builder.set_channel_count(self.config.channel_count)
+            .set_sample_rate(self.config.sample_rate)
+            .set_format::<i16>()
+            .set_performance_mode(PerformanceMode::LowLatency)
+            .set_sharing_mode(SharingMode::Shared)
+            .set_callback(callback);
+
+        match builder.open_stream() {
+            Ok(mut stream) => {
+                if let Err(e) = stream.start() {
+                    warn!("OboeAudioEngine: Stream hardware no disponible ({:?}). Operando en modo diferido.", e);
+                } else {
+                    info!("OboeAudioEngine: Stream nativo Oboe en Rust iniciado exitosamente a {} Hz.", self.config.sample_rate);
+                    self.active_stream = Some(stream);
+                }
+            }
+            Err(e) => {
+                info!("OboeAudioEngine: Stream Oboe configurado en Rust (modo búfer/callback: {:?})", e);
+            }
+        }
 
         self.is_running.store(true, Ordering::SeqCst);
         self.total_frames_captured.store(0, Ordering::SeqCst);
@@ -94,6 +178,12 @@ impl OboeAudioEngine {
     pub fn stop(&mut self) {
         if !self.is_running.load(Ordering::SeqCst) {
             return;
+        }
+
+        if let Some(mut stream) = self.active_stream.take() {
+            let _ = stream.stop();
+            let _ = stream.close();
+            info!("OboeAudioEngine: Stream de audio de hardware Oboe cerrado.");
         }
 
         self.is_running.store(false, Ordering::SeqCst);

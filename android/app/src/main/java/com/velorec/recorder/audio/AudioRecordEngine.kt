@@ -61,7 +61,7 @@ class AudioRecordEngine(
         private const val BITRATE = 128_000 // 128 kbps AAC-LC
         private const val TIMEOUT_US = 10_000L
         private const val SAMPLES_PER_FRAME = 1024 // 1024 muestras por canal = 2048 muestras estéreo (21.3ms @ 48kHz)
-        private const val RING_BUFFER_CAPACITY = 262144 // ~2.73 segundos de audio estéreo a 48 kHz
+        private const val RING_BUFFER_CAPACITY = 32768 // Capacidad ágil de ~341 ms (evita acumular segundos de desfase)
     }
 
     private val isRecording = AtomicBoolean(false)
@@ -72,8 +72,8 @@ class AudioRecordEngine(
 
     /**
      * Búfer circular thread-safe preasignado para muestras PCM de 16-bit.
-     * Capacidad: 262.144 shorts (~2.73 segundos de audio a 48 kHz estéreo).
-     * Cero recolección de basura (GC) y cero pérdida de muestras durante partidas intensas.
+     * Capacidad: 32.768 shorts (~341 ms de audio a 48 kHz estéreo).
+     * Cero recolección de basura (GC) y eliminación proactiva de backlog para erradicar el desfasaje.
      */
     private class AudioShortRingBuffer(val capacity: Int = RING_BUFFER_CAPACITY) {
         private val buffer = ShortArray(capacity)
@@ -109,6 +109,20 @@ class AudioRecordEngine(
         }
 
         fun available(): Int = synchronized(lock) { count }
+
+        /**
+         * Si por ráfagas intensas de CPU el juego acumuló un retraso superior a maxAllowed,
+         * descarta las muestras más viejas manteniendo solo keepAmount muestras en tiempo real exacto.
+         */
+        fun discardOldestIfExceeds(maxAllowed: Int, keepAmount: Int) {
+            synchronized(lock) {
+                if (count > maxAllowed) {
+                    val toDrop = count - keepAmount
+                    head = (head + toDrop) % capacity
+                    count = keepAmount
+                }
+            }
+        }
 
         fun clear() {
             synchronized(lock) {
@@ -401,6 +415,7 @@ class AudioRecordEngine(
         var totalFramesEncoded = 0L
 
         // Marca de tiempo monotónica estricta para sincronización con reloj del sistema (CLOCK_MONOTONIC)
+        var audioSessionStartMonoUs = -1L
         var lastAudioPtsUs = -1L
 
         while (isRecording.get()) {
@@ -437,15 +452,20 @@ class AudioRecordEngine(
                 }
 
                 "internal" -> {
+                    // Erradicación proactiva de latencia acumulada (Zero-Drift):
+                    // Si el juego (ej. Subway Surfers) tuvo un hipo de CPU y acumuló más de ~64 ms en el buffer,
+                    // descartar el excedente antiguo para conservar siempre el audio en tiempo real estricto (<22 ms).
+                    internalRingBuffer.discardOldestIfExceeds(maxAllowed = 6144, keepAmount = stereoSamplesCount)
+
                     val availableShorts = internalRingBuffer.available()
                     if (availableShorts >= stereoSamplesCount) {
                         // Cuadro completo de sonido del juego disponible en el buffer
                         internalRingBuffer.read(finalStereoBuffer, 0, stereoSamplesCount)
                         framesObtained = SAMPLES_PER_FRAME
                     } else {
-                        // Esperar a que el lector en segundo plano entregue el siguiente paquete
+                        // Espera no bloqueante breve (1 ms) para no perder cuadros de hardware
                         try {
-                            Thread.sleep(4)
+                            Thread.sleep(1)
                         } catch (_: InterruptedException) {
                             break
                         }
@@ -454,6 +474,9 @@ class AudioRecordEngine(
                 }
 
                 "both" -> {
+                    // Erradicar latencia acumulada del buffer interno en modo dual
+                    internalRingBuffer.discardOldestIfExceeds(maxAllowed = 6144, keepAmount = stereoSamplesCount)
+
                     // 1. Obtener audio del micrófono (bloqueante en tiempo real del hardware de audio)
                     if (isMicMono && micMonoBuffer != null) {
                         val readMono = micRecord?.read(micMonoBuffer, 0, SAMPLES_PER_FRAME) ?: 0
@@ -499,7 +522,7 @@ class AudioRecordEngine(
 
             if (framesObtained <= 0) {
                 try {
-                    Thread.sleep(3)
+                    Thread.sleep(1)
                 } catch (_: InterruptedException) {
                     break
                 }
@@ -516,20 +539,34 @@ class AudioRecordEngine(
             }
             pcmByteBuffer.flip()
 
-            // Sincronización Monotónica Estricta con el Reloj del Sistema (CLOCK_MONOTONIC)
-            // Se calcula el timestamp exacto del inicio del bloque recién capturado en microsegundos
-            val nowNanos = System.nanoTime()
-            val chunkDurationUs = (framesObtained * 1_000_000L) / actualSampleRate
-            var presentationTimeUs = (nowNanos / 1000L) - chunkDurationUs
-
-            // Asegurar estricta monotonicidad creciente requerida por MediaCodec y contenedores MP4
-            if (presentationTimeUs <= lastAudioPtsUs) {
-                presentationTimeUs = lastAudioPtsUs + chunkDurationUs
+            // Sincronización Monotónica Maestra por Muestras Continuas (Continuous Sample Clock)
+            // Se calcula el tiempo transcurrido en base a las muestras generadas matemáticamente
+            // y se compara con el reloj monotónico del sistema (System.nanoTime()) para prevenir drift.
+            val nowMonoUs = System.nanoTime() / 1000L
+            if (audioSessionStartMonoUs < 0L) {
+                audioSessionStartMonoUs = nowMonoUs
             }
-            lastAudioPtsUs = presentationTimeUs
 
-            // Alimentar encoder MediaCodec
-            val inputBufferIndex = encoder.dequeueInputBuffer(TIMEOUT_US)
+            val continuousPtsUs = audioSessionStartMonoUs + ((totalFramesEncoded * 1_000_000L) / actualSampleRate)
+            val driftDeltaUs = nowMonoUs - continuousPtsUs
+
+            val presentationTimeUs = if (kotlin.math.abs(driftDeltaUs) > 35_000L) {
+                // Resincronizar suavemente si el juego estuvo en silencio o si la CPU tuvo pausas
+                audioSessionStartMonoUs = nowMonoUs - ((totalFramesEncoded * 1_000_000L) / actualSampleRate)
+                nowMonoUs
+            } else {
+                continuousPtsUs
+            }
+
+            var safePtsUs = presentationTimeUs
+            if (safePtsUs <= lastAudioPtsUs) {
+                val frameDurationUs = (framesObtained * 1_000_000L) / actualSampleRate
+                safePtsUs = lastAudioPtsUs + frameDurationUs.coerceAtLeast(1000L)
+            }
+            lastAudioPtsUs = safePtsUs
+
+            // Alimentar encoder MediaCodec (con timeout inmediato de 2 ms para no frenar la tubería)
+            val inputBufferIndex = encoder.dequeueInputBuffer(2000L)
             if (inputBufferIndex >= 0) {
                 val inputBuffer = encoder.getInputBuffer(inputBufferIndex)
                 inputBuffer?.clear()
@@ -539,13 +576,13 @@ class AudioRecordEngine(
                     inputBufferIndex,
                     0,
                     pcmBytesLength,
-                    presentationTimeUs,
+                    safePtsUs,
                     0
                 )
                 totalFramesEncoded += framesObtained
             }
 
-            // Drenar paquetes codificados hacia el Muxer
+            // Drenar paquetes codificados hacia el Muxer con timeout 0 (No bloqueante, latencia ultra baja)
             drainEncoder(encoder, muxer, bufferInfo, endOfStream = false)
         }
 
@@ -564,8 +601,9 @@ class AudioRecordEngine(
         bufferInfo: MediaCodec.BufferInfo,
         endOfStream: Boolean
     ) {
+        val drainTimeoutUs = if (endOfStream) TIMEOUT_US else 0L
         while (true) {
-            val outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
+            val outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, drainTimeoutUs)
 
             if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 val newFormat = encoder.outputFormat
