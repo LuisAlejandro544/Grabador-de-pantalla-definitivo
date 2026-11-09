@@ -291,19 +291,15 @@ fun VeloRecMainScreen(
                 },
                 actions = {
                     // Badge nativo del motor con selector rápido interactivo
+                    // Badge nativo del motor exclusivo Rust 2024
                     Surface(
-                        color = if (selectedEngine == "rust2024") Color(0xFF451A03) else Color(0xFF083344),
+                        color = Color(0xFF451A03),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .padding(end = 12.dp)
-                            .clickable {
-                                if (!isRecording) {
-                                    selectedEngine = if (selectedEngine == "rust2024") "cpp23" else "rust2024"
-                                }
-                            }
                             .border(
                                 width = 1.dp,
-                                color = if (selectedEngine == "rust2024") WarningAmber else dynamicAccentColor,
+                                color = WarningAmber,
                                 shape = RoundedCornerShape(12.dp)
                             )
                     ) {
@@ -314,16 +310,16 @@ fun VeloRecMainScreen(
                             Icon(
                                 imageVector = Icons.Default.Bolt,
                                 contentDescription = null,
-                                tint = if (selectedEngine == "rust2024") WarningAmber else dynamicAccentColor,
+                                tint = WarningAmber,
                                 modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (selectedEngine == "rust2024") "Rust 2024" else "C++23 NDK",
+                                text = "Rust 2024",
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
-                                color = if (selectedEngine == "rust2024") WarningAmber else dynamicAccentColor
+                                color = WarningAmber
                             )
                         }
                     }

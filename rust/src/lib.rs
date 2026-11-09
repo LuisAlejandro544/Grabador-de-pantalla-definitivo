@@ -15,10 +15,22 @@
 
 #![allow(clippy::collapsible_if, clippy::missing_safety_doc, clippy::let_unit_value)]
 
+pub mod audio_oboe;
+pub mod color_yuv;
+pub mod gpu_glow;
+pub mod streamer;
+
+pub use audio_oboe::{OboeAudioConfig, OboeAudioEngine, PcmAudioPacket};
+pub use color_yuv::{YuvColorConverter, YuvColorFormat};
+pub use gpu_glow::{FaceCamShaderParams, GamingColorBoostParams, GlowGpuPipeline, GlowShaderEffect};
+pub use streamer::{RustStreamEngine, StreamConfig, StreamPacketType, StreamStats};
+
+
 use std::ffi::CString;
 use std::fs::OpenOptions;
 use std::os::unix::io::IntoRawFd;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};

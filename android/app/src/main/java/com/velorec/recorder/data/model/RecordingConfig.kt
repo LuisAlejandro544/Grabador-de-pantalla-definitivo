@@ -38,7 +38,7 @@ val AUDIO_SOURCE_PRESETS = listOf(
 )
 
 data class NativeRecordingConfig(
-    val engine: String = "cpp23",
+    val engine: String = "rust2024",
     val width: Int = 1080,
     val height: Int = 1920,
     val fps: Int = 60,

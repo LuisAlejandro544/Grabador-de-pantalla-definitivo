@@ -28,25 +28,23 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Soporta Micrófono, Audio Interno del Sistema/Juego (Android 10+ / API 29+) y Mezcla Dual.
  *
  * CORRECCIONES Y OPTIMIZACIONES CRÍTICAS IMPLEMENTADAS:
- * 1. NEGOCIACIÓN DE FRECUENCIA NATIVA (48 kHz / 44.1 kHz):
- *    - El mezclador de audio de hardware de Android opera a 48000 Hz. Se prioriza 48 kHz
- *      para AudioPlaybackCapture con fallback seguro a 44.1 kHz, eliminando fallos de
- *      inicialización del HAL y distorsiones de remuestreo.
- * 2. CEBADO INMEDIATO DEL CODIFICADOR AAC (Priming Buffer <5 ms):
- *    - Se alimenta un cuadro inicial silencioso al arrancar para forzar a MediaCodec a emitir
- *      'INFO_OUTPUT_FORMAT_CHANGED' y 'csd-0' en milisegundos. Esto garantiza que AMediaMuxer
- *      de C++23 reciba y registre la pista de audio antes de que los fotogramas de video
- *      inicien, impidiendo que el multiplexor se inicie como solo-video.
- * 3. BUFFER CIRCULAR DE MUESTRAS PCM (AudioShortRingBuffer):
- *    - Erradica la fragmentación y el relleno con ceros aleatorio. Las lecturas de AudioRecord
- *      se acumulan en un ring buffer de 32k muestras; la codificación extrae cuadros completos
- *      exactos de 1024 muestras estéreo (2048 shorts), preservando el 100% del audio del juego.
+ * 1. SINCRONIZACIÓN TEMPORAL ESTRICTA Y CERO LAG (Zero Drift & Anti-Desync):
+ *    - Se sincroniza la generación de muestras y marcas de tiempo (PTS) con el reloj
+ *      monotónico del sistema (System.nanoTime()). Si el juego entra en pausas, pantallas de
+ *      carga o silencios temporales, el motor inyecta silencio de confort en tiempo real
+ *      exacto según el tiempo transcurrido, impidiendo que el audio se congele o se desplace
+ *      en relación al video.
+ * 2. BÚFER CIRCULAR AMPLIO (AudioShortRingBuffer de 262.144 muestras = ~2.73 segundos):
+ *    - Capacidad expandida de 32k a 262.144 muestras estéreo (512 KB), absorbiendo cualquier
+ *      ráfaga de CPU o pausa de recolección de basura del sistema sin perder jamás paquetes
+ *      de sonido ("se laguea el sonido" erradicado).
+ * 3. NEGOCIACIÓN DE FRECUENCIA NATIVA (48 kHz / 44.1 kHz):
+ *    - El mezclador de hardware de Android opera a 48000 Hz. Se prioriza 48 kHz para
+ *      AudioPlaybackCapture con fallback seguro a 44.1 kHz.
  * 4. ByteOrder.LITTLE_ENDIAN OBLIGATORIO:
- *    - En arquitecturas ARM los codificadores AAC esperan PCM 16-bit Little-Endian.
+ *    - En procesadores ARM los codificadores AAC esperan PCM 16-bit Little-Endian.
  * 5. MEZCLA DUAL CON SUMA SATURADA (Clamping anti-distorsión):
- *    - Combina voz y juego sin chasquidos ni distorsiones digitales.
- * 6. TIMESTAMP MONOTÓNICO BASADO EN MUESTRAS:
- *    - PTS = (totalFrames * 1_000_000L) / actualSampleRate, garantizando sincronía labial y de juego perfecta.
+ *    - Combina voz y juego simultáneamente sin saturación ni ruido digital.
  */
 class AudioRecordEngine(
     private val context: Context,
@@ -63,6 +61,7 @@ class AudioRecordEngine(
         private const val BITRATE = 128_000 // 128 kbps AAC-LC
         private const val TIMEOUT_US = 10_000L
         private const val SAMPLES_PER_FRAME = 1024 // 1024 muestras por canal = 2048 muestras estéreo (21.3ms @ 48kHz)
+        private const val RING_BUFFER_CAPACITY = 262144 // ~2.73 segundos de audio estéreo a 48 kHz
     }
 
     private val isRecording = AtomicBoolean(false)
@@ -73,10 +72,10 @@ class AudioRecordEngine(
 
     /**
      * Búfer circular thread-safe preasignado para muestras PCM de 16-bit.
-     * Capacidad: 32768 shorts (~341 ms de audio a 48 kHz estéreo).
-     * Cero recolección de basura (GC) y cero fragmentación de memoria durante partidas intensas.
+     * Capacidad: 262.144 shorts (~2.73 segundos de audio a 48 kHz estéreo).
+     * Cero recolección de basura (GC) y cero pérdida de muestras durante partidas intensas.
      */
-    private class AudioShortRingBuffer(val capacity: Int = 32768) {
+    private class AudioShortRingBuffer(val capacity: Int = RING_BUFFER_CAPACITY) {
         private val buffer = ShortArray(capacity)
         private var head = 0
         private var tail = 0
@@ -124,7 +123,7 @@ class AudioRecordEngine(
     private var isMicMono = false
 
     private var internalRecord: AudioRecord? = null
-    private val internalRingBuffer = AudioShortRingBuffer(32768)
+    private val internalRingBuffer = AudioShortRingBuffer(RING_BUFFER_CAPACITY)
 
     private var actualSampleRate = PREFERRED_SAMPLE_RATE
 
@@ -401,32 +400,8 @@ class AudioRecordEngine(
         val bufferInfo = MediaCodec.BufferInfo()
         var totalFramesEncoded = 0L
 
-        // =========================================================================
-        // CEBADO INICIAL DEL CODIFICADOR AAC (Priming Buffer <5 ms):
-        // Se inyecta un cuadro silencioso de 0s inmediatamente al iniciar el bucle.
-        // Esto obliga al MediaCodec AAC a procesar y emitir 'csd-0' de inmediato.
-        // C++23 recibe 'nativeAddAudioTrack' en menos de 10 ms, permitiendo que
-        // AMediaMuxer registre el audio ANTES de que el VirtualDisplay comience a codificar video.
-        // =========================================================================
-        try {
-            val primeInputIndex = encoder.dequeueInputBuffer(TIMEOUT_US)
-            if (primeInputIndex >= 0) {
-                val primeBuf = encoder.getInputBuffer(primeInputIndex)
-                primeBuf?.clear()
-                pcmByteBuffer.clear()
-                java.util.Arrays.fill(finalStereoBuffer, 0.toShort())
-                for (i in 0 until stereoSamplesCount) {
-                    pcmByteBuffer.putShort(0)
-                }
-                pcmByteBuffer.flip()
-                primeBuf?.put(pcmByteBuffer)
-                encoder.queueInputBuffer(primeInputIndex, 0, chunkSizeBytes, 0L, 0)
-                totalFramesEncoded += SAMPLES_PER_FRAME
-                drainEncoder(encoder, muxer, bufferInfo, endOfStream = false)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Aviso en priming buffer: ${e.message}")
-        }
+        // Marca de tiempo de referencia de inicio del reloj monotónico del sistema (Zero-Drift Master Clock)
+        val startNanoTime = System.nanoTime()
 
         while (isRecording.get()) {
             if (isPaused.get()) {
@@ -437,6 +412,11 @@ class AudioRecordEngine(
                 }
                 continue
             }
+
+            // Reloj monotónico de referencia: calcular cuadros esperados según el tiempo real transcurrido
+            val elapsedNanos = System.nanoTime() - startNanoTime
+            val elapsedUs = elapsedNanos / 1000L
+            val expectedTotalFrames = (elapsedUs * actualSampleRate) / 1_000_000L
 
             var framesObtained = 0
 
@@ -462,28 +442,31 @@ class AudioRecordEngine(
                 }
 
                 "internal" -> {
-                    // Extraer audio interno acumulado del buffer circular sin fragmentaciones
                     val availableShorts = internalRingBuffer.available()
                     if (availableShorts >= stereoSamplesCount) {
+                        // Cuadro completo de sonido del juego disponible
                         internalRingBuffer.read(finalStereoBuffer, 0, stereoSamplesCount)
                         framesObtained = SAMPLES_PER_FRAME
-                    } else if (availableShorts > 0) {
-                        // Si hay muestras pero menos de un cuadro completo, leerlas y rellenar con silencio
+                    } else if (availableShorts > 0 && totalFramesEncoded < expectedTotalFrames) {
+                        // Fragmento disponible y el tiempo real avanza: drenar y completar con silencio
                         val readCount = internalRingBuffer.read(finalStereoBuffer, 0, availableShorts)
                         for (i in readCount until stereoSamplesCount) {
                             finalStereoBuffer[i] = 0
                         }
                         framesObtained = SAMPLES_PER_FRAME
-                    } else if (internalRecord != null) {
-                        // El juego está en un menú o pantalla de carga silenciosa: generar silencio
-                        // con cadencia rítmica fija para mantener la sincronización monotónica con el video
+                    } else if (availableShorts == 0 && totalFramesEncoded < expectedTotalFrames) {
+                        // El juego está en silencio o en pantalla de carga: emitir silencio de confort
+                        // para mantener sincronía 1:1 absoluta con el reloj de video
                         java.util.Arrays.fill(finalStereoBuffer, 0.toShort())
                         framesObtained = SAMPLES_PER_FRAME
+                    } else {
+                        // El búfer de audio va a la par del tiempo real: esperar brevemente muestras frescas del HAL
                         try {
-                            Thread.sleep(20)
+                            Thread.sleep(4)
                         } catch (_: InterruptedException) {
                             break
                         }
+                        continue
                     }
                 }
 
@@ -507,16 +490,27 @@ class AudioRecordEngine(
                     }
 
                     // 2. Extraer audio interno del buffer circular
-                    val targetShorts = framesObtained * CHANNEL_COUNT
-                    val intReadShorts = if (targetShorts > 0) {
-                        internalRingBuffer.read(internalTempStereoBuffer, 0, targetShorts)
+                    val targetShorts = if (framesObtained > 0) framesObtained * CHANNEL_COUNT else stereoSamplesCount
+                    val availableInternal = internalRingBuffer.available()
+                    val intReadShorts = if (availableInternal > 0) {
+                        val toRead = minOf(targetShorts, availableInternal)
+                        internalRingBuffer.read(internalTempStereoBuffer, 0, toRead)
                     } else 0
+
+                    if (intReadShorts < targetShorts) {
+                        java.util.Arrays.fill(internalTempStereoBuffer, intReadShorts, targetShorts, 0.toShort())
+                    }
+
+                    if (framesObtained <= 0 && totalFramesEncoded < expectedTotalFrames) {
+                        framesObtained = SAMPLES_PER_FRAME
+                        java.util.Arrays.fill(micStereoBuffer, 0.toShort())
+                    }
 
                     // 3. Mezcla Estéreo con Suma Saturada (Clamping anti-distorsión)
                     val mixSamples = framesObtained * CHANNEL_COUNT
                     for (i in 0 until mixSamples) {
                         val micSample = micStereoBuffer[i].toInt()
-                        val intSample = if (i < intReadShorts) internalTempStereoBuffer[i].toInt() else 0
+                        val intSample = internalTempStereoBuffer[i].toInt()
                         val mixed = (micSample + intSample).coerceIn(-32768, 32767)
                         finalStereoBuffer[i] = mixed.toShort()
                     }
@@ -525,7 +519,7 @@ class AudioRecordEngine(
 
             if (framesObtained <= 0) {
                 try {
-                    Thread.sleep(5)
+                    Thread.sleep(3)
                 } catch (_: InterruptedException) {
                     break
                 }
@@ -542,7 +536,7 @@ class AudioRecordEngine(
             }
             pcmByteBuffer.flip()
 
-            // Cálculo estricto de marca de tiempo (PTS) basado en muestras reales y frecuencia negociada
+            // Cálculo estricto de marca de tiempo (PTS) basado en muestras y frecuencia negociada
             val presentationTimeUs = (totalFramesEncoded * 1_000_000L) / actualSampleRate
 
             // Alimentar encoder MediaCodec

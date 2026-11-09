@@ -83,13 +83,6 @@ jobs:
         run: |
           cargo install cargo-ndk
 
-      # 5.5. Configurar entorno de Go (v1.22) para el motor de streaming y protocolos de red
-      - name: 🐹 Configurar Go (v1.22)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          check-latest: false
-
       # 6. Instalar dependencias del proyecto React Native
       - name: 📚 Instalar dependencias de npm
         run: |

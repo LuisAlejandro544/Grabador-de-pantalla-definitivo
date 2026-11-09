@@ -20,9 +20,8 @@ add_compile_options(
     -fdata-sections
 )
 
-# Definir biblioteca compartida .so con aceleración de sombreado GPU (GLSL/SPIR-V)
+# Definir biblioteca compartida .so para aceleración visual y conversiones SIMD NEON
 add_library(velorec_cpp23 SHARED
-    NativeRecorderEngine.cpp
     libyuv_bridge.cpp
     GpuShaderPipeline.cpp
 )

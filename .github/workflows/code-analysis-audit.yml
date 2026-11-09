@@ -131,8 +131,7 @@ jobs:
 
           echo "=== 2. Análisis estático avanzado con Clang-Tidy para C++23 ==="
           SYSROOT="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
-          clang-tidy android/app/src/main/cpp/NativeRecorderEngine.cpp \
-                     android/app/src/main/cpp/GpuShaderPipeline.cpp \
+          clang-tidy android/app/src/main/cpp/GpuShaderPipeline.cpp \
                      android/app/src/main/cpp/libyuv_bridge.cpp \
                      --header-filter='android/app/src/main/cpp/.*' \
                      --checks='-*,bugprone-*,clang-analyzer-*,performance-*,portability-*,-bugprone-easily-swappable-parameters' \

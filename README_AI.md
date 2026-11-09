@@ -12,7 +12,7 @@
 | **Plataformas de Destino** | Android Nativo (APK instalable, Uptodown, F-Droid) |
 | **Frontend Móvil** | **Kotlin Jetpack Compose (Material 3)** (100% Nativo) |
 | **Orquestación Nativa** | Kotlin (Jetpack Compose UI + Coroutines `Dispatchers.IO` + Foreground Service) |
-| **Motores de Video** | **C++23** (AMediaCodec NDK) y **Rust (Edition 2024 / 1.85+)** |
+| **Motores Nativos** | **Rust (Edition 2024 / 1.85+)** (Grabación Central) + **C++23** (Shaders GPU y libyuv) |
 | **Versiones de Android** | `minSdkVersion = 26` (Android 8.0) \| `targetSdkVersion = 35` (Android 15) |
 | **Arquitecturas CPU** | `arm64-v8a` (64-bit), `armeabi-v7a` (32-bit), `x86_64` (Selector universal/individual en CI) |
 | **CI / Compilación** | GitHub Actions (`workflow_dispatch`, 100% manual con selector de ABI) |
@@ -40,14 +40,12 @@
   - `ScreenRecordService.kt`: Servicio en primer plano con `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION`, corrutinas IO y firmas JNI C++23 y Rust 2024.
   - `VeloRecComposeUI.kt`: Fachada modular que mantiene retrocompatibilidad total.
 - **`android/app/src/main/shaders/`**: Aceleración gráfica en GPU con shaders GLSL ES 3.20 (`glsl/`) y bytecode SPIR-V (`spirv/SpirvShaderBytecode.hpp`) para FaceCam circular antialiased, Chroma Key y Gaming Color Boost.
-- **`android/app/src/main/cpp/GpuShaderPipeline.hpp` & `.cpp`**: Tubería gráfica C++23 con `std::expected` enlazada a `GLESv3` y `EGL` para efectos de sombreado directo en GPU.
-- **`android/app/src/main/cpp/NativeRecorderEngine.hpp` & `.cpp`**: Motor C++23 con `AMediaCodec_createInputSurface` para codificación directa por hardware con cero copias, normalización PTS base 0, **Buffer Pacing Asíncrono auto-detectado para eMMC (`/sys/block/mmcblk0`)** y **Afinidad de Hilos (Thread Affinity)** a núcleos de eficiencia (LITTLE, Cortex-A55) para liberar el 100% de los núcleos Big (Cortex-A75) para el videojuego.
+- **`android/app/src/main/cpp/GpuShaderPipeline.hpp` & `.cpp`**: Tubería gráfica C++23 con `std::expected` enlazada a `GLESv3` y `EGL` para efectos de sombreado directo en GPU (FaceCam, Chroma Key y Gaming Color Boost).
 - **`android/app/src/main/cpp/libyuv_bridge.hpp` & `.cpp`**: Puente de integración con Google libyuv (Licencia BSD) acelerado con vectorización ARM NEON para transformaciones de color YUV420 y escalado bilineal.
-- **`android/app/src/main/cpp/CMakeLists.txt`**: Configuración CMake con `-std=c++23` y enlace a `mediandk`, `android`, `log`, `libyuv`, `oboe`, `GLESv3` y `EGL`.
-- **`go/go.mod` & `go/streamer.go`**: Motor de streaming en red y baja latencia en Go (v1.22+) con *goroutines*, colas de paquetes NAL y *Ring Buffer* de 4 MB para protocolos RTMP/SRT.
-- **`rust/Cargo.toml` & `rust/src/lib.rs`**: Motor Rust Edition 2024 con canales `crossbeam-channel`, sincronización PTS base 0, enlaces JNI y afinidad a núcleos LITTLE (`apply_efficiency_core_affinity`).
-- **`android/app/build.gradle.kts`**: Script Gradle que compila CMake (C++23), Cargo NDK (Rust), Go Streamer Check y Jetpack Compose con firma de depuración automática.
-- **`src/utils/recorderCore.ts`**: Lógica desacoplada de cálculo de bitrate, validación de paridad de resolución, validación de cuenta regresiva, paquetes Android y especificaciones de shaders/Go.
+- **`android/app/src/main/cpp/CMakeLists.txt`**: Configuración CMake con `-std=c++23` y enlace a `mediandk`, `android`, `log`, `libyuv`, `GLESv3` y `EGL`.
+- **`rust/Cargo.toml` & `rust/src/`**: Motor Rust Edition 2024 unificado con canales `crossbeam-channel`, sincronización PTS base 0, enlaces JNI y módulos especializados: Google Oboe (`audio_oboe.rs`), conversor de color SIMD NEON `yuvutils-rs` (`color_yuv.rs`), sombreadores GPU `glow` (`gpu_glow.rs`), motor de streaming de red `streamer.rs` (RTMP/SRT) y afinidad a núcleos LITTLE (`apply_efficiency_core_affinity`).
+- **`android/app/build.gradle.kts`**: Script Gradle que compila CMake (C++23), Cargo NDK (Rust 2024) y Jetpack Compose con firma de depuración automática.
+- **`src/utils/recorderCore.ts`**: Lógica desacoplada de cálculo de bitrate, validación de paridad de resolución, validación de cuenta regresiva, paquetes Android y especificaciones de shaders/Rust streaming.
 - **`src/utils/recorderCore.test.ts`**: Suite de tests unitarios ejecutables con `npx --yes tsx --test`.
 
 ---

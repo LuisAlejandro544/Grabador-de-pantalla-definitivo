@@ -117,25 +117,37 @@ object AudioMuxerHelper {
             videoExtractor.selectTrack(videoTrackIndexInExtractor)
             audioExtractor.selectTrack(audioTrackIndexInExtractor)
 
+            var firstVideoSampleTime = -1L
+            var firstAudioSampleTime = -1L
             var lastVideoPts = -1L
             var lastAudioPts = -1L
             var videoDone = false
             var audioDone = false
 
             while (!videoDone || !audioDone) {
-                val videoTime = if (!videoDone) videoExtractor.sampleTime else Long.MAX_VALUE
-                val audioTime = if (!audioDone) audioExtractor.sampleTime else Long.MAX_VALUE
+                val rawVideoTime = if (!videoDone) videoExtractor.sampleTime else Long.MAX_VALUE
+                val rawAudioTime = if (!audioDone) audioExtractor.sampleTime else Long.MAX_VALUE
 
-                if (videoTime == -1L) {
+                if (rawVideoTime == -1L) {
                     videoDone = true
                 }
-                if (audioTime == -1L) {
+                if (rawAudioTime == -1L) {
                     audioDone = true
                 }
                 if (videoDone && audioDone) break
 
+                val normVideoTime = if (!videoDone && rawVideoTime != Long.MAX_VALUE) {
+                    if (firstVideoSampleTime < 0) firstVideoSampleTime = rawVideoTime
+                    maxOf(0L, rawVideoTime - firstVideoSampleTime)
+                } else Long.MAX_VALUE
+
+                val normAudioTime = if (!audioDone && rawAudioTime != Long.MAX_VALUE) {
+                    if (firstAudioSampleTime < 0) firstAudioSampleTime = rawAudioTime
+                    maxOf(0L, rawAudioTime - firstAudioSampleTime)
+                } else Long.MAX_VALUE
+
                 // Escribir la muestra que tenga la marca de tiempo menor para mantener sincronización estricta
-                if (!videoDone && (audioDone || videoTime <= audioTime)) {
+                if (!videoDone && (audioDone || normVideoTime <= normAudioTime)) {
                     byteBuffer.clear()
                     val sampleSize = videoExtractor.readSampleData(byteBuffer, 0)
                     if (sampleSize < 0) {
@@ -144,7 +156,7 @@ object AudioMuxerHelper {
                         bufferInfo.offset = 0
                         bufferInfo.size = sampleSize
 
-                        var pts = videoExtractor.sampleTime
+                        var pts = normVideoTime
                         if (pts <= lastVideoPts) {
                             pts = if (lastVideoPts >= 0) lastVideoPts + 1000L else 0L
                         }
@@ -175,7 +187,7 @@ object AudioMuxerHelper {
                         bufferInfo.offset = 0
                         bufferInfo.size = sampleSize
 
-                        var pts = audioExtractor.sampleTime
+                        var pts = normAudioTime
                         if (pts <= lastAudioPts) {
                             pts = if (lastAudioPts >= 0) lastAudioPts + 1000L else 0L
                         }

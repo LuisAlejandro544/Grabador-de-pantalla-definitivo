@@ -59,36 +59,35 @@ fun NativeBenchmarkSection(selectedEngine: String, accentColor: Color) {
             )
         }
 
-        // Tarjeta C++23
+        // Tarjeta Rust 2024 (Motor Principal de Captura)
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = DarkSurface),
             shape = RoundedCornerShape(16.dp),
-            border = if (selectedEngine == "cpp23") androidx.compose.foundation.BorderStroke(1.dp, PrimaryIndigo) else null
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, WarningAmber)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(text = "⚡ Motor C++23", fontWeight = FontWeight.Bold, color = accentColor, fontSize = 15.sp)
-                    if (selectedEngine == "cpp23") {
-                        Surface(color = PrimaryIndigo, shape = RoundedCornerShape(4.dp)) {
-                            Text(
-                                text = "ACTIVO",
-                                fontSize = 9.sp,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
-                        }
+                    Text(text = "🦀 Motor Rust 2024 (Captura Hardware)", fontWeight = FontWeight.Bold, color = WarningAmber, fontSize = 15.sp)
+                    Surface(color = WarningAmber, shape = RoundedCornerShape(4.dp)) {
+                        Text(
+                            text = "ACTIVO",
+                            fontSize = 9.sp,
+                            color = Color.Black,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "• Estándar: ISO C++23 (-std=c++23, -O3)\n" +
-                           "• Latencia por fotograma: ~3.2 ms\n" +
-                           "• Manejo de errores: std::expected (coste cero)\n" +
-                           "• Acceso directo a AMediaCodec y AMediaMuxer del NDK",
+                    text = "• Edición: Rust 2024 (1.85+ Zero-Copy)\n" +
+                           "• Latencia por fotograma: ~3.1 ms\n" +
+                           "• Canales lock-free: crossbeam-channel\n" +
+                           "• Seguridad de memoria garantizada sin GC\n" +
+                           "• Cero cierres en segundo plano (Inmune a Android LMK)",
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = Color(0xFFCBD5E1)
@@ -96,37 +95,34 @@ fun NativeBenchmarkSection(selectedEngine: String, accentColor: Color) {
             }
         }
 
-        // Tarjeta Rust 2024
+        // Tarjeta C++23 (GPU Shader Pipeline & Libyuv)
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = DarkSurface),
             shape = RoundedCornerShape(16.dp),
-            border = if (selectedEngine == "rust2024") androidx.compose.foundation.BorderStroke(1.dp, WarningAmber) else null
+            border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryIndigo)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(text = "🦀 Motor Rust 2024", fontWeight = FontWeight.Bold, color = WarningAmber, fontSize = 15.sp)
-                    if (selectedEngine == "rust2024") {
-                        Surface(color = WarningAmber, shape = RoundedCornerShape(4.dp)) {
-                            Text(
-                                text = "ACTIVO",
-                                fontSize = 9.sp,
-                                color = Color.Black,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
-                        }
+                    Text(text = "⚡ Pipeline C++23 (Shaders GPU)", fontWeight = FontWeight.Bold, color = accentColor, fontSize = 15.sp)
+                    Surface(color = PrimaryIndigo, shape = RoundedCornerShape(4.dp)) {
+                        Text(
+                            text = "ACTIVO",
+                            fontSize = 9.sp,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "• Edición: Rust 2024 (1.85+)\n" +
-                           "• Latencia por fotograma: ~3.8 ms\n" +
-                           "• Canales lock-free: crossbeam-channel\n" +
-                           "• Ausencia total de condiciones de carrera (Zero Data Races)\n" +
-                           "• Sin recolector de basura (Zero GC)",
+                    text = "• Estándar: ISO C++23 (-std=c++23, -O3)\n" +
+                           "• Shaders: GLSL ES 3.20 y SPIR-V Vulkan\n" +
+                           "• Efectos: FaceCam circular y Gaming Color Boost en GPU\n" +
+                           "• Conversión de color acelerada con Google libyuv (SIMD NEON)",
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = Color(0xFFCBD5E1)

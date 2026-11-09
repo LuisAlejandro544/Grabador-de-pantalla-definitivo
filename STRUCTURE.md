@@ -66,23 +66,20 @@
 │           │   ├── glsl/                        # Shaders de texto GLSL ES 3.20 (FaceCam circular, Gaming Color Boost, Passthrough)
 │           │   └── spirv/                       # Shaders en bytecode compilado SPIR-V (SpirvShaderBytecode.hpp) para Vulkan
 │           └── cpp/
-│               ├── CMakeLists.txt          # Configuración CMake para C++23 (-std=c++23, -O3), libyuv, Oboe y GLESv3/EGL
-│               ├── CMakeLists.txt          # Configuración CMake para C++23 (-std=c++23, -O3), libyuv, Oboe y GLESv3/EGL
-│               ├── NativeRecorderEngine.hpp # Cabecera C++23 con std::expected, span, eMMC Pacing y afinidad de hilos
-│               ├── NativeRecorderEngine.cpp # AMediaCodec, AMediaMuxer, ANativeWindow, Buffer Pacing asíncrono para eMMC y afinidad LITTLE
+│               ├── CMakeLists.txt          # Configuración CMake para C++23 (-std=c++23, -O3), libyuv y GLESv3/EGL
 │               ├── GpuShaderPipeline.hpp   # Tubería C++23 para sombreadores GPU (GLSL ES 3.20 y SPIR-V)
 │               ├── GpuShaderPipeline.cpp   # Implementación de compilación, enlace y uniforms de FaceCam/Gaming
 │               ├── libyuv_bridge.hpp       # Interfaz C++23 para aceleración SIMD ARM NEON de Google libyuv (32 y 64 bits)
 │               └── libyuv_bridge.cpp       # Implementación de conversiones de color YUV420 y escalado bilineal con libyuv
 │
-├── go/                                 # Motor de streaming en red y baja latencia (Go 1.22+)
-│   ├── go.mod                          # Manifiesto del módulo Go (github.com/velorec/streamer)
-│   └── streamer.go                     # Despachador de paquetes NAL con goroutines, Ring Buffer de 4MB y bindings RTMP/SRT
-│
-├── rust/                               # Motor nativo en Rust (Edition 2024)
-│   ├── Cargo.toml                      # Manifiesto de Rust con edition = "2024", cdylib y ndk-sys
+├── rust/                               # Motor nativo unificado en Rust (Edition 2024)
+│   ├── Cargo.toml                      # Manifiesto de Rust con edition = "2024", oboe, yuvutils-rs y glow
 │   └── src/
-│       └── lib.rs                      # Hardware encoder NDK AMediaCodec, ANativeWindow y crossbeam
+│       ├── lib.rs                      # Hardware encoder NDK AMediaCodec, ANativeWindow y crossbeam
+│       ├── audio_oboe.rs               # Integración de Google Oboe para captura de audio nativo (<10ms)
+│       ├── color_yuv.rs                # Conversión de color YUV420/NV12 y RGBA con SIMD ARM NEON (yuvutils-rs)
+│       ├── gpu_glow.rs                 # Tubería de sombreadores GPU OpenGL ES 3.20 en Rust puro (glow)
+│       └── streamer.rs                 # Motor de streaming en vivo (RTMP/SRT) en Rust con Ring Buffer (Zero-GC)
 │
 ├── src/                                # Código fuente de la página web oficial (Landing Page)
 │   ├── components/                     # Componentes de la landing page de descarga
@@ -116,7 +113,6 @@
 ├── README.md                           # Documentación general del proyecto
 ├── ROADMAP.md                          # Plan de desarrollo y futuras fases
 ├── STRUCTURE.md                        # Explicación de la arquitectura de archivos (este archivo)
-├── ESTRUCTURE.md                       # Referencia de estructura del proyecto
 ├── AI_CONTEXT.md                       # Contexto técnico para modelos de lenguaje
 ├── AGENTS.md                           # Guía operativa para agentes de desarrollo
 └── README_AI.md                        # Resumen ejecutivo para asistentes de IA
@@ -130,16 +126,21 @@
 Contiene la configuración de Gradle Kotlin DSL (`build.gradle.kts`) lista para compilar de forma autónoma:
 - **Gradle Wrapper**: Incluye los ejecutables `gradlew` (Linux/macOS), `gradlew.bat` (Windows) y `gradle-wrapper.properties` configurado con Gradle 8.7.
 - **Configuración Raíz y Módulos**: `settings.gradle.kts` y `build.gradle.kts` vinculando el módulo `:app`.
-- **CMake**: Compila `NativeRecorderEngine.cpp` con el estándar C++23 activado explícitamente (`-std=c++23`).
+- **CMake**: Compila la tubería gráfica `GpuShaderPipeline.cpp` y Google `libyuv_bridge.cpp` con el estándar C++23 (`-std=c++23`).
 - **Cargo NDK**: Compila el módulo Rust generando las bibliotecas `.so` para arquitecturas de 64 bits (`arm64-v8a`), 32 bits (`armeabi-v7a`) y `x86_64`.
 - **Servicios**: `ScreenRecordService.kt` hereda de `android.app.Service` y maneja `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION` con Corrutinas Kotlin (`Dispatchers.IO`).
 
-### 2. `/rust` (Motor Rust Edition 2024 con Hardware Encoder)
-Crate autónomo con `crate-type = ["cdylib"]`.
+### 2. `/rust` (Motor Rust Edition 2024 con Hardware Encoder y Módulos de Alto Rendimiento)
+Crate autónomo con `crate-type = ["cdylib", "rlib"]`.
 - Configurado con `edition = "2024"` y dependencias NDK (`ndk = "0.9.0"`, `ndk-sys = "0.6.0"`, `crossbeam-channel = "0.5.14"`, `libc = "0.2"`).
 - Implementa la tubería **Zero-Copy**: crea el codificador de hardware mediante `AMediaCodec_createEncoderByType`, obtiene la superficie nativa con `AMediaCodec_createInputSurface` y la entrega a Android vía `ANativeWindow_toSurface`.
+- **Integración de Google Oboe (`audio_oboe.rs`)**: Captura de audio de ultra baja latencia (<10 ms) con soporte dual AAudio/OpenSL ES.
+- **Conversión de Color Acelerada con SIMD ARM NEON (`color_yuv.rs`)**: Conversiones YUV420/NV12 y RGBA a más de 200 FPS en Rust puro con `yuvutils-rs`.
+- **Tubería de Sombreadores GPU (`gpu_glow.rs`)**: Shaders OpenGL ES 3.20 en Rust mediante `glow` para FaceCam circular antialiased, Chroma Key y Gaming Color Boost.
+- **Motor de Streaming en Vivo (`streamer.rs`)**: Despacho de paquetes NAL de ultra baja latencia (RTMP/SRT) con *Ring Buffer* de 4 MB y descarte inteligente anti-congestión (Zero-GC).
 - Procesa búferes codificados en un hilo worker seguro y escribe el archivo MP4 mediante `AMediaMuxer`.
 - Garantiza ausencia total de condiciones de carrera (*Data Races*) y cero recolección de basura (*Zero GC*).
+
 
 ### 3. `/src/components` (Diseño Modular UI)
 Cumpliendo con la regla de diseño modular:

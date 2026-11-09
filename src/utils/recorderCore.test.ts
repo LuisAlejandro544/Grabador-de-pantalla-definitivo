@@ -25,6 +25,7 @@ import {
   validateAppPackageName,
   getShaderPipelineCapabilities,
   getGoStreamingEngineSpecs,
+  getRustStreamingEngineSpecs,
   detectStorageTechnology,
   calculateOptimalThreadAffinity,
   calculateSavingProgress,
@@ -34,7 +35,9 @@ import {
   MAX_SAFE_PHONE_BITRATE_MBPS,
   MAX_EXTREME_HARDWARE_BITRATE_MBPS,
   getBitrateProfile,
-  preserveBitrateOnResolutionChange
+  preserveBitrateOnResolutionChange,
+  getRustIntegratedLibraries,
+  getStreamingEngineComparison
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -346,12 +349,14 @@ test('getShaderPipelineCapabilities provides GLSL and SPIR-V specs', () => {
   assert.ok(effectIds.includes('gaming_color_boost'));
 });
 
-test('getGoStreamingEngineSpecs defines RTMP and SRT streaming specs', () => {
-  const specs = getGoStreamingEngineSpecs();
-  assert.match(specs.engine, /Go/);
+test('getRustStreamingEngineSpecs defines RTMP and SRT streaming specs for Rust', () => {
+  const specs = getRustStreamingEngineSpecs();
+  assert.match(specs.engine, /Rust/);
   assert.ok(specs.protocols.includes('RTMP'));
   assert.ok(specs.protocols.includes('SRT'));
   assert.equal(specs.zeroCopyNalDispatch, true);
+  assert.equal(specs.zeroGarbageCollection, true);
+  assert.equal(specs.nativeModule, 'streamer.rs');
   assert.equal(specs.queueCapacity, 1024);
   assert.equal(specs.ringBufferBytes, 4 * 1024 * 1024);
   assert.ok(specs.crossPlatformAbis.includes('arm64-v8a'));
@@ -553,4 +558,40 @@ test('preserveBitrateOnResolutionChange ensures resolution changes do not affect
   assert.equal(preserved50, 50, 'El bitrate personalizado de 50 Mbps debe conservarse intacto al cambiar resolución');
 });
 
+test('getRustIntegratedLibraries exposes oboe, yuvutils-rs and glow specifications', () => {
+  const libs = getRustIntegratedLibraries();
+  assert.equal(libs.length, 3);
 
+  const oboe = libs.find(l => l.crate === 'oboe');
+  assert.ok(oboe !== undefined);
+  assert.equal(oboe?.category, 'audio');
+  assert.equal(oboe?.license, 'Apache-2.0');
+  assert.equal(oboe?.nativeModule, 'audio_oboe.rs');
+
+  const yuv = libs.find(l => l.crate === 'yuvutils-rs');
+  assert.ok(yuv !== undefined);
+  assert.equal(yuv?.category, 'color');
+  assert.equal(yuv?.simdNeomSupported, true);
+  assert.equal(yuv?.nativeModule, 'color_yuv.rs');
+
+  const glow = libs.find(l => l.crate === 'glow');
+  assert.ok(glow !== undefined);
+  assert.equal(glow?.category, 'gpu');
+  assert.equal(glow?.nativeModule, 'gpu_glow.rs');
+});
+
+test('getStreamingEngineComparison compares Rust vs Go for on-device and server streaming', () => {
+  const comparison = getStreamingEngineComparison();
+  assert.equal(comparison.recommendationOnDevice, 'Rust');
+  assert.equal(comparison.recommendationServer, 'Go');
+  assert.equal(comparison.items.length, 2);
+
+  const rustItem = comparison.items.find(i => i.language === 'Rust');
+  assert.ok(rustItem !== undefined);
+  assert.ok(rustItem?.memoryFootprintMb.includes('< 10 MB'));
+  assert.ok(rustItem?.onDeviceClientVerdict.includes('RECOMENDADO'));
+
+  const goItem = comparison.items.find(i => i.language === 'Go');
+  assert.ok(goItem !== undefined);
+  assert.ok(goItem?.serverRelayVerdict.includes('RECOMENDADO'));
+});

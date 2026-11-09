@@ -2149,24 +2149,22 @@ private fun EngineSettingsSubScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader(
-            title = "Motor Nativo por Hardware",
-            description = "VeloRec incorpora una arquitectura con dos motores nativos independientes en NDK que eliminan por completo el Garbage Collector de la JVM de Android.",
+            title = "Arquitectura Nativa NDK",
+            description = "VeloRec utiliza Rust (Edition 2024) como motor exclusivo de captura por hardware Zero-Copy (sin GC ni cierres por LMK) y C++23 para aceleración de Shaders GPU y Libyuv.",
             accentColor = accentColor,
             onBack = onBack
         )
 
-        // C++23
-        val isCppSelected = selectedEngine == "cpp23"
+        // Rust 2024 (Motor Principal de Captura)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .clickable(enabled = !isRecording) { onEngineChange("cpp23") },
+                .clip(RoundedCornerShape(14.dp)),
             colors = CardDefaults.cardColors(
-                containerColor = if (isCppSelected) primaryColor.copy(alpha = 0.2f) else DarkSurface
+                containerColor = WarningAmber.copy(alpha = 0.2f)
             ),
             shape = RoundedCornerShape(14.dp),
-            border = if (isCppSelected) BorderStroke(1.5.dp, primaryColor) else BorderStroke(1.dp, Color(0xFF334155).copy(alpha = 0.4f))
+            border = BorderStroke(1.5.dp, WarningAmber)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -2175,36 +2173,32 @@ private fun EngineSettingsSubScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "⚡ Motor C++23 (AMediaCodec NDK)",
+                        text = "🦀 Motor Rust (Edition 2024) — ACTIVO",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = if (isCppSelected) accentColor else Color.White
+                        color = WarningAmber
                     )
-                    if (isCppSelected) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = primaryColor, modifier = Modifier.size(20.dp))
-                    }
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(20.dp))
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Acceso directo a AMediaCodec e InputSurface mediante el Android NDK con estándar C++23 (-std=c++23). Emplea std::expected para manejo de errores de coste cero y std::jthread cooperativo. Latencia promedio: ~3.2 ms por cuadro.",
+                    text = "Motor principal y exclusivo de grabación de pantalla. Garantía matemática de seguridad en memoria sin recolector de basura (Zero GC). Escribe directamente a AMediaMuxer del NDK con canales multihilo atómicos, inmune a cierres en segundo plano del sistema operativo.",
                     fontSize = 11.5.sp,
-                    color = Color(0xFF94A3B8)
+                    color = Color(0xFFCBD5E1)
                 )
             }
         }
 
-        // Rust 2024
-        val isRustSelected = selectedEngine == "rust2024"
+        // C++23 (Tubería de Shaders GPU y Procesamiento de Color)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .clickable(enabled = !isRecording) { onEngineChange("rust2024") },
+                .clip(RoundedCornerShape(14.dp)),
             colors = CardDefaults.cardColors(
-                containerColor = if (isRustSelected) WarningAmber.copy(alpha = 0.2f) else DarkSurface
+                containerColor = DarkSurface
             ),
             shape = RoundedCornerShape(14.dp),
-            border = if (isRustSelected) BorderStroke(1.5.dp, WarningAmber) else BorderStroke(1.dp, Color(0xFF334155).copy(alpha = 0.4f))
+            border = BorderStroke(1.dp, Color(0xFF334155).copy(alpha = 0.4f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -2213,18 +2207,15 @@ private fun EngineSettingsSubScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🦀 Motor Rust (Edition 2024)",
+                        text = "⚡ Pipeline C++23 (Shaders GPU & Libyuv)",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = if (isRustSelected) WarningAmber else Color.White
+                        color = accentColor
                     )
-                    if (isRustSelected) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(20.dp))
-                    }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Garantía matemática de seguridad en memoria sin recolector de basura (Zero GC). Canales multihilo atómicos con crossbeam-channel y ausencia total de condiciones de carrera (Data Races).",
+                    text = "Aceleración gráfica en C++23 con GLSL ES 3.20 y SPIR-V Vulkan (GpuShaderPipeline) para FaceCam circular antialiased, Chroma Key en GPU, Gaming Color Boost y conversión ultrarrápida de color con Google libyuv.",
                     fontSize = 11.5.sp,
                     color = Color(0xFF94A3B8)
                 )

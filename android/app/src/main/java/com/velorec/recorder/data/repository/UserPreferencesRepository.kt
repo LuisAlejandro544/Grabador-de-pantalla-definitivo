@@ -52,14 +52,14 @@ object UserPreferencesRepository {
     }
 
     // =========================================================================
-    // MOTOR NATIVO (C++23 vs Rust 2024)
+    // MOTOR NATIVO (Rust Edition 2024 como núcleo principal)
     // =========================================================================
     fun saveEngine(context: Context, engine: String) {
         getPrefs(context).edit().putString(KEY_ENGINE, engine).apply()
     }
 
     fun loadEngine(context: Context): String {
-        return getPrefs(context).getString(KEY_ENGINE, "cpp23") ?: "cpp23"
+        return getPrefs(context).getString(KEY_ENGINE, "rust2024") ?: "rust2024"
     }
 
     // =========================================================================
