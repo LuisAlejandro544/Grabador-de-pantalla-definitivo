@@ -436,10 +436,12 @@ class ScreenRecordService : Service() {
         updateNotification(isPaused = true)
         audioEngine?.pause()
         serviceScope.launch(Dispatchers.IO) {
-            if (activeEngine == "rust2024") {
-                nativePauseRustEncoding()
-            } else {
-                nativePauseCppEncoding()
+            try {
+                if (isNativeEncoderStarted) {
+                    nativePauseRustEncoding()
+                }
+            } catch (e: Exception) {
+                Log.e("ScreenRecordService", "Error al pausar motor de codificación nativo: ${e.message}", e)
             }
         }
     }
@@ -450,10 +452,12 @@ class ScreenRecordService : Service() {
         updateNotification(isPaused = false)
         audioEngine?.resume()
         serviceScope.launch(Dispatchers.IO) {
-            if (activeEngine == "rust2024") {
-                nativeResumeRustEncoding()
-            } else {
-                nativeResumeCppEncoding()
+            try {
+                if (isNativeEncoderStarted) {
+                    nativeResumeRustEncoding()
+                }
+            } catch (e: Exception) {
+                Log.e("ScreenRecordService", "Error al reanudar motor de codificación nativo: ${e.message}", e)
             }
         }
     }
