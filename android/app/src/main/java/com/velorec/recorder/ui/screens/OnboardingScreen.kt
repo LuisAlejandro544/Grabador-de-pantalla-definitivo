@@ -48,8 +48,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,12 +61,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.velorec.recorder.ui.theme.DarkBackground
 import com.velorec.recorder.ui.theme.DarkCard
 import com.velorec.recorder.ui.theme.DarkSurface
@@ -92,21 +97,41 @@ fun OnboardingScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var currentPage by remember { mutableIntStateOf(0) }
     val totalPages = 4
 
-    val audioGranted = ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.RECORD_AUDIO
-    ) == PackageManager.PERMISSION_GRANTED
-
-    val notificationsGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    fun checkAudioPermission(): Boolean =
         ContextCompat.checkSelfPermission(
             context,
-            Manifest.permission.POST_NOTIFICATIONS
+            Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
-    } else {
-        true
+
+    fun checkNotificationsPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
+    var audioGranted by remember { mutableStateOf(checkAudioPermission()) }
+    var notificationsGranted by remember { mutableStateOf(checkNotificationsPermission()) }
+
+    // Reevaluar permisos automáticamente al volver del diálogo del sistema (ON_RESUME)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                audioGranted = checkAudioPermission()
+                notificationsGranted = checkNotificationsPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     Surface(

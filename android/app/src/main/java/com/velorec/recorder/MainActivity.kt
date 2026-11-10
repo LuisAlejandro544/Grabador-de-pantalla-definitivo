@@ -178,7 +178,19 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Launcher para permisos de micrófono y notificaciones
+                // Launcher exclusivo para permisos del Onboarding (NO lanza MediaProjection)
+                val onboardingPermissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestMultiplePermissions()
+                ) { permissions ->
+                    val allGranted = permissions.values.all { it }
+                    if (allGranted) {
+                        Toast.makeText(this, "¡Permisos concedidos!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "Algunos permisos quedaron pendientes", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                // Launcher para permisos antes de iniciar grabación (SÍ continúa hacia MediaProjection)
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions()
                 ) { permissions ->
@@ -290,7 +302,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         if (permissionsToRequest.isNotEmpty()) {
-                            permissionLauncher.launch(permissionsToRequest.toTypedArray())
+                            onboardingPermissionLauncher.launch(permissionsToRequest.toTypedArray())
                         } else {
                             Toast.makeText(this, "¡Permisos ya concedidos!", Toast.LENGTH_SHORT).show()
                         }

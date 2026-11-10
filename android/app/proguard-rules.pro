@@ -21,6 +21,10 @@
     native <methods>;
 }
 
+-keep class com.velorec.recorder.ScreenRecordService$Companion {
+    public *;
+}
+
 # 3. Modelos de datos serializados y Server-Driven UI
 -keep class com.velorec.recorder.data.model.** { *; }
 

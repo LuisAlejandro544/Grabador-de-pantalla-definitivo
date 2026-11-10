@@ -30,12 +30,19 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Soporte completo para arquitecturas móviles de 64 y 32 bits (configurable mediante -PtargetAbi)
+        // 'mobile' empaqueta únicamente arm64-v8a y armeabi-v7a (descarta x86_64 de PC/emulador)
         val targetAbiProperty = project.findProperty("targetAbi") as? String
         ndk {
-            if (!targetAbiProperty.isNullOrBlank() && targetAbiProperty != "all") {
-                abiFilters.add(targetAbiProperty)
-            } else {
-                abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
+            when {
+                targetAbiProperty == "mobile" -> {
+                    abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
+                }
+                !targetAbiProperty.isNullOrBlank() && targetAbiProperty != "all" -> {
+                    abiFilters.add(targetAbiProperty)
+                }
+                else -> {
+                    abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
+                }
             }
         }
 
@@ -43,7 +50,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments(
-                    "-DANDROID_STL=c++_static",
+                    "-DANDROID_STL=c++_shared",
                     "-DCMAKE_CXX_STANDARD=23",
                     "-DANDROID_TOOLCHAIN=clang"
                 )
@@ -188,10 +195,13 @@ tasks.register("cargoNdkBuild") {
 
     doLast {
         val targetAbiProperty = project.findProperty("targetAbi") as? String
-        val targets = if (!targetAbiProperty.isNullOrBlank() && targetAbiProperty != "all") {
-            listOf(targetAbiProperty)
-        } else {
-            listOf(
+        val targets = when {
+            targetAbiProperty == "mobile" -> listOf(
+                "arm64-v8a",     // 64-bit ARM
+                "armeabi-v7a"    // 32-bit ARM
+            )
+            !targetAbiProperty.isNullOrBlank() && targetAbiProperty != "all" -> listOf(targetAbiProperty)
+            else -> listOf(
                 "arm64-v8a",     // 64-bit ARM
                 "armeabi-v7a",   // 32-bit ARM
                 "x86_64"         // Emulador x86_64

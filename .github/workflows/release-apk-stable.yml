@@ -61,10 +61,10 @@ jobs:
           yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       # 5. Configurar Toolchain de Rust (Edition 2024 / 1.85+) y targets de Android (32 y 64 bits)
-      - name: 🦀 Instalar Rust Toolchain y Targets Móviles
+      - name: 🦀 Instalar Rust Toolchain y Targets Móviles (32 y 64 bits)
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi
 
       - name: 🛠️ Instalar cargo-ndk
         run: |
@@ -136,36 +136,56 @@ jobs:
             chmod +x gradlew
           fi
 
-      # 10. Compilar bibliotecas nativas de Rust 2024 (Zero-Copy) para todas las arquitecturas móviles
-      - name: 🦀 Compilar bibliotecas nativas Rust (arm64-v8a + armeabi-v7a + x86_64)
-        env:
-          RUSTFLAGS: "-C link-arg=-Wl,--gc-sections -C link-arg=-Wl,--icf=all"
+      # 10. Compilar bibliotecas nativas de Rust 2024 (Zero-Copy) solo para arquitecturas móviles (32 y 64 bits)
+      - name: 🦀 Compilar bibliotecas nativas Rust (arm64-v8a + armeabi-v7a)
         run: |
           mkdir -p android/app/src/main/jniLibs
           cd rust
-          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 --platform 26 -o ../android/app/src/main/jniLibs build --release
+          cargo ndk -t arm64-v8a -t armeabi-v7a --platform 26 -o ../android/app/src/main/jniLibs build --release
 
           echo "🔍 Verificando presencia de libvelorec_rust2024.so..."
           ls -lR ../android/app/src/main/jniLibs
 
-          for target_abi in "arm64-v8a" "armeabi-v7a" "x86_64"; do
+          for target_abi in "arm64-v8a" "armeabi-v7a"; do
             SO_FILE="../android/app/src/main/jniLibs/$target_abi/libvelorec_rust2024.so"
             if [ ! -s "$SO_FILE" ]; then
               echo "❌ ERROR FATAL: No se generó la biblioteca $SO_FILE"
               exit 1
             fi
             echo "✅ Confirmada: $SO_FILE ($(wc -c < "$SO_FILE") bytes)"
+
+            # Empaquetar libc++_shared.so para la arquitectura móvil
+            NDK_TRIPLE=""
+            case "$target_abi" in
+              "arm64-v8a") NDK_TRIPLE="aarch64-linux-android" ;;
+              "armeabi-v7a") NDK_TRIPLE="arm-linux-androideabi" ;;
+            esac
+
+            LIBCXX_PATH=$(find "$ANDROID_NDK_HOME" -name "libc++_shared.so" 2>/dev/null | grep "$NDK_TRIPLE" | head -n 1)
+            if [ -n "$LIBCXX_PATH" ] && [ -f "$LIBCXX_PATH" ]; then
+              cp "$LIBCXX_PATH" "../android/app/src/main/jniLibs/$target_abi/libc++_shared.so"
+              echo "✅ Empaquetada libc++_shared.so ($target_abi) desde: $LIBCXX_PATH"
+            else
+              echo "❌ ERROR FATAL: No se encontró libc++_shared.so para $target_abi"
+              exit 1
+            fi
           done
 
-      # 11. Compilar el APK de Release Oficial con R8, ProGuard y Firma Real
+      # 11. Generar iconos PNG del launcher en todas las densidades (solo en tiempo de build)
+      - name: 🎨 Generar iconos PNG del launcher desde XML
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin
+          python3 scripts/generate_launcher_pngs.py
+
+      # 12. Compilar el APK de Release Oficial con R8, ProGuard y Firma Real
       # - isMinifyEnabled = true (Elimina código no usado)
       # - isShrinkResources = true (Elimina recursos no usados)
-      # - Logcat y consola de Debug erradicadas
+      # - -PtargetAbi=mobile (Solo arm64-v8a y armeabi-v7a, descarta x86_64 de PC)
       - name: 🚀 Compilar APK Release Optimizado con Gradle
         run: |
           cd android
           ./gradlew assembleRelease \
-            -PtargetAbi=all \
+            -PtargetAbi=mobile \
             -PRELEASE_STORE_FILE=release.keystore \
             -PRELEASE_STORE_PASSWORD="${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
             -PRELEASE_KEY_ALIAS="${{ secrets.RELEASE_KEY_ALIAS }}" \

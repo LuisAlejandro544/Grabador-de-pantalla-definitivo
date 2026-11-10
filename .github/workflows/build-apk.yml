@@ -184,7 +184,13 @@ jobs:
             fi
           done
 
-      # 9. Compilar el APK Debug
+      # 9. Generar iconos PNG del launcher en todas las densidades (solo en tiempo de build)
+      - name: 🎨 Generar iconos PNG del launcher desde XML
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin
+          python3 scripts/generate_launcher_pngs.py
+
+      # 10. Compilar el APK Debug
       # Compila las vistas nativas en Kotlin Jetpack Compose (Material 3),
       # las bibliotecas C++23 con CMake/NDK y Rust 2024 con Cargo NDK para la arquitectura seleccionada.
       - name: 🚀 Compilar APK Debug con Gradle
