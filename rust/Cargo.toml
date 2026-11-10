@@ -30,8 +30,8 @@ android_logger = "0.14.1"
 # =========================================================================
 
 # 1. Google Oboe para captura de audio de ultra baja latencia (<10 ms, AAudio/OpenSL ES)
-# 'shared-stdcxx' enlaza dinámicamente con libc++_shared.so resolviendo __gxx_personality_v0 y unificando el STL de C++
-oboe = { version = "0.6.1", default-features = false, features = ["shared-stdcxx"] }
+# Sin 'shared-stdcxx' enlaza C++ STL estáticamente y elimina la dependencia de libc++_shared.so
+oboe = { version = "0.6.1", default-features = false }
 
 # 2. Conversión de color YUV a RGB con aceleración SIMD ARM NEON en Rust puro
 yuvutils-rs = { version = "0.7.0", default-features = false, features = ["fast_mode"] }
@@ -44,7 +44,13 @@ opt-level = 1
 panic = "abort"
 
 [profile.release]
-opt-level = 3
+opt-level = "s"
+lto = true
+codegen-units = 1
 panic = "abort"
 strip = true
+
+# Mantener optimización máxima de velocidad SIMD ARM NEON en conversión de color YUV
+[profile.release.package.yuvutils-rs]
+opt-level = 3
 

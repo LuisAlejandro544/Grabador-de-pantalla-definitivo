@@ -358,18 +358,20 @@ fun SettingsMainMenu(
             onClick = { onNavigateTo(SettingsSubScreen.ENGINE) }
         )
 
-        // Acceso directo a VeloRec Inspector (Crashes, Logcat y Diagnóstico)
-        val context = LocalContext.current
-        SettingsNavigationRow(
-            icon = Icons.Default.BugReport,
-            title = "VeloRec Inspector (Diagnóstico)",
-            subtitle = "Logcat en tiempo real, caídas (crashes) y telemetría de Rust",
-            badgeText = "🔍 Debug",
-            accentColor = Color(0xFFC084FC),
-            onClick = {
-                context.startActivity(Intent(context, com.velorec.recorder.debug.DebugConsoleActivity::class.java))
-            }
-        )
+        // Acceso directo a VeloRec Inspector (Exclusivo para compilaciones Debug)
+        if (com.velorec.recorder.BuildConfig.DEBUG) {
+            val context = LocalContext.current
+            SettingsNavigationRow(
+                icon = Icons.Default.BugReport,
+                title = "VeloRec Inspector (Diagnóstico)",
+                subtitle = "Logcat en tiempo real, caídas (crashes) y telemetría de Rust",
+                badgeText = "🔍 Debug",
+                accentColor = Color(0xFFC084FC),
+                onClick = {
+                    com.velorec.recorder.debug.DebugInspectorLauncher.open(context)
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
     }

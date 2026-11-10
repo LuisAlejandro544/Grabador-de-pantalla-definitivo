@@ -33,6 +33,10 @@ import java.net.URL
 object RemoteConfigRepository {
 
     const val CURRENT_APP_VERSION = "1.0.0-E"
+    private const val REPO_RELEASES_URL =
+        "https://api.github.com/repos/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases/latest"
+    private const val RAW_FALLBACK_URL =
+        "https://raw.githubusercontent.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/main/app_config.json"
 
     /**
      * Compara jerárquicamente dos cadenas de versión semántica (ej: 'v1.0.1-E' vs '1.0.0-E').

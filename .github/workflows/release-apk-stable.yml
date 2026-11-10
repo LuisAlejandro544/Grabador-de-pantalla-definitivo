@@ -138,6 +138,8 @@ jobs:
 
       # 10. Compilar bibliotecas nativas de Rust 2024 (Zero-Copy) para todas las arquitecturas móviles
       - name: 🦀 Compilar bibliotecas nativas Rust (arm64-v8a + armeabi-v7a + x86_64)
+        env:
+          RUSTFLAGS: "-C link-arg=-Wl,--gc-sections -C link-arg=-Wl,--icf=all"
         run: |
           mkdir -p android/app/src/main/jniLibs
           cd rust
@@ -153,20 +155,6 @@ jobs:
               exit 1
             fi
             echo "✅ Confirmada: $SO_FILE ($(wc -c < "$SO_FILE") bytes)"
-
-            # Empaquetar libc++_shared.so para la arquitectura
-            NDK_TRIPLE=""
-            case "$target_abi" in
-              "arm64-v8a") NDK_TRIPLE="aarch64-linux-android" ;;
-              "armeabi-v7a") NDK_TRIPLE="arm-linux-androideabi" ;;
-              "x86_64") NDK_TRIPLE="x86_64-linux-android" ;;
-            esac
-
-            LIBCXX_PATH=$(find "$ANDROID_NDK_HOME" -name "libc++_shared.so" 2>/dev/null | grep "$NDK_TRIPLE" | head -n 1)
-            if [ -n "$LIBCXX_PATH" ] && [ -f "$LIBCXX_PATH" ]; then
-              cp "$LIBCXX_PATH" "../android/app/src/main/jniLibs/$target_abi/libc++_shared.so"
-              echo "✅ Empaquetada libc++_shared.so ($target_abi) desde: $LIBCXX_PATH"
-            fi
           done
 
       # 11. Compilar el APK de Release Oficial con R8, ProGuard y Firma Real

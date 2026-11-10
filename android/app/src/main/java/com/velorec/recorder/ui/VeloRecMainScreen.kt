@@ -338,7 +338,7 @@ fun VeloRecMainScreen(
                     if (com.velorec.recorder.BuildConfig.DEBUG) {
                         IconButton(
                             onClick = {
-                                context.startActivity(Intent(context, com.velorec.recorder.debug.DebugConsoleActivity::class.java))
+                                com.velorec.recorder.debug.DebugInspectorLauncher.open(context)
                             },
                             modifier = Modifier.padding(end = 4.dp)
                         ) {

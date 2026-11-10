@@ -43,7 +43,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments(
-                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_STL=c++_static",
                     "-DCMAKE_CXX_STANDARD=23",
                     "-DANDROID_TOOLCHAIN=clang"
                 )
