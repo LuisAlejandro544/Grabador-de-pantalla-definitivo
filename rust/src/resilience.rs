@@ -25,9 +25,32 @@ use std::sync::Arc;
 use std::time::Instant;
 use log::{info, warn};
 
-// Declaración externa de malloc_trim para la biblioteca estándar Bionic libc de Android
-unsafe extern "C" {
-    fn malloc_trim(pad: usize) -> libc::c_int;
+/// Compactación de memoria nativa resiliente y 100% compatible con Android Bionic.
+/// En Android Bionic (jemalloc / Scudo), 'malloc_trim' no se exporta estáticamente en libc.so.
+/// Al resolverlo dinámicamente con 'dlsym', se garantiza CERO fallos en 'dlopen', y si
+/// el símbolo no existe, se utiliza 'mallopt(M_PURGE, 0)' de Bionic para purgar páginas sucias al kernel.
+fn try_trim_native_memory() -> bool {
+    unsafe {
+        // 1. Intentar resolver malloc_trim dinámicamente si el entorno lo soporta
+        let sym_trim = libc::dlsym(libc::RTLD_DEFAULT, b"malloc_trim\0".as_ptr() as *const libc::c_char);
+        if !sym_trim.is_null() {
+            type MallocTrimFn = unsafe extern "C" fn(usize) -> libc::c_int;
+            let func: MallocTrimFn = std::mem::transmute(sym_trim);
+            return func(0) != 0;
+        }
+
+        // 2. En Android Bionic estándar (jemalloc / Scudo), purgar páginas usando mallopt(M_PURGE, 0)
+        // En Bionic libc, M_PURGE = -101 (definido en <malloc.h>)
+        let sym_mallopt = libc::dlsym(libc::RTLD_DEFAULT, b"mallopt\0".as_ptr() as *const libc::c_char);
+        if !sym_mallopt.is_null() {
+            type MalloptFn = unsafe extern "C" fn(libc::c_int, libc::c_int) -> libc::c_int;
+            let mallopt_func: MalloptFn = std::mem::transmute(sym_mallopt);
+            const M_PURGE: libc::c_int = -101;
+            return mallopt_func(M_PURGE, 0) != 0;
+        }
+
+        false
+    }
 }
 
 // Constantes de prioridad de E/S para la llamada al sistema ioprio_set en Linux
@@ -101,18 +124,16 @@ impl ResilienceGuardian {
 
     /// Ejecuta una compactación forzada de memoria nativa devolviendo páginas al kernel
     pub fn force_memory_trim(&self) -> bool {
-        unsafe {
-            let res = malloc_trim(0);
-            if res != 0 {
-                self.total_trims.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut lock) = self.last_trim_time.lock() {
-                    *lock = Instant::now();
-                }
-                info!("ResilienceGuardian: malloc_trim ejecutado exitosamente. Páginas liberadas a Linux.");
-                true
-            } else {
-                false
+        let res = try_trim_native_memory();
+        if res {
+            self.total_trims.fetch_add(1, Ordering::Relaxed);
+            if let Ok(mut lock) = self.last_trim_time.lock() {
+                *lock = Instant::now();
             }
+            info!("ResilienceGuardian: Compactación de memoria nativa ejecutada exitosamente. Páginas liberadas a Linux.");
+            true
+        } else {
+            false
         }
     }
 

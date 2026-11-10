@@ -821,6 +821,18 @@ test('diagnoseNdkStlLinkage identifies __gxx_personality_v0 and recommends share
   assert.match(errorDiag.diagnosis, /__gxx_personality_v0/);
   assert.match(errorDiag.actionRequired || '', /shared-stdcxx/);
 
+  // Caso de error con malloc_trim en Android Bionic
+  const mallocTrimDiag = diagnoseNdkStlLinkage({
+    isSharedStdcxxEnabled: true,
+    isLibCxxPreloaded: true,
+    rustLibraryLoaded: false,
+    dlopenErrorMessage: 'dlopen failed: cannot locate symbol "malloc_trim" referenced by ".../lib/arm64-v8a/libvelorec_rust2024.so"'
+  });
+
+  assert.equal(mallocTrimDiag.isResolved, false);
+  assert.match(mallocTrimDiag.diagnosis, /malloc_trim/);
+  assert.match(mallocTrimDiag.actionRequired || '', /dlsym|mallopt/);
+
   // Caso resuelto
   const okDiag = diagnoseNdkStlLinkage({
     isSharedStdcxxEnabled: true,

@@ -1426,6 +1426,14 @@ export function diagnoseNdkStlLinkage(status: {
     };
   }
 
+  if (status.dlopenErrorMessage?.includes('malloc_trim')) {
+    return {
+      isResolved: false,
+      diagnosis: 'Fallo de enlace en tiempo de ejecución: símbolo malloc_trim no encontrado en Bionic libc de Android.',
+      actionRequired: 'Reemplazar llamada estática con resolución dinámica dlsym o mallopt(M_PURGE) en resilience.rs para compatibilidad total con Bionic libc.'
+    };
+  }
+
   return {
     isResolved: false,
     diagnosis: status.dlopenErrorMessage || 'Biblioteca nativa no disponible.',
