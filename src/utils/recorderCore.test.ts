@@ -48,7 +48,8 @@ import {
   getRustResilienceGuardianSpecs,
   parseLogcatLine,
   formatDiagnosticReport,
-  getDebugInspectorSpecs
+  getDebugInspectorSpecs,
+  diagnoseNdkStlLinkage
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -805,5 +806,30 @@ test('getDebugInspectorSpecs defines standalone activity capabilities and leakca
   assert.ok(specs.capabilities.some(c => c.includes('Logcat')));
   assert.ok(specs.capabilities.some(c => c.includes('UncaughtExceptionHandler')));
   assert.ok(specs.capabilities.some(c => c.includes('Markdown')));
+});
+
+test('diagnoseNdkStlLinkage identifies __gxx_personality_v0 and recommends shared-stdcxx solution', () => {
+  // Caso de error como el visto en el dispositivo del usuario
+  const errorDiag = diagnoseNdkStlLinkage({
+    isSharedStdcxxEnabled: false,
+    isLibCxxPreloaded: false,
+    rustLibraryLoaded: false,
+    dlopenErrorMessage: 'dlopen failed: cannot locate symbol "__gxx_personality_v0" referenced by "/data/app/.../libvelorec_rust2024.so"'
+  });
+
+  assert.equal(errorDiag.isResolved, false);
+  assert.match(errorDiag.diagnosis, /__gxx_personality_v0/);
+  assert.match(errorDiag.actionRequired || '', /shared-stdcxx/);
+
+  // Caso resuelto
+  const okDiag = diagnoseNdkStlLinkage({
+    isSharedStdcxxEnabled: true,
+    isLibCxxPreloaded: true,
+    rustLibraryLoaded: true,
+    dlopenErrorMessage: null
+  });
+
+  assert.equal(okDiag.isResolved, true);
+  assert.match(okDiag.diagnosis, /libc\+\+_shared\.so/);
 });
 

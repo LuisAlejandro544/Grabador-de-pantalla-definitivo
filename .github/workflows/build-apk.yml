@@ -168,6 +168,20 @@ jobs:
               exit 1
             fi
             echo "✅ Confirmada: $SO_FILE ($(wc -c < "$SO_FILE") bytes)"
+
+            # Garantizar la presencia física de libc++_shared.so para la arquitectura
+            NDK_TRIPLE=""
+            case "$target_abi" in
+              "arm64-v8a") NDK_TRIPLE="aarch64-linux-android" ;;
+              "armeabi-v7a") NDK_TRIPLE="arm-linux-androideabi" ;;
+              "x86_64") NDK_TRIPLE="x86_64-linux-android" ;;
+            esac
+
+            LIBCXX_PATH=$(find "$ANDROID_NDK_HOME" -name "libc++_shared.so" 2>/dev/null | grep "$NDK_TRIPLE" | head -n 1)
+            if [ -n "$LIBCXX_PATH" ] && [ -f "$LIBCXX_PATH" ]; then
+              cp "$LIBCXX_PATH" "../android/app/src/main/jniLibs/$target_abi/libc++_shared.so"
+              echo "✅ Empaquetada libc++_shared.so ($target_abi) desde: $LIBCXX_PATH"
+            fi
           done
 
       # 9. Compilar el APK Debug

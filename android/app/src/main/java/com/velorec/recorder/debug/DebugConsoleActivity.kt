@@ -206,8 +206,11 @@ fun DebugConsoleScreen(
                             tint = DefaultAccentCyan
                         )
                     }
-                    // Botón refrescar
-                    IconButton(onClick = { refreshLogs() }) {
+                    // Botón refrescar (recarga registros y reintenta enlace de librerías nativas)
+                    IconButton(onClick = {
+                        ScreenRecordService.loadNativeLibraries()
+                        refreshLogs()
+                    }) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Recargar Logs",

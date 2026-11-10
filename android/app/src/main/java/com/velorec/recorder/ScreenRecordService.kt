@@ -166,8 +166,24 @@ class ScreenRecordService : Service() {
             private set
 
         // Carga dinámica independiente de bibliotecas nativas C++23 y Rust 2024
-        // Se protegen de forma aislada para que la ausencia de una no impida la carga de la otra
+        // Se precarga libc++_shared para resolver dependencias de C++ STL (__gxx_personality_v0 de Oboe)
         init {
+            loadNativeLibraries()
+        }
+
+        /**
+         * Carga o recarga las bibliotecas nativas de forma segura y devuelve si Rust 2024 está disponible.
+         */
+        fun loadNativeLibraries(): Boolean {
+            // 1. Precarga de la biblioteca C++ STL estándar de Android
+            try {
+                System.loadLibrary("c++_shared")
+                Log.i("ScreenRecordService", "Biblioteca C++ STL (c++_shared) precargada con éxito")
+            } catch (t: Throwable) {
+                Log.w("ScreenRecordService", "Aviso: c++_shared precarga (puede estar integrada por el sistema): ${t.message}")
+            }
+
+            // 2. Carga de la tubería de shaders GPU en C++23
             try {
                 System.loadLibrary("velorec_cpp23")
                 isCppLoaded = true
@@ -176,6 +192,8 @@ class ScreenRecordService : Service() {
                 isCppLoaded = false
                 Log.w("ScreenRecordService", "Aviso: velorec_cpp23 no disponible: ${t.message}")
             }
+
+            // 3. Carga del motor central en Rust 2024 (cero copia, anti-LMK)
             try {
                 System.loadLibrary("velorec_rust2024")
                 isRustLoaded = true
@@ -186,6 +204,8 @@ class ScreenRecordService : Service() {
                 rustLoadError = t.localizedMessage ?: t.message
                 Log.e("ScreenRecordService", "Aviso: velorec_rust2024 no disponible en este dispositivo: ${t.message}")
             }
+
+            return isRustLoaded
         }
     }
 

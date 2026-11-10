@@ -1396,3 +1396,40 @@ export function getDebugInspectorSpecs() {
   };
 }
 
+/**
+ * Diagnostica y valida la resolución de dependencias NDK y STL (libc++_shared.so).
+ * Comprueba que las dependencias requeridas por Oboe C++ (__gxx_personality_v0) estén
+ * satisfechas mediante shared-stdcxx y la precarga ordenada de librerías nativas.
+ */
+export function diagnoseNdkStlLinkage(status: {
+  isSharedStdcxxEnabled: boolean;
+  isLibCxxPreloaded: boolean;
+  rustLibraryLoaded: boolean;
+  dlopenErrorMessage?: string | null;
+}): {
+  isResolved: boolean;
+  diagnosis: string;
+  actionRequired?: string;
+} {
+  if (status.rustLibraryLoaded) {
+    return {
+      isResolved: true,
+      diagnosis: 'Motor Rust 2024 cargado correctamente con STL de C++ compartido (libc++_shared.so).'
+    };
+  }
+
+  if (status.dlopenErrorMessage?.includes('__gxx_personality_v0')) {
+    return {
+      isResolved: false,
+      diagnosis: 'Fallo de enlace en tiempo de ejecución: __gxx_personality_v0 no encontrado. Oboe requiere libc++_shared.so con el feature shared-stdcxx.',
+      actionRequired: 'Asegurar features = ["shared-stdcxx"] en Cargo.toml, enlazar c++_shared en build.rs y precargar System.loadLibrary("c++_shared").'
+    };
+  }
+
+  return {
+    isResolved: false,
+    diagnosis: status.dlopenErrorMessage || 'Biblioteca nativa no disponible.',
+    actionRequired: 'Revisar compilación con cargo-ndk y verificar inclusión en jniLibs.'
+  };
+}
+

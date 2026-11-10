@@ -30,13 +30,18 @@ android_logger = "0.14.1"
 # =========================================================================
 
 # 1. Google Oboe para captura de audio de ultra baja latencia (<10 ms, AAudio/OpenSL ES)
-oboe = { version = "0.6.1", default-features = false }
+# 'shared-stdcxx' enlaza dinámicamente con libc++_shared.so resolviendo __gxx_personality_v0 y unificando el STL de C++
+oboe = { version = "0.6.1", default-features = false, features = ["shared-stdcxx"] }
 
 # 2. Conversión de color YUV a RGB con aceleración SIMD ARM NEON en Rust puro
 yuvutils-rs = { version = "0.7.0", default-features = false, features = ["fast_mode"] }
 
 # 3. GL on Whatever (Glow) para sombreadores GPU OpenGL ES 3.20 multiplataforma
 glow = { version = "0.16.0", default-features = false }
+
+[profile.dev]
+opt-level = 1
+panic = "abort"
 
 [profile.release]
 opt-level = 3
