@@ -21,6 +21,7 @@ import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -30,6 +31,8 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import android.content.Intent
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -290,7 +293,29 @@ fun VeloRecMainScreen(
                     }
                 },
                 actions = {
-                    // Badge nativo del motor con selector rápido interactivo
+                    // Acceso directo a VeloRec Inspector (Logcat, crashes y telemetría de Rust)
+                    IconButton(
+                        onClick = {
+                            context.startActivity(Intent(context, com.velorec.recorder.debug.DebugConsoleActivity::class.java))
+                        },
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF3B0764)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BugReport,
+                                contentDescription = "Consola de Diagnóstico (VeloRec Inspector)",
+                                tint = Color(0xFFC084FC),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
                     // Badge nativo del motor exclusivo Rust 2024
                     Surface(
                         color = Color(0xFF451A03),

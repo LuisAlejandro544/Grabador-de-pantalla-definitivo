@@ -153,20 +153,38 @@ class ScreenRecordService : Service() {
             _countdownRemainingFlow.value = countdownRemaining
         }
 
+        @Volatile
+        var isRustLoaded: Boolean = false
+            private set
+
+        @Volatile
+        var isCppLoaded: Boolean = false
+            private set
+
+        @Volatile
+        var rustLoadError: String? = null
+            private set
+
         // Carga dinámica independiente de bibliotecas nativas C++23 y Rust 2024
         // Se protegen de forma aislada para que la ausencia de una no impida la carga de la otra
         init {
             try {
                 System.loadLibrary("velorec_cpp23")
+                isCppLoaded = true
                 Log.i("ScreenRecordService", "Biblioteca C++23 (velorec_cpp23) cargada con éxito")
             } catch (t: Throwable) {
+                isCppLoaded = false
                 Log.w("ScreenRecordService", "Aviso: velorec_cpp23 no disponible: ${t.message}")
             }
             try {
                 System.loadLibrary("velorec_rust2024")
+                isRustLoaded = true
+                rustLoadError = null
                 Log.i("ScreenRecordService", "Biblioteca Rust 2024 (velorec_rust2024) cargada con éxito")
             } catch (t: Throwable) {
-                Log.w("ScreenRecordService", "Aviso: velorec_rust2024 no disponible: ${t.message}")
+                isRustLoaded = false
+                rustLoadError = t.localizedMessage ?: t.message
+                Log.e("ScreenRecordService", "Aviso: velorec_rust2024 no disponible en este dispositivo: ${t.message}")
             }
         }
     }
@@ -338,16 +356,45 @@ class ScreenRecordService : Service() {
                 tempVideoFilePath = null
                 tempAudioFilePath = null
 
+                // Comprobar disponibilidad de la biblioteca nativa Rust antes de invocar JNI
+                if (!isRustLoaded) {
+                    val supportedAbis = android.os.Build.SUPPORTED_ABIS?.joinToString(", ") ?: "Desconocida"
+                    val detail = rustLoadError ?: "Biblioteca libvelorec_rust2024.so no encontrada en este paquete"
+                    Log.e("ScreenRecordService", "Rust no disponible para arquitectura ($supportedAbis): $detail")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            applicationContext,
+                            "Error: Motor Rust no disponible para tu arquitectura ($supportedAbis). $detail. Recompila seleccionando 'Universal' en GitHub Actions.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    handleStopRecording()
+                    return@launch
+                }
+
                 // Inicializar motor nativo en Rust 2024 y obtener la Surface de hardware (Zero-Copy)
-                val nativeSurface: Surface = nativeInitRustRecorder(
-                    finalOutputFile.absolutePath,
-                    width,
-                    height,
-                    fps,
-                    bitrate,
-                    codec,
-                    audio
-                )
+                val nativeSurface: Surface = try {
+                    nativeInitRustRecorder(
+                        finalOutputFile.absolutePath,
+                        width,
+                        height,
+                        fps,
+                        bitrate,
+                        codec,
+                        audio
+                    )
+                } catch (linkErr: UnsatisfiedLinkError) {
+                    Log.e("ScreenRecordService", "UnsatisfiedLinkError en nativeInitRustRecorder: ${linkErr.message}", linkErr)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            applicationContext,
+                            "Error de enlace nativo en Rust: ${linkErr.localizedMessage}. Verifica que el APK coincida con la arquitectura de tu teléfono.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    handleStopRecording()
+                    return@launch
+                }
 
                 isNativeEncoderStarted = true
 

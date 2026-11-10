@@ -1,8 +1,8 @@
 //! jni_bindings.rs - Firmas JNI de Interoperabilidad con Android Kotlin (ScreenRecordService)
 //!
 //! ¿QUÉ HACE ESTE ARCHIVO?
-//! 1. Expone los símbolos nativos C ('extern "system"') requeridos por la JVM de Android.
-//! 2. Cumple estrictamente con Rust Edition 2024 (RFC 3325) usando '#[unsafe(no_mangle)]'.
+//! 1. Expone los símbolos nativos C ('extern "C"') requeridos por la JVM de Android.
+//! 2. Garantiza enlace estricto sin mangleo ('#[no_mangle]') para resolución inmediata en dlsym.
 //! 3. Gestiona la instancia global 'GLOBAL_RUST_ENGINE' protegida por 'Mutex' para acceso thread-safe.
 
 use std::sync::Mutex;
@@ -17,8 +17,8 @@ use crate::encoder::{RustRecorderConfig, RustRecorderEngine};
 // Instancia global del motor Rust gestionada de forma thread-safe con Mutex
 pub static GLOBAL_RUST_ENGINE: Mutex<Option<RustRecorderEngine>> = Mutex::new(None);
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeInitRustRecorder<'local>(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeInitRustRecorder<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     path: JString<'local>,
@@ -76,8 +76,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeStartRustEncoding(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeStartRustEncoding(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
@@ -90,8 +90,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativePauseRustEncoding(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativePauseRustEncoding(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
@@ -102,8 +102,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeResumeRustEncoding(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeResumeRustEncoding(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
@@ -114,8 +114,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeStopRustEncoding(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeStopRustEncoding(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
@@ -126,8 +126,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeConfigureRustAudioTrack<'local>(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeConfigureRustAudioTrack<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
     sample_rate: jint,
@@ -154,8 +154,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeWriteRustAudioSample<'local>(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeWriteRustAudioSample<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
     byte_buffer: jobject,
@@ -191,8 +191,8 @@ fn get_or_init_guardian<'a>() -> std::sync::MutexGuard<'a, Option<crate::resilie
     lock
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeForceMemoryTrim(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeForceMemoryTrim(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) -> jint {
@@ -204,8 +204,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeInstallEmergencySignalHandler(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeInstallEmergencySignalHandler(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) {
@@ -215,8 +215,8 @@ pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nati
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn Java_com_velorec_recorder_ScreenRecordService_nativeGetResilienceTelemetry<'local>(
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_velorec_recorder_ScreenRecordService_nativeGetResilienceTelemetry<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jni::sys::jstring {

@@ -148,6 +148,24 @@ jobs:
           cd rust
           cargo ndk $CARGO_TARGETS --platform 26 -o ../android/app/src/main/jniLibs build --release
 
+          echo "🔍 Verificando presencia de libvelorec_rust2024.so en jniLibs..."
+          ls -lR ../android/app/src/main/jniLibs
+          
+          # Verificar que cada arquitectura solicitada contenga el archivo .so no vacío
+          TARGET_LIST=()
+          if [[ "$CARGO_TARGETS" =~ "arm64-v8a" ]]; then TARGET_LIST+=("arm64-v8a"); fi
+          if [[ "$CARGO_TARGETS" =~ "armeabi-v7a" ]]; then TARGET_LIST+=("armeabi-v7a"); fi
+          if [[ "$CARGO_TARGETS" =~ "x86_64" ]]; then TARGET_LIST+=("x86_64"); fi
+
+          for target_abi in "${TARGET_LIST[@]}"; do
+            SO_FILE="../android/app/src/main/jniLibs/$target_abi/libvelorec_rust2024.so"
+            if [ ! -s "$SO_FILE" ]; then
+              echo "❌ ERROR FATAL: No se generó la biblioteca $SO_FILE o está vacía."
+              exit 1
+            fi
+            echo "✅ Confirmada: $SO_FILE ($(wc -c < "$SO_FILE") bytes)"
+          done
+
       # 9. Compilar el APK Debug
       # Compila las vistas nativas en Kotlin Jetpack Compose (Material 3),
       # las bibliotecas C++23 con CMake/NDK y Rust 2024 con Cargo NDK para la arquitectura seleccionada.

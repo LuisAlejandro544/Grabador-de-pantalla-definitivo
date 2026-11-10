@@ -101,6 +101,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Inicializar interceptor de caídas, lector de Logcat y diagnóstico de NDK
+        com.velorec.recorder.debug.VeloRecDebugManager.init(applicationContext)
+
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(

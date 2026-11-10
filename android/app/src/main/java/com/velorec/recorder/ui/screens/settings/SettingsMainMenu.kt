@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Mic
@@ -295,6 +296,19 @@ fun SettingsMainMenu(
             badgeText = if (selectedEngine == "rust2024") "🦀 Rust" else "⚡ C++23",
             accentColor = if (selectedEngine == "rust2024") WarningAmber else accentColor,
             onClick = { onNavigateTo(SettingsSubScreen.ENGINE) }
+        )
+
+        // Acceso directo a VeloRec Inspector (Crashes, Logcat y Diagnóstico)
+        val context = LocalContext.current
+        SettingsNavigationRow(
+            icon = Icons.Default.BugReport,
+            title = "VeloRec Inspector (Diagnóstico)",
+            subtitle = "Logcat en tiempo real, caídas (crashes) y telemetría de Rust",
+            badgeText = "🔍 Debug",
+            accentColor = Color(0xFFC084FC),
+            onClick = {
+                context.startActivity(Intent(context, com.velorec.recorder.debug.DebugConsoleActivity::class.java))
+            }
         )
 
         Spacer(modifier = Modifier.height(16.dp))

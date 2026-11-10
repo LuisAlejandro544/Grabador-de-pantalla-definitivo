@@ -45,7 +45,10 @@ import {
   getRustYuvMigrationSpecs,
   parseResilienceTelemetry,
   calculateOomKillRisk,
-  getRustResilienceGuardianSpecs
+  getRustResilienceGuardianSpecs,
+  parseLogcatLine,
+  formatDiagnosticReport,
+  getDebugInspectorSpecs
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -761,3 +764,46 @@ test('getRustResilienceGuardianSpecs exposes anti-LMK and real-time scheduling a
   assert.ok(specs.antiLmkTechniques.some(t => t.includes('SIGTERM')));
   assert.deepEqual(specs.supportedArchitectures, ['arm64-v8a', 'armeabi-v7a', 'x86_64']);
 });
+
+test('parseLogcatLine correctly parses standard Android logcat time format', () => {
+  const line = '11-09 19:14:13.456 E/ScreenRecordService( 14096): Error al iniciar grabación: No implementation found';
+  const parsed = parseLogcatLine(line);
+  assert.ok(parsed !== null);
+  assert.equal(parsed.timestamp, '11-09 19:14:13.456');
+  assert.equal(parsed.level, 'E');
+  assert.equal(parsed.tag, 'ScreenRecordService');
+  assert.match(parsed.message, /No implementation found/);
+
+  // Input inválido o vacío
+  assert.equal(parseLogcatLine(''), null);
+  assert.equal(parseLogcatLine('   '), null);
+});
+
+test('formatDiagnosticReport generates markdown with device, ABIs, and native library status', () => {
+  const report = formatDiagnosticReport({
+    model: 'Xiaomi Poco M5',
+    androidVersion: '14 (API 34)',
+    abis: ['arm64-v8a', 'armeabi-v7a'],
+    rustLoaded: true,
+    cppLoaded: true,
+    recentErrors: ['19:14:13 [ERROR] ScreenRecordService: Codec ok']
+  });
+
+  assert.match(report, /### 📱 Reporte de Diagnóstico VeloRec Studio/);
+  assert.match(report, /Xiaomi Poco M5/);
+  assert.match(report, /arm64-v8a, armeabi-v7a/);
+  assert.match(report, /libvelorec_rust2024.so`:\s*✅ Cargada con éxito/);
+  assert.match(report, /libvelorec_cpp23.so`:\s*✅ Cargada con éxito/);
+  assert.match(report, /Registros de Error Recientes/);
+});
+
+test('getDebugInspectorSpecs defines standalone activity capabilities and leakcanary style behavior', () => {
+  const specs = getDebugInspectorSpecs();
+  assert.equal(specs.name, 'VeloRec Inspector');
+  assert.equal(specs.launcherIcon, true);
+  assert.equal(specs.taskAffinity, 'com.velorec.recorder.debug');
+  assert.ok(specs.capabilities.some(c => c.includes('Logcat')));
+  assert.ok(specs.capabilities.some(c => c.includes('UncaughtExceptionHandler')));
+  assert.ok(specs.capabilities.some(c => c.includes('Markdown')));
+});
+

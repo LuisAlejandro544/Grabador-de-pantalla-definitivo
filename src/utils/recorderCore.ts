@@ -1326,3 +1326,73 @@ export function getRustResilienceGuardianSpecs() {
     supportedArchitectures: ['arm64-v8a', 'armeabi-v7a', 'x86_64']
   };
 }
+
+/**
+ * Parsea una línea cruda de logcat con formato -v time.
+ * Ejemplo: "05-10 14:20:10.123 E/ScreenRecordService( 1234): Error al iniciar grabación"
+ */
+export function parseLogcatLine(rawLine: string): { timestamp: string; level: string; tag: string; message: string } | null {
+  if (!rawLine || typeof rawLine !== 'string') return null;
+  const regex = /^(\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+([VDIWEF])\/([^(]+)\(\s*\d+\):\s*(.*)$/;
+  const match = regex.exec(rawLine.trim());
+  if (!match) return null;
+  return {
+    timestamp: match[1],
+    level: match[2],
+    tag: match[3].trim(),
+    message: match[4]
+  };
+}
+
+/**
+ * Genera un reporte diagnóstico en formato Markdown estructurado para copiar y pegar directamente al asistente.
+ */
+export function formatDiagnosticReport(data: {
+  model: string;
+  androidVersion: string;
+  abis: string[];
+  rustLoaded: boolean;
+  cppLoaded: boolean;
+  recentErrors?: string[];
+}): string {
+  const abisStr = data.abis.length > 0 ? data.abis.join(', ') : 'Desconocida';
+  const rustStr = data.rustLoaded ? '✅ Cargada con éxito' : '❌ No disponible';
+  const cppStr = data.cppLoaded ? '✅ Cargada con éxito' : '❌ No disponible';
+
+  let report = `### 📱 Reporte de Diagnóstico VeloRec Studio\n`;
+  report += `- **Dispositivo**: ${data.model}\n`;
+  report += `- **Android**: ${data.androidVersion}\n`;
+  report += `- **Arquitecturas Soportadas (ABI)**: \`${abisStr}\`\n\n`;
+  report += `#### 🦀 Estado de Bibliotecas Nativas\n`;
+  report += `- \`libvelorec_rust2024.so\`: ${rustStr}\n`;
+  report += `- \`libvelorec_cpp23.so\`: ${cppStr}\n`;
+
+  if (data.recentErrors && data.recentErrors.length > 0) {
+    report += `\n#### 📋 Registros de Error Recientes (${data.recentErrors.length})\n\`\`\`text\n`;
+    for (const err of data.recentErrors) {
+      report += `${err}\n`;
+    }
+    report += `\`\`\`\n`;
+  }
+  return report;
+}
+
+/**
+ * Retorna las especificaciones técnicas de VeloRec Inspector (estilo LeakCanary).
+ */
+export function getDebugInspectorSpecs() {
+  return {
+    name: 'VeloRec Inspector',
+    architecture: 'In-APK Standalone Activity (LeakCanary style)',
+    launcherIcon: true,
+    capabilities: [
+      'Lectura de Logcat en vivo sin permisos root',
+      'Captura global de caídas no controladas (UncaughtExceptionHandler)',
+      'Diagnóstico de carga de bibliotecas nativas Rust y C++',
+      'Telemetría de memoria física anti-LMK',
+      'Copia de reporte diagnóstico en formato Markdown en 1 clic'
+    ],
+    taskAffinity: 'com.velorec.recorder.debug'
+  };
+}
+
