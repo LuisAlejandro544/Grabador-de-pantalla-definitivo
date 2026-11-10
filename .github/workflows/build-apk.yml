@@ -126,15 +126,19 @@ jobs:
           GRADLE_PROP="-PtargetAbi=all"
           ABI_NAME="Universal"
 
-          if [[ "$ABI_INPUT" =~ "arm64-v8a" ]]; then
+          if [[ "$ABI_INPUT" =~ "Universal" ]] || [[ "$ABI_INPUT" == "all" ]]; then
+            CARGO_TARGETS="-t arm64-v8a -t armeabi-v7a -t x86_64"
+            GRADLE_PROP="-PtargetAbi=all"
+            ABI_NAME="Universal"
+          elif [[ "$ABI_INPUT" =~ "Solo 64-bit" ]] || [[ "$ABI_INPUT" == "arm64-v8a" ]]; then
             CARGO_TARGETS="-t arm64-v8a"
             GRADLE_PROP="-PtargetAbi=arm64-v8a"
             ABI_NAME="arm64-v8a"
-          elif [[ "$ABI_INPUT" =~ "armeabi-v7a" ]]; then
+          elif [[ "$ABI_INPUT" =~ "Solo 32-bit" ]] || [[ "$ABI_INPUT" == "armeabi-v7a" ]]; then
             CARGO_TARGETS="-t armeabi-v7a"
             GRADLE_PROP="-PtargetAbi=armeabi-v7a"
             ABI_NAME="armeabi-v7a"
-          elif [[ "$ABI_INPUT" =~ "x86_64" ]]; then
+          elif [[ "$ABI_INPUT" =~ "Solo Emulador" ]] || [[ "$ABI_INPUT" == "x86_64" ]]; then
             CARGO_TARGETS="-t x86_64"
             GRADLE_PROP="-PtargetAbi=x86_64"
             ABI_NAME="x86_64"
