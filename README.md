@@ -1,5 +1,14 @@
 # 📱 VeloRec Studio — Grabador de Pantalla Móvil Nativo de Alto Rendimiento
 
+[![Versión](https://img.shields.io/badge/Versi%C3%B3n-v1.0.0--E%20(Estable)-06B6D4?style=for-the-badge&logo=android)](CHANGELOG_ESTABLE.md)
+[![Motor](https://img.shields.io/badge/Motor-Rust%202024%20Zero--Copy-F97316?style=for-the-badge&logo=rust)](rust/src/lib.rs)
+[![GPU](https://img.shields.io/badge/GPU%20Shaders-C%2B%2B23%20GLSL%2FSPIR--V-6366F1?style=for-the-badge&logo=c%2B%2B)](android/app/src/main/cpp/)
+[![Release Action](https://img.shields.io/badge/Release%20CI-GitHub%20Releases%20(-E)-10B981?style=for-the-badge&logo=githubactions)](.github/workflows/release-apk-stable.yml)
+
+> **Versión Oficial v1.0.0-E (Estable)**:  
+> El sufijo **`-E`** significa **ESTABLE**. Representa una versión verificada para uso diario sin crasheos ni interrupciones.  
+> Consulta el desglose completo en [**`CHANGELOG_ESTABLE.md`**](CHANGELOG_ESTABLE.md).
+
 > **Arquitectura móvil 100% nativa**: Kotlin (Jetpack Compose Material 3 & Corrutinas) + Rust (Edition 2024 Zero-Copy Core) + C++23 (GPU Shader Pipeline & Google libyuv).
 
 VeloRec Studio es una aplicación **100% móvil nativa** de captura y codificación de pantalla para Android. Diseñada con interfaz táctil ergonómica y moderna basada en **Jetpack Compose (Material 3)** puro, elimina por completo los cuellos de botella de la máquina virtual (JVM/ART) mediante una tubería **Zero-Copy** que transfiere directamente las superficies de hardware de la GPU a los codificadores nativos en Rust (Edition 2024) y procesa efectos visuales en tiempo real mediante shaders en C++23.
@@ -148,6 +157,44 @@ Para garantizar la estabilidad del APK en tiendas de terceros como Uptodown y pr
    - **TypeScript & Lógica Pura**: Comprobación de tipos estrictos (`tsc --noEmit`) y suite de tests unitarios matemáticos (`recorderCore.test.ts`).
 2. **Reporte Ejecutivo para Descarga Móvil**:
    - Genera el artefacto `Reporte-Auditoria-Produccion-VeloRec` con un informe legible en formato Markdown (`AUDIT_SUMMARY.md`) y los reportes detallados de Android Lint en HTML para inspeccionarlos directamente desde el smartphone.
+
+---
+
+## 🚀 Publicación Automatizada de APKs en GitHub Releases (`.github/workflows/release-apk-stable.yml`)
+
+Para distribuir actualizaciones de forma limpia y profesional a los usuarios (en Uptodown o distribución directa de APK), VeloRec Studio cuenta con un flujo de GitHub Actions **exclusivo para Releases Estables**:
+
+- **Disparador Estricto**: Se activa **únicamente** cuando publicas un **Release en GitHub** cuya etiqueta finaliza en **`-E`** (ejemplo: `v1.0.0-E`, `v1.0.1-E`).
+- **Cero Consumo Accidental de Minutos**: No se ejecuta con commits, `push`, `pull_request` ni llamadas manuales.
+- **Compilación de Producción**:
+  1. Instala el toolchain nativo de Rust (Edition 2024 / 1.85+) con `cargo-ndk`.
+  2. Compila `libvelorec_rust2024.so` y los shaders C++23 para `arm64-v8a`, `armeabi-v7a` y `x86_64`.
+  3. Empaqueta `libc++_shared.so` y ensambla el APK con Gradle.
+  4. Renombra los binarios generados (`VeloRec-v1.0.0-E-Universal.apk`) y los adjunta **automáticamente como activos descargables dentro del mismo Release de GitHub**.
+
+---
+
+## 🔄 Sistema de Actualizaciones Integrado (In-App Update)
+
+VeloRec Studio incluye un detector de actualizaciones autónomo que garantiza que el usuario siempre disfrute de la versión más reciente:
+
+1. **Detección Automática y Manual**:
+   - Al iniciar la app, consulta la API de GitHub Releases en segundo plano sin interrumpir la experiencia.
+   - También permite comprobación manual en cualquier momento desde la pestaña **Ajustes ➔ "Buscar Actualización"**.
+2. **Visualización de Novedades (Changelog)**:
+   - Si detecta una versión superior (ej: `v1.0.1-E` frente a `v1.0.0-E`), despliega un modal táctil (`AppUpdateDialog`) con las notas oficiales del release y las mejoras de rendimiento.
+3. **Instalación Directa en 1 Toque**:
+   - Incluye el botón **"Descargar e Instalar APK"**, el cual abre directamente el enlace al paquete binario para su actualización instantánea.
+
+---
+
+## 🔒 Blindaje de Grabaciones (Garantía de Persistencia en Actualizaciones)
+
+> 🛡️ **Tus videos grabados NUNCA se eliminan al actualizar VeloRec Studio**  
+> 
+> Todas las capturas se guardan en el álbum público **`Movies/VeloRec`** mediante la API de **`MediaStore`** de Android:
+> - **Independencia del APK**: El almacenamiento público compartido de Android está desacoplado del ciclo de vida de instalación del paquete.
+> - **Inmunidad Total**: Cuando instalas una nueva versión del APK sobre la anterior (actualización in-place), Android únicamente sustituye el binario del código ejecutable. **Tus archivos MP4, miniaturas y metadatos en Google Fotos y la Galería nativa permanecen 100% seguros e intactos**.
 
 ---
 

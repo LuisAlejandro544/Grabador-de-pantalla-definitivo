@@ -64,7 +64,8 @@ fun NativeSettingsSection(
     onFpsChange: (Int) -> Unit,
     onCodecChange: (String) -> Unit,
     onAudioChange: (String) -> Unit,
-    onCountdownChange: (Int) -> Unit = {}
+    onCountdownChange: (Int) -> Unit = {},
+    onCheckUpdates: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val resolutions = availableResolutions ?: remember(context) { getAdaptivePresetsForDevice(context) }
@@ -89,7 +90,8 @@ fun NativeSettingsSection(
                 accentColor = accentColor,
                 primaryColor = primaryColor,
                 remoteConfig = remoteConfig,
-                onNavigateTo = { currentSubScreen = it }
+                onNavigateTo = { currentSubScreen = it },
+                onCheckUpdates = onCheckUpdates
             )
         }
         SettingsSubScreen.RESOLUTION -> {

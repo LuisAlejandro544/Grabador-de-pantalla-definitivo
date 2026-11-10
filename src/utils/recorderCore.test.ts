@@ -49,7 +49,15 @@ import {
   parseLogcatLine,
   formatDiagnosticReport,
   getDebugInspectorSpecs,
-  diagnoseNdkStlLinkage
+  diagnoseNdkStlLinkage,
+  calculateAppListFingerprint,
+  shouldRescanInstalledApps,
+  getOnboardingPagesDefinition,
+  parseVersionTag,
+  isNewerVersion,
+  getStorageSafetyGuaranteeInfo,
+  getReleaseOptimizationProfile,
+  validateSigningSecrets
 } from './recorderCore';
 
 test('calculateEstimatedFileSize calculates byte size accurately', () => {
@@ -843,5 +851,144 @@ test('diagnoseNdkStlLinkage identifies __gxx_personality_v0 and recommends share
 
   assert.equal(okDiag.isResolved, true);
   assert.match(okDiag.diagnosis, /libc\+\+_shared\.so/);
+});
+
+test('shouldRescanInstalledApps prevents redundant scans and detects package additions/deletions', () => {
+  const initialPackages = ['com.dts.freefireth', 'com.tencent.ig', 'com.supercell.brawlstars'];
+  const initialHash = calculateAppListFingerprint(initialPackages);
+
+  // 1. Segunda visita a la pestaña sin cambios: NO debe reescanear (reutiliza cache instantáneamente)
+  const noChange = shouldRescanInstalledApps(initialHash, initialHash, true, false);
+  assert.equal(noChange, false);
+
+  // 2. Si no hay cache previa (primera apertura): SÍ debe escanear
+  const firstOpen = shouldRescanInstalledApps(initialHash, initialHash, false, false);
+  assert.equal(firstOpen, true);
+
+  // 3. Si el usuario descargó una app nueva (Free Fire + Roblox): fingerprint cambia, SÍ debe escanear
+  const withNewApp = ['com.dts.freefireth', 'com.tencent.ig', 'com.supercell.brawlstars', 'com.roblox.client'];
+  const newHash = calculateAppListFingerprint(withNewApp);
+  assert.notEqual(initialHash, newHash);
+  const detectedNewApp = shouldRescanInstalledApps(initialHash, newHash, true, false);
+  assert.equal(detectedNewApp, true);
+
+  // 4. Si el usuario eliminó una app: fingerprint cambia, SÍ debe escanear
+  const withDeletedApp = ['com.dts.freefireth', 'com.supercell.brawlstars'];
+  const deletedHash = calculateAppListFingerprint(withDeletedApp);
+  assert.notEqual(initialHash, deletedHash);
+  const detectedDeletedApp = shouldRescanInstalledApps(initialHash, deletedHash, true, false);
+  assert.equal(detectedDeletedApp, true);
+
+  // 5. Si el usuario pulsa manualmente el botón de Refrescar: forceRefresh = true
+  const manualRefresh = shouldRescanInstalledApps(initialHash, initialHash, true, true);
+  assert.equal(manualRefresh, true);
+});
+
+test('getOnboardingPagesDefinition configures 4 structured walkthrough steps with permissions', () => {
+  const pages = getOnboardingPagesDefinition();
+  assert.equal(pages.length, 4);
+
+  // Página 0: Rendimiento y Rust 2024
+  assert.equal(pages[0].pageIndex, 0);
+  assert.match(pages[0].title, /Sin Lag/);
+
+  // Página 1: Audio Interno y sincronización
+  assert.equal(pages[1].pageIndex, 1);
+  assert.match(pages[1].title, /Sonido/);
+
+  // Página 2: Lanzador 1-Click REC y Galería
+  assert.equal(pages[2].pageIndex, 2);
+  assert.match(pages[2].title, /1-Click/);
+
+  // Página 3: Permisos del sistema
+  assert.equal(pages[3].pageIndex, 3);
+  assert.match(pages[3].title, /Permisos/);
+  assert.ok(pages[3].requiredPermissions.includes('android.permission.RECORD_AUDIO'));
+  assert.ok(pages[3].requiredPermissions.includes('android.permission.POST_NOTIFICATIONS'));
+});
+
+test('parseVersionTag accurately parses version string, numbers, and -E stable flag', () => {
+  const v1 = parseVersionTag('v1.0.0-E');
+  assert.equal(v1.major, 1);
+  assert.equal(v1.minor, 0);
+  assert.equal(v1.patch, 0);
+  assert.equal(v1.isStable, true);
+  assert.equal(v1.tagSuffix, 'E');
+
+  const v2 = parseVersionTag('1.2.3');
+  assert.equal(v2.major, 1);
+  assert.equal(v2.minor, 2);
+  assert.equal(v2.patch, 3);
+  assert.equal(v2.isStable, false);
+
+  const v3 = parseVersionTag(null);
+  assert.equal(v3.major, 0);
+  assert.equal(v3.isStable, false);
+});
+
+test('isNewerVersion detects when a remote release is newer than current version', () => {
+  const current = '1.0.0-E';
+
+  // Mayor versión
+  assert.equal(isNewerVersion('v2.0.0-E', current), true);
+  assert.equal(isNewerVersion('2.0.0', current), true);
+
+  // Menor versión
+  assert.equal(isNewerVersion('v1.1.0-E', current), true);
+  assert.equal(isNewerVersion('1.0.1-E', current), true);
+
+  // Misma versión
+  assert.equal(isNewerVersion('v1.0.0-E', current), false);
+  assert.equal(isNewerVersion('1.0.0-E', current), false);
+
+  // Versión inferior
+  assert.equal(isNewerVersion('v0.9.9-E', current), false);
+  assert.equal(isNewerVersion('1.0.0-beta', current), false);
+});
+
+test('getStorageSafetyGuaranteeInfo confirms recordings in Movies/VeloRec are immune to updates', () => {
+  const guarantee = getStorageSafetyGuaranteeInfo();
+  assert.equal(guarantee.isImmuneToUpdates, true);
+  assert.equal(guarantee.path, 'Movies/VeloRec');
+  assert.equal(guarantee.storageType, 'MediaStore_Shared_Public');
+  assert.match(guarantee.description, /NUNCA se eliminan/);
+});
+
+test('getReleaseOptimizationProfile strips debug inspector and logcat in release but keeps in debug', () => {
+  const debugProfile = getReleaseOptimizationProfile('debug');
+  assert.equal(debugProfile.hasDebugInspector, true);
+  assert.equal(debugProfile.hasLogcatEnabled, true);
+  assert.equal(debugProfile.isMinified, false);
+  assert.equal(debugProfile.r8LogcatStripping, false);
+
+  const releaseProfile = getReleaseOptimizationProfile('release');
+  assert.equal(releaseProfile.hasDebugInspector, false);
+  assert.equal(releaseProfile.hasLogcatEnabled, false);
+  assert.equal(releaseProfile.isMinified, true);
+  assert.equal(releaseProfile.isShrinkResources, true);
+  assert.equal(releaseProfile.signingRequired, true);
+  assert.equal(releaseProfile.r8LogcatStripping, true);
+});
+
+test('validateSigningSecrets requires all 4 mandatory release secrets', () => {
+  // Caso incompleto
+  const incomplete = validateSigningSecrets({
+    keystoreBase64: 'abc123base64',
+    keystorePassword: 'pass'
+  });
+  assert.equal(incomplete.isValid, false);
+  assert.ok(incomplete.missingSecrets.includes('RELEASE_KEY_ALIAS'));
+  assert.ok(incomplete.missingSecrets.includes('RELEASE_KEY_PASSWORD'));
+
+  // Caso completo
+  const complete = validateSigningSecrets({
+    keystoreBase64: 'abc123base64',
+    keystorePassword: 'storepassword123',
+    keyAlias: 'velorec_release',
+    keyPassword: 'keypassword123'
+  });
+  assert.equal(complete.isValid, true);
+  assert.equal(complete.missingSecrets.length, 0);
+  assert.equal(complete.configuredSecrets.length, 4);
 });
 

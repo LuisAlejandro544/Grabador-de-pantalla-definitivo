@@ -270,6 +270,30 @@ class MainActivity : ComponentActivity() {
                         }
                         startService(stopIntent)
                         Toast.makeText(this, "Grabación finalizada y guardada en MP4", Toast.LENGTH_LONG).show()
+                    },
+                    onRequestPermissions = {
+                        val permissionsToRequest = mutableListOf<String>()
+                        if (ContextCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.RECORD_AUDIO
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            if (ContextCompat.checkSelfPermission(
+                                    this,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                        if (permissionsToRequest.isNotEmpty()) {
+                            permissionLauncher.launch(permissionsToRequest.toTypedArray())
+                        } else {
+                            Toast.makeText(this, "¡Permisos ya concedidos!", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
             }

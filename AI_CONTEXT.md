@@ -22,7 +22,16 @@ VeloRec Studio es una aplicación móvil de grabación de pantalla de alto rendi
    - **Google Oboe 100% en Rust**: Captura de audio de ultra baja latencia (<10 ms con AAudio/OpenSL ES) administrada exclusivamente en Rust (crate `oboe`), eliminando la dependencia prefab AAR de Oboe en C++23.
    - **Conversión de Color y Escalado YUV 100% en Rust (`yuvutils-rs`)**: Conversiones de color NV12, I420 y RGBA junto a escalado bilineal en `rust/src/color_yuv.rs` con aceleración vectorial SIMD ARM NEON (32/64 bits), erradicando la dependencia de Google libyuv en C++23 y agilizando la compilación CMake.
    - Guardado directo en Galería (`Movies/VeloRec`) con indexación inmediata.
-6. **CI/CD Móvil**: Flujo de GitHub Actions con disparo **estrictamente manual (`workflow_dispatch`)** para compilar el APK Debug sin necesidad de computadora.
+6. **CI/CD Móvil y Releases Estables**:
+   - Flujo `.github/workflows/build-apk.yml`: Compilación de pruebas manual (`workflow_dispatch`).
+   - Flujo `.github/workflows/release-apk-stable.yml`: Publicación automatizada vinculada **estrictamente a Releases de GitHub cuya etiqueta termina en `-E` (ej: `v1.0.0-E`)**. Compila los APKs de producción y los adjunta automáticamente al release.
+7. **Sistema de Versiones y Novedades (`v1.0.0-E`)**:
+   - Versión actual: `v1.0.0-E` (la letra **E** designa formalmente una versión **Estable**).
+   - Documentada detalladamente en `CHANGELOG_ESTABLE.md`.
+   - Sistema de actualizaciones in-app autónomo (`AppUpdateDialog.kt` y `RemoteConfigRepository.checkForAppUpdate`) que verifica GitHub Releases, muestra notas de versión y permite descargar el APK directamente.
+8. **Blindaje de Grabaciones y Persistencia ante Actualizaciones**:
+   - Todas las grabaciones residen en el almacenamiento compartido de Android (`MediaStore API`, `Movies/VeloRec`).
+   - Las actualizaciones del APK son completamente independientes del almacenamiento público: **NINGUNA actualización borra ni altera los videos del usuario**.
 
 ---
 

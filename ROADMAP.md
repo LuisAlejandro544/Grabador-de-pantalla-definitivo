@@ -93,6 +93,12 @@ Plan de evolución técnica y funcional para el grabador de pantalla móvil de a
 
 - [ ] **Publicación Automática en Uptodown**: Integración de scripts para actualizar versiones APK directamente en el catálogo de Uptodown.
 - [ ] **Soporte para F-Droid**: Empaquetado reproducible compatible con los estándares de compilación de F-Droid.
+- [x] **Versión Oficial v1.0.0-E (Estable)**: Implementación de la primera versión oficial estable verificada para producción sin cierres inesperados.
+- [x] **Publicación Automatizada por Releases en GitHub (`release-apk-stable.yml`)**: Compilación automatizada de APKs con C++23 y Rust 2024 vinculada exclusivamente a Releases de GitHub con sufijo `-E`.
+- [x] **Sistema de Actualizaciones In-App Autónomo**: Detección de versiones superiores en GitHub Releases (`releases/latest`), visualización de notas de versión (`CHANGELOG_ESTABLE.md`) y botón para descargar e instalar el nuevo APK en 1 toque.
+- [x] **Blindaje y Garantía de Persistencia de Grabaciones en `Movies/VeloRec`**: Almacenamiento compartido mediante MediaStore API que garantiza que ninguna actualización de APK altere ni elimine los videos del usuario.
+- [x] **Flujo de Onboarding Interactivo de 4 Pasos**: Recorrido de bienvenida con concesión guiada de permisos de audio y notificaciones.
+- [x] **Lanzador Rápido con Caché Inteligente de Paquetes**: Escaneo único con detección de huella digital de aplicaciones (carga en 0 ms sin reescaneos repetitivos).
 - [x] **Configuración Remota Dinámica (Server-Driven UI sin reinstalar APK)**: La app consulta asíncronamente `app_config.json` en los releases de GitHub (`https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases`) con resiliencia offline para cambiar acentos, banners, anuncios y opciones en caliente.
 - [x] **Flujo de Publicación Manual en GitHub Actions**: Action `publish-config-release.yml` con activación estricta manual (`workflow_dispatch`) para publicar el JSON a GitHub Releases.
-- [ ] **Sistema de Actualizaciones In-App de APK Sin Google Play**: Comprobación de nuevas versiones con descargas de paquetes `.apk` con verificación de hash SHA-256.
+

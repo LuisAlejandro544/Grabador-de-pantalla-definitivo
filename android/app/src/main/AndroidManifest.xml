@@ -70,11 +70,13 @@
         </activity>
 
         <!-- Actividad autónoma de diagnóstico e inspección de Logcat y Crashes (Estilo LeakCanary) -->
-        <!-- Aparece como icono independiente en el cajón de apps del smartphone: 'VeloRec Inspector' -->
+        <!-- Se deshabilita y elimina completamente del APK en compilaciones Release ('enableDebugInspector = false') -->
+        <!-- Solo se habilita en compilaciones Debug para inspección interna sin root -->
         <activity
             android:name=".debug.DebugConsoleActivity"
             android:label="VeloRec Inspector"
             android:exported="true"
+            android:enabled="${enableDebugInspector}"
             android:taskAffinity="com.velorec.recorder.debug"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:windowSoftInputMode="adjustResize">

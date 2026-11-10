@@ -32,6 +32,11 @@ import java.io.FileOutputStream
  * 3. Doble Respaldo:
  *    - Si por restricciones de permisos el guardado público fallara, preserva el archivo en el
  *      almacenamiento privado de la aplicación para garantizar que el usuario nunca pierda su grabación.
+ * 4. Inmunidad Total ante Actualizaciones del APK:
+ *    - Al utilizar MediaStore y la carpeta pública 'Movies/VeloRec', los videos residen en el
+ *      almacenamiento compartido global del sistema operativo Android.
+ *    - La instalación o actualización de cualquier versión del APK (por ejemplo de v1.0.0-E a v1.0.1-E)
+ *      NUNCA altera ni elimina los archivos alojados en 'Movies/VeloRec'.
  */
 /**
  * Estructura para grabación directa en la Galería del usuario sin archivos temporales ni copias pesadas.

@@ -74,8 +74,10 @@ object VeloRecDebugManager {
 
     /**
      * Inicializa el interceptor global de caídas (crashes).
+     * En compilaciones Release (producción estable), no se activa para eliminar sobrecarga y logs.
      */
     fun init(context: Context) {
+        if (!com.velorec.recorder.BuildConfig.DEBUG) return
         if (isInitialized) return
         isInitialized = true
 
@@ -195,6 +197,9 @@ object VeloRecDebugManager {
         query: String = "",
         minLevel: LogcatLevel = LogcatLevel.VERBOSE
     ): List<LogcatEntry> = withContext(Dispatchers.IO) {
+        if (!com.velorec.recorder.BuildConfig.DEBUG) {
+            return@withContext emptyList()
+        }
         val myPid = Process.myPid()
         val result = mutableListOf<LogcatEntry>()
 

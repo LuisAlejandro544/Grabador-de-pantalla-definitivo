@@ -1441,3 +1441,236 @@ export function diagnoseNdkStlLinkage(status: {
   };
 }
 
+/**
+ * Calcula un fingerprint numérico determinista a partir de la lista de paquetes instalados.
+ * Permite detectar si se agregó o eliminó una aplicación sin tener que cargar iconos ni metadatos.
+ */
+export function calculateAppListFingerprint(packageNames: string[]): number {
+  let hash = packageNames.length;
+  for (const pkg of packageNames) {
+    for (let i = 0; i < pkg.length; i++) {
+      hash = (Math.imul(31, hash) + pkg.charCodeAt(i)) | 0;
+    }
+  }
+  return hash;
+}
+
+/**
+ * Determina si se requiere un reescaneo de aplicaciones o si se debe reutilizar la caché en memoria.
+ * - Si forceRefresh es true -> Reescanea
+ * - Si no hay caché previa -> Escanea
+ * - Si el fingerprint cambió (se instaló o eliminó una app) -> Reescanea
+ * - Si no hubo cambios -> REUTILIZA LA CACHÉ (0ms de latencia, cero parpadeos)
+ */
+export function shouldRescanInstalledApps(
+  lastFingerprint: number,
+  currentFingerprint: number,
+  hasCache: boolean,
+  forceRefresh: boolean = false
+): boolean {
+  if (forceRefresh) return true;
+  if (!hasCache) return true;
+  return lastFingerprint !== currentFingerprint;
+}
+
+/**
+ * Retorna las especificaciones de las páginas del flujo de Onboarding / Bienvenida inicial.
+ */
+export function getOnboardingPagesDefinition() {
+  return [
+    {
+      pageIndex: 0,
+      title: 'Grabación Sin Lag Ni Anuncios',
+      focus: 'Rendimiento Extremo Rust 2024 Zero-Copy y afinidad CPU',
+      requiredPermissions: []
+    },
+    {
+      pageIndex: 1,
+      title: 'Sonido de Juegos Cristalino',
+      focus: 'Audio interno puro, mezcla estéreo y finalización en <15ms',
+      requiredPermissions: []
+    },
+    {
+      pageIndex: 2,
+      title: 'Lanzador Rápido 1-Click REC',
+      focus: 'Abre tus juegos y graba al instante con guardado en Movies/VeloRec',
+      requiredPermissions: []
+    },
+    {
+      pageIndex: 3,
+      title: 'Permisos de Android',
+      focus: 'Permisos de Audio y Notificaciones esenciales',
+      requiredPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.POST_NOTIFICATIONS']
+    }
+  ];
+}
+
+export interface ParsedVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  isStable: boolean;
+  tagSuffix: string;
+  raw: string;
+}
+
+/**
+ * Parsea una etiqueta de versión (ejemplo: 'v1.0.0-E', '1.0.1-E', 'v2.1.0-beta').
+ * El sufijo '-E' denota explícitamente versión Estable (Release de Producción).
+ */
+export function parseVersionTag(tag: string | null | undefined): ParsedVersion {
+  if (!tag || typeof tag !== 'string') {
+    return { major: 0, minor: 0, patch: 0, isStable: false, tagSuffix: '', raw: '' };
+  }
+  const clean = tag.trim().replace(/^v/i, '');
+  const isStable = clean.toUpperCase().endsWith('-E');
+
+  const parts = clean.split('-');
+  const numPart = parts[0] || '0.0.0';
+  const tagSuffix = parts.slice(1).join('-');
+
+  const nums = numPart.split('.').map(n => parseInt(n, 10) || 0);
+  const major = nums[0] ?? 0;
+  const minor = nums[1] ?? 0;
+  const patch = nums[2] ?? 0;
+
+  return {
+    major,
+    minor,
+    patch,
+    isStable,
+    tagSuffix,
+    raw: tag.trim()
+  };
+}
+
+/**
+ * Compara si una versión remota disponible en GitHub Releases es superior a la versión actual instalada.
+ * Compara jerárquicamente: Mayor > Menor > Parche.
+ */
+export function isNewerVersion(remoteTag: string, currentVersion: string): boolean {
+  const remote = parseVersionTag(remoteTag);
+  const current = parseVersionTag(currentVersion);
+
+  if (remote.major > current.major) return true;
+  if (remote.major < current.major) return false;
+
+  if (remote.minor > current.minor) return true;
+  if (remote.minor < current.minor) return false;
+
+  if (remote.patch > current.patch) return true;
+  return false;
+}
+
+export interface StorageSafetyGuarantee {
+  path: string;
+  isImmuneToUpdates: boolean;
+  storageType: 'MediaStore_Shared_Public';
+  description: string;
+}
+
+/**
+ * Retorna la especificación de blindaje y persistencia de grabaciones ante actualizaciones del APK.
+ * En Android, MediaStore y /storage/emulated/0/Movies/VeloRec residen en almacenamiento público compartido,
+ * por lo que ninguna actualización de APK puede borrar o alterar los videos del usuario.
+ */
+export function getStorageSafetyGuaranteeInfo(): StorageSafetyGuarantee {
+  return {
+    path: 'Movies/VeloRec',
+    isImmuneToUpdates: true,
+    storageType: 'MediaStore_Shared_Public',
+    description: 'Tus grabaciones en la Galería (Movies/VeloRec) están en almacenamiento público compartido de Android y NUNCA se eliminan al actualizar el APK.'
+  };
+}
+
+export interface ReleaseOptimizationProfile {
+  buildType: 'debug' | 'release';
+  hasDebugInspector: boolean;
+  hasLogcatEnabled: boolean;
+  isMinified: boolean;
+  isShrinkResources: boolean;
+  signingRequired: boolean;
+  r8LogcatStripping: boolean;
+}
+
+/**
+ * Retorna las especificaciones de optimización del APK según el tipo de compilación:
+ * - 'debug': Incluye inspector, logcat y no ofusca.
+ * - 'release': Elimina consola de debug, suprime logcats con Proguard R8, activa shrinking y requiere keystore real.
+ */
+export function getReleaseOptimizationProfile(buildType: 'debug' | 'release'): ReleaseOptimizationProfile {
+  if (buildType === 'release') {
+    return {
+      buildType: 'release',
+      hasDebugInspector: false,
+      hasLogcatEnabled: false,
+      isMinified: true,
+      isShrinkResources: true,
+      signingRequired: true,
+      r8LogcatStripping: true
+    };
+  }
+  return {
+    buildType: 'debug',
+    hasDebugInspector: true,
+    hasLogcatEnabled: true,
+    isMinified: false,
+    isShrinkResources: false,
+    signingRequired: false,
+    r8LogcatStripping: false
+  };
+}
+
+export interface SigningSecretsValidation {
+  isValid: boolean;
+  missingSecrets: string[];
+  configuredSecrets: string[];
+}
+
+/**
+ * Valida la presencia de las 4 credenciales obligatorias para firmar el APK de Release en GitHub Actions:
+ * - RELEASE_KEYSTORE_BASE64
+ * - RELEASE_KEYSTORE_PASSWORD
+ * - RELEASE_KEY_ALIAS
+ * - RELEASE_KEY_PASSWORD
+ */
+export function validateSigningSecrets(secrets: {
+  keystoreBase64?: string | null;
+  keystorePassword?: string | null;
+  keyAlias?: string | null;
+  keyPassword?: string | null;
+}): SigningSecretsValidation {
+  const missing: string[] = [];
+  const configured: string[] = [];
+
+  if (!secrets.keystoreBase64 || secrets.keystoreBase64.trim().length === 0) {
+    missing.push('RELEASE_KEYSTORE_BASE64');
+  } else {
+    configured.push('RELEASE_KEYSTORE_BASE64');
+  }
+
+  if (!secrets.keystorePassword || secrets.keystorePassword.trim().length === 0) {
+    missing.push('RELEASE_KEYSTORE_PASSWORD');
+  } else {
+    configured.push('RELEASE_KEYSTORE_PASSWORD');
+  }
+
+  if (!secrets.keyAlias || secrets.keyAlias.trim().length === 0) {
+    missing.push('RELEASE_KEY_ALIAS');
+  } else {
+    configured.push('RELEASE_KEY_ALIAS');
+  }
+
+  if (!secrets.keyPassword || secrets.keyPassword.trim().length === 0) {
+    missing.push('RELEASE_KEY_PASSWORD');
+  } else {
+    configured.push('RELEASE_KEY_PASSWORD');
+  }
+
+  return {
+    isValid: missing.length === 0,
+    missingSecrets: missing,
+    configuredSecrets: configured
+  };
+}
+

@@ -66,6 +66,7 @@ import com.velorec.recorder.data.model.RemoteUiConfig
 import com.velorec.recorder.data.repository.RemoteConfigRepository
 import com.velorec.recorder.data.repository.UserPreferencesRepository
 import com.velorec.recorder.ui.components.RemoteAnnouncementDialog
+import com.velorec.recorder.ui.components.AppUpdateDialog
 import com.velorec.recorder.ui.screens.NativeAppLauncherSection
 import com.velorec.recorder.ui.screens.NativeBenchmarkSection
 import com.velorec.recorder.ui.screens.NativeGallerySection
@@ -108,10 +109,15 @@ fun VeloRecMainScreen(
     onStartRecording: (config: NativeRecordingConfig) -> Unit = {},
     onLaunchAppAndRecord: (packageName: String, config: NativeRecordingConfig) -> Unit = { _, _ -> },
     onTogglePause: () -> Unit = {},
-    onStopRecording: () -> Unit = {}
+    onStopRecording: () -> Unit = {},
+    onRequestPermissions: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val adaptivePresets = remember(context) { getAdaptivePresetsForDevice(context) }
+
+    var showOnboarding by remember {
+        mutableStateOf(!UserPreferencesRepository.isOnboardingCompleted(context))
+    }
 
     var activeTab by remember { mutableStateOf(NativeTab.RECORDER) }
     var selectedEngine by remember {
@@ -139,18 +145,46 @@ fun VeloRecMainScreen(
     // Estado de configuración remota dinámica (Server-Driven UI)
     var remoteConfig by remember { mutableStateOf(RemoteUiConfig()) }
     var showAnnouncementModal by remember { mutableStateOf(false) }
+    var showUpdateModal by remember { mutableStateOf(false) }
 
-    // Descarga asíncrona no bloqueante de app_config.json desde GitHub Releases
+    // Descarga asíncrona no bloqueante de app_config.json y verificación de release desde GitHub
     LaunchedEffect(Unit) {
         val fetched = RemoteConfigRepository.fetchRemoteConfigSafe()
         remoteConfig = fetched
         if (fetched.announcement.showDialog && fetched.announcement.message.isNotBlank()) {
             showAnnouncementModal = true
         }
+        if (fetched.updateInfo.hasUpdate) {
+            showUpdateModal = true
+        }
     }
 
     val dynamicAccentColor = parseColorSafe(remoteConfig.theme.accentColorHex, DefaultAccentCyan)
     val dynamicPrimaryColor = parseColorSafe(remoteConfig.theme.primaryColorHex, PrimaryIndigo)
+
+    // Pantalla de Bienvenida y Onboarding (solo en la primera apertura)
+    if (showOnboarding) {
+        com.velorec.recorder.ui.screens.OnboardingScreen(
+            accentColor = dynamicAccentColor,
+            primaryColor = dynamicPrimaryColor,
+            onRequestPermissions = onRequestPermissions,
+            onFinishOnboarding = {
+                UserPreferencesRepository.setOnboardingCompleted(context, true)
+                showOnboarding = false
+            }
+        )
+        return
+    }
+
+    // Modal de Actualización Disponible (GitHub Releases con notas y APK)
+    if (showUpdateModal) {
+        AppUpdateDialog(
+            updateInfo = remoteConfig.updateInfo,
+            accentColor = dynamicAccentColor,
+            primaryColor = dynamicPrimaryColor,
+            onDismiss = { showUpdateModal = false }
+        )
+    }
 
     // Modal de Anuncio Remoto (si se activa en app_config.json)
     if (showAnnouncementModal) {
@@ -271,15 +305,21 @@ fun VeloRecMainScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
-                                    color = DarkCard,
-                                    shape = RoundedCornerShape(4.dp)
+                                    color = if (remoteConfig.updateInfo.hasUpdate) Color(0xFF10B981).copy(alpha = 0.2f) else DarkCard,
+                                    border = if (remoteConfig.updateInfo.hasUpdate) BorderStroke(1.dp, Color(0xFF10B981)) else null,
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = Modifier.clickable {
+                                        if (remoteConfig.updateInfo.hasUpdate) {
+                                            showUpdateModal = true
+                                        }
+                                    }
                                 ) {
                                     Text(
-                                        text = "V${remoteConfig.version} PRO",
+                                        text = if (remoteConfig.updateInfo.hasUpdate) "ACTUALIZAR" else "v${remoteConfig.version}",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = dynamicAccentColor,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                        color = if (remoteConfig.updateInfo.hasUpdate) Color(0xFF10B981) else dynamicAccentColor,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                     )
                                 }
                             }
@@ -293,26 +333,29 @@ fun VeloRecMainScreen(
                     }
                 },
                 actions = {
-                    // Acceso directo a VeloRec Inspector (Logcat, crashes y telemetría de Rust)
-                    IconButton(
-                        onClick = {
-                            context.startActivity(Intent(context, com.velorec.recorder.debug.DebugConsoleActivity::class.java))
-                        },
-                        modifier = Modifier.padding(end = 4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF3B0764)),
-                            contentAlignment = Alignment.Center
+                    // Acceso a VeloRec Inspector (Logcat y telemetría): EXCLUSIVO para compilaciones Debug
+                    // Se oculta y elimina al 100% en compilaciones Release (versión estable)
+                    if (com.velorec.recorder.BuildConfig.DEBUG) {
+                        IconButton(
+                            onClick = {
+                                context.startActivity(Intent(context, com.velorec.recorder.debug.DebugConsoleActivity::class.java))
+                            },
+                            modifier = Modifier.padding(end = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.BugReport,
-                                contentDescription = "Consola de Diagnóstico (VeloRec Inspector)",
-                                tint = Color(0xFFC084FC),
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF3B0764)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BugReport,
+                                    contentDescription = "Consola de Diagnóstico (VeloRec Inspector)",
+                                    tint = Color(0xFFC084FC),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
 
@@ -523,6 +566,9 @@ fun VeloRecMainScreen(
                         onCountdownChange = {
                             selectedCountdownSec = it
                             UserPreferencesRepository.saveCountdownSec(context, it)
+                        },
+                        onCheckUpdates = {
+                            showUpdateModal = true
                         }
                     )
                 }

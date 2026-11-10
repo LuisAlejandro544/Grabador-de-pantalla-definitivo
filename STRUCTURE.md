@@ -11,9 +11,11 @@
 ├── .github/
 │   └── workflows/
 │       ├── build-apk.yml               # GitHub Actions para compilar APK Debug manualmente con selector de ABI (universal o individual)
+│       ├── release-apk-stable.yml      # GitHub Actions activado por Release con sufijo '-E' para publicar APKs automáticamente
 │       ├── code-analysis-audit.yml     # GitHub Actions para auditoría de producción y análisis estático (Kotlin Lint, Cppcheck, Clippy, TS)
 │       └── publish-config-release.yml  # GitHub Actions para publicar app_config.json en GitHub Releases (workflow_dispatch)
 │
+├── CHANGELOG_ESTABLE.md                # Registro oficial de cambios y notas de la versión estable v1.0.0-E
 ├── android/                             # Estructura del proyecto Android nativo completa
 │   ├── gradle/
 │   │   └── wrapper/
@@ -59,12 +61,14 @@
 │           │       ├── components/
 │           │       │   ├── MetricBadge.kt   # Componente de telemetría de hardware
 │           │       │   ├── RemoteAnnouncementDialog.kt # Diálogo modal para anuncios remotos
+│           │       │   ├── AppUpdateDialog.kt # Diálogo modal táctil para actualización de APK con notas y blindaje de grabaciones
 │           │       │   └── recorder/        # Módulos desacoplados del visor de grabación
 │           │       │       ├── QuickQualityCard.kt     # Tarjeta de ajustes rápidos de resolución, bitrate y audio
 │           │       │       ├── RecorderHudCard.kt      # Visor tipo HUD con cronómetro y animaciones de pulso
 │           │       │       ├── HardwareTelemetryRow.kt # Fila de métricas de CPU, latencia, RAM y Zero-Copy
 │           │       │       └── RecorderActionButtons.kt# Botones ergonómicos de gran área táctil (REC / Pausa)
 │           │       └── screens/
+│           │           ├── OnboardingScreen.kt  # Pantalla de inducción táctil de 4 pasos con solicitud guiada de permisos
 │           │           ├── RecorderScreen.kt    # Orquestador modular del visor principal de captura
 │           │           ├── AppLauncherScreen.kt # Lanzador rápido de juegos y apps descargadas con 1-Click REC
 │           │           ├── SettingsScreen.kt    # Orquestador de navegación modular con BackHandler

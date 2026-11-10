@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "min_supported_version": "1.0.0",
-  "apk_download_url": "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases",
+  "version": "1.0.0-E",
+  "min_supported_version": "1.0.0-E",
+  "apk_download_url": "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases/latest",
   "theme": {
     "accent_color_hex": "#06B6D4",
     "primary_color_hex": "#6366F1",
@@ -10,7 +10,7 @@
     "banner_type": "info"
   },
   "recorder": {
-    "default_engine": "cpp23",
+    "default_engine": "rust2024",
     "supported_resolutions": ["480p", "720p", "1080p", "1440p", "4k"],
     "supported_bitrates_mbps": [4, 8, 12, 16, 24, 35, 50],
     "default_resolution": "1080p",

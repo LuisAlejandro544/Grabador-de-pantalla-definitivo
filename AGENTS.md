@@ -54,7 +54,8 @@ npm run build
 - **Android SDK y NDK en GitHub Actions (`ubuntu-latest`)**:
   - **NUNCA** usar la acción de terceros `android-actions/setup-android@v3` porque intenta descargar el paquete obsoleto `tools` que Google eliminó de los repositorios del SDK, provocando el fallo `Failed to find package 'tools'`. Los entornos de GitHub Actions ya traen el Android SDK y NDK r26/r27 preinstalados en `/usr/local/lib/android/sdk`; se deben usar directamente las variables de entorno `ANDROID_HOME` y `ANDROID_NDK_HOME`.
 - **Disparo del GitHub Action**:
-  - Debe mantenerse configurado **únicamente** con `on: workflow_dispatch`. No añadir `push` ni `pull_request` para evitar ejecuciones innecesarias que consuman cuotas de GitHub.
+  - Para compilación de pruebas manual (`build-apk.yml`), debe mantenerse configurado **únicamente** con `on: workflow_dispatch`. No añadir `push` ni `pull_request` para evitar ejecuciones innecesarias que consuman cuotas de GitHub.
+  - Para compilación oficial de producción (`release-apk-stable.yml`), se dispara **estrictamente** con `on: release: types: [published]` con condición `endsWith(github.event.release.tag_name, '-E')`.
 - **Paridad en Resoluciones**:
   - Los codificadores de hardware NDK (`AMediaCodec`) en Android fallarán con error si el ancho o alto son números impares (ej: 1081x1920). Cualquier función que modifique resoluciones debe aplicar `width % 2 === 0 && height % 2 === 0`.
 - **Corrutinas en Kotlin**:

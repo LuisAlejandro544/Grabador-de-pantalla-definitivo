@@ -1,0 +1,216 @@
+name: 🚀 Publicar APKs Release Estable (VeloRec)
+
+# DISPARADOR ESTRICTAMENTE LIGADO A RELEASES DE GITHUB CON SUFIJO '-E' (Estable)
+# No se ejecuta con push, pull_request, ni manualmente (workflow_dispatch).
+# Se activa de manera automatizada únicamente al publicar un Release en GitHub
+# con una etiqueta terminada en '-E' (por ejemplo: v1.0.0-E, v1.0.1-E).
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish-stable:
+    name: 📦 Compilar y Firmar APK Release Estable
+    runs-on: ubuntu-latest
+    if: endsWith(github.event.release.tag_name, '-E')
+
+    steps:
+      # 1. Clonar el repositorio
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      # 2. Configurar entorno de Node.js (v20)
+      - name: 🟢 Configurar Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3. Configurar Java JDK 17
+      - name: ☕ Configurar Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 4. Configurar Android SDK y NDK (Usando el SDK oficial preinstalado en el runner de GitHub)
+      - name: 🤖 Configurar variables de Android SDK y NDK
+        run: |
+          SDK_DIR="/usr/local/lib/android/sdk"
+          if [ ! -d "$SDK_DIR" ]; then
+            SDK_DIR="$ANDROID_HOME"
+          fi
+          echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> $GITHUB_ENV
+
+          # Detectar el NDK preinstalado en el runner
+          NDK_PATH=$(find $SDK_DIR/ndk -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$NDK_PATH" ]; then
+            yes | $SDK_DIR/cmdline-tools/latest/bin/sdkmanager --licenses || true
+            $SDK_DIR/cmdline-tools/latest/bin/sdkmanager "ndk;26.3.11579264" "cmake;3.22.1"
+            NDK_PATH="$SDK_DIR/ndk/26.3.11579264"
+          fi
+          echo "NDK detectado: $NDK_PATH"
+          echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+
+      - name: 📦 Aceptar licencias de Android SDK
+        run: |
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      # 5. Configurar Toolchain de Rust (Edition 2024 / 1.85+) y targets de Android (32 y 64 bits)
+      - name: 🦀 Instalar Rust Toolchain y Targets Móviles
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: 🛠️ Instalar cargo-ndk
+        run: |
+          cargo install cargo-ndk
+
+      # 6. Instalar dependencias de npm sin flags de caché que fallen
+      - name: 📚 Instalar dependencias de npm
+        run: |
+          if [ -f "package-lock.json" ]; then
+            npm ci --legacy-peer-deps
+          else
+            npm install --legacy-peer-deps
+          fi
+
+      # 7. Validar Secrets de Firma Obligatorios
+      # Si el usuario no ha configurado sus credenciales de firma en GitHub Secrets,
+      # el workflow se detiene informando exactamente qué falta.
+      - name: 🔐 Verificar Secrets de Firma Obligatorios
+        run: |
+          MISSING_SECRETS=()
+          if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            MISSING_SECRETS+=("RELEASE_KEYSTORE_BASE64")
+          fi
+          if [ -z "${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" ]; then
+            MISSING_SECRETS+=("RELEASE_KEYSTORE_PASSWORD")
+          fi
+          if [ -z "${{ secrets.RELEASE_KEY_ALIAS }}" ]; then
+            MISSING_SECRETS+=("RELEASE_KEY_ALIAS")
+          fi
+          if [ -z "${{ secrets.RELEASE_KEY_PASSWORD }}" ]; then
+            MISSING_SECRETS+=("RELEASE_KEY_PASSWORD")
+          fi
+
+          if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+            echo "======================================================================="
+            echo "❌ ERROR: FALTAN SECRETS OBLIGATORIOS PARA LA FIRMA DEL APK DE RELEASE"
+            echo "======================================================================="
+            echo "Los siguientes secrets no están configurados en tu repositorio de GitHub:"
+            for s in "${MISSING_SECRETS[@]}"; do
+              echo "  👉 $s"
+            done
+            echo ""
+            echo "Para agregarlos:"
+            echo "1. Ve a tu repositorio en GitHub"
+            echo "2. Entra en Settings ➔ Secrets and variables ➔ Actions"
+            echo "3. Pulsa 'New repository secret' y añade cada uno con sus datos."
+            echo "======================================================================="
+            exit 1
+          fi
+          echo "✅ Todos los secrets de firma están configurados correctamente."
+
+      # 8. Decodificar Keystore de Producción desde GitHub Secrets
+      - name: 🔑 Restaurar Keystore de Producción
+        run: |
+          mkdir -p android/app
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          if [ ! -s "android/app/release.keystore" ]; then
+            echo "❌ ERROR: El archivo android/app/release.keystore está vacío o la decodificación falló."
+            exit 1
+          fi
+          echo "✅ Keystore de producción cargada exitosamente ($(wc -c < android/app/release.keystore) bytes)."
+
+      # 9. Dar permisos de ejecución a gradlew
+      - name: 🔧 Configurar permisos de gradlew
+        run: |
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          elif [ -f "gradlew" ]; then
+            chmod +x gradlew
+          fi
+
+      # 10. Compilar bibliotecas nativas de Rust 2024 (Zero-Copy) para todas las arquitecturas móviles
+      - name: 🦀 Compilar bibliotecas nativas Rust (arm64-v8a + armeabi-v7a + x86_64)
+        run: |
+          mkdir -p android/app/src/main/jniLibs
+          cd rust
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 --platform 26 -o ../android/app/src/main/jniLibs build --release
+
+          echo "🔍 Verificando presencia de libvelorec_rust2024.so..."
+          ls -lR ../android/app/src/main/jniLibs
+
+          for target_abi in "arm64-v8a" "armeabi-v7a" "x86_64"; do
+            SO_FILE="../android/app/src/main/jniLibs/$target_abi/libvelorec_rust2024.so"
+            if [ ! -s "$SO_FILE" ]; then
+              echo "❌ ERROR FATAL: No se generó la biblioteca $SO_FILE"
+              exit 1
+            fi
+            echo "✅ Confirmada: $SO_FILE ($(wc -c < "$SO_FILE") bytes)"
+
+            # Empaquetar libc++_shared.so para la arquitectura
+            NDK_TRIPLE=""
+            case "$target_abi" in
+              "arm64-v8a") NDK_TRIPLE="aarch64-linux-android" ;;
+              "armeabi-v7a") NDK_TRIPLE="arm-linux-androideabi" ;;
+              "x86_64") NDK_TRIPLE="x86_64-linux-android" ;;
+            esac
+
+            LIBCXX_PATH=$(find "$ANDROID_NDK_HOME" -name "libc++_shared.so" 2>/dev/null | grep "$NDK_TRIPLE" | head -n 1)
+            if [ -n "$LIBCXX_PATH" ] && [ -f "$LIBCXX_PATH" ]; then
+              cp "$LIBCXX_PATH" "../android/app/src/main/jniLibs/$target_abi/libc++_shared.so"
+              echo "✅ Empaquetada libc++_shared.so ($target_abi) desde: $LIBCXX_PATH"
+            fi
+          done
+
+      # 11. Compilar el APK de Release Oficial con R8, ProGuard y Firma Real
+      # - isMinifyEnabled = true (Elimina código no usado)
+      # - isShrinkResources = true (Elimina recursos no usados)
+      # - Logcat y consola de Debug erradicadas
+      - name: 🚀 Compilar APK Release Optimizado con Gradle
+        run: |
+          cd android
+          ./gradlew assembleRelease \
+            -PtargetAbi=all \
+            -PRELEASE_STORE_FILE=release.keystore \
+            -PRELEASE_STORE_PASSWORD="${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
+            -PRELEASE_KEY_ALIAS="${{ secrets.RELEASE_KEY_ALIAS }}" \
+            -PRELEASE_KEY_PASSWORD="${{ secrets.RELEASE_KEY_PASSWORD }}" \
+            --info --stacktrace
+
+      # 12. Preparar y renombrar los APKs para su distribución en el Release
+      - name: 🏷️ Preparar APKs con nombre de versión
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          mkdir -p release_apks
+
+          # Copiar el APK firmado resultante de release
+          SOURCE_APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$SOURCE_APK" ]; then
+            # Si se compiló en carpeta raíz de apk
+            SOURCE_APK=$(find android/app/build/outputs/apk -name "*release*.apk" | head -n 1)
+          fi
+
+          if [ -n "$SOURCE_APK" ] && [ -f "$SOURCE_APK" ]; then
+            cp "$SOURCE_APK" "release_apks/VeloRec-${TAG_NAME}-Universal.apk"
+            echo "✅ APK de Release firmado preparado: release_apks/VeloRec-${TAG_NAME}-Universal.apk"
+          else
+            echo "❌ ERROR: No se encontró ningún archivo .apk compilado en outputs/apk/release."
+            exit 1
+          fi
+
+      # 13. Adjuntar los APKs compilados directamente al Release de GitHub
+      - name: 📤 Subir APKs al Release Oficial de GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          echo "Adjuntando binarios APK firmados al release: $TAG_NAME"
+          gh release upload "$TAG_NAME" release_apks/*.apk --clobber
+          echo "🎉 ¡APKs oficiales firmados adjuntados exitosamente al Release de GitHub!"

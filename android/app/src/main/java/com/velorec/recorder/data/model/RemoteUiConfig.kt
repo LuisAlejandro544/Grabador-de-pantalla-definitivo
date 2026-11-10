@@ -29,10 +29,23 @@ data class RemoteAnnouncementConfig(
     val message: String = ""
 )
 
+data class AppUpdateInfo(
+    val hasUpdate: Boolean = false,
+    val latestVersionTag: String = "1.0.0-E",
+    val currentVersionTag: String = "1.0.0-E",
+    val releaseTitle: String = "",
+    val releaseNotes: String = "",
+    val apkDownloadUrl: String = "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases/latest",
+    val isStable: Boolean = true,
+    val publishedAt: String = "",
+    val checkedSuccessfully: Boolean = false
+)
+
 data class RemoteUiConfig(
-    val version: String = "1.0.0",
-    val apkDownloadUrl: String = "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases",
+    val version: String = "1.0.0-E",
+    val apkDownloadUrl: String = "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases/latest",
     val theme: RemoteThemeConfig = RemoteThemeConfig(),
     val announcement: RemoteAnnouncementConfig = RemoteAnnouncementConfig(),
-    val isFetchedFromNetwork: Boolean = false
+    val isFetchedFromNetwork: Boolean = false,
+    val updateInfo: AppUpdateInfo = AppUpdateInfo()
 )

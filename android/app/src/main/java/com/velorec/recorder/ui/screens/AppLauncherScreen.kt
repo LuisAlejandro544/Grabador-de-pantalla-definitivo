@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SportsEsports
@@ -60,6 +61,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,7 +85,36 @@ import com.velorec.recorder.ui.theme.RecordRed
 import com.velorec.recorder.ui.theme.SuccessGreen
 import com.velorec.recorder.ui.theme.WarningAmber
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * Caché estático en memoria para las aplicaciones y juegos instalados.
+ * 
+ * LÓGICA DE DETECCIÓN INTELIGENTE:
+ * 1. Mantiene las apps ya escaneadas para no reescanear al alternar entre pestañas.
+ * 2. Comprueba la huella (fingerprint) de paquetes instalados en milisegundos.
+ * 3. Si no se descargó ninguna app nueva ni se eliminó ninguna, NO vuelve a escanear.
+ * 4. Si el sistema detecta que se agregó o quitó un paquete, se actualiza automáticamente.
+ */
+object AppLauncherCache {
+    var cachedApps: List<InstalledAppItem>? = null
+    var lastPackageFingerprint: Int = -1
+
+    fun hasCache(): Boolean = !cachedApps.isNullOrEmpty()
+
+    fun getCache(): List<InstalledAppItem> = cachedApps ?: emptyList()
+
+    fun updateCache(apps: List<InstalledAppItem>, fingerprint: Int) {
+        cachedApps = apps
+        lastPackageFingerprint = fingerprint
+    }
+
+    fun clearCache() {
+        cachedApps = null
+        lastPackageFingerprint = -1
+    }
+}
 
 /**
  * AppLauncherScreen.kt
@@ -94,7 +125,7 @@ import kotlinx.coroutines.withContext
  * de pantalla automáticamente con la configuración preestablecida.
  * 
  * CARACTERÍSTICAS Y OPTIMIZACIONES:
- * 1. Consulta asíncrona en 'Dispatchers.IO' mediante PackageManager para evitar bloqueos del hilo UI.
+ * 1. Caché inteligente 'AppLauncherCache': escanea 1 sola vez; solo reescanea si se detecta una app nueva o eliminada.
  * 2. Detección automática de videojuegos mediante ApplicationInfo.CATEGORY_GAME y flags del sistema.
  * 3. Filtrado dinámico por texto (Buscador) y pestañas rápidas (Todos, Juegos, Apps).
  * 4. Conversión segura de iconos nativos (Drawable a ImageBitmap) con renderizado fluido.
@@ -117,19 +148,60 @@ fun NativeAppLauncherSection(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var installedApps by remember { mutableStateOf<List<InstalledAppItem>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    val coroutineScope = rememberCoroutineScope()
+    var installedApps by remember { mutableStateOf<List<InstalledAppItem>>(AppLauncherCache.getCache()) }
+    var isLoading by remember { mutableStateOf(!AppLauncherCache.hasCache()) }
+    var isRefreshing by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategoryFilter by remember { mutableStateOf("Todos") } // "Todos", "Juegos", "Apps"
 
-    // Carga asíncrona de aplicaciones y juegos en segundo plano (Dispatchers.IO)
-    LaunchedEffect(Unit) {
-        isLoading = true
-        val apps = withContext(Dispatchers.IO) {
+    val pm = remember(context) { context.packageManager }
+    val launchIntent = remember {
+        Intent(Intent.ACTION_MAIN, null).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+    }
+
+    // Función suspendida que valida la huella de paquetes y reescanea solo si cambió
+    suspend fun checkAndScanApps(forceRescan: Boolean = false) {
+        val currentFingerprint = withContext(Dispatchers.IO) {
+            try {
+                val resolveList = pm.queryIntentActivities(launchIntent, 0)
+                var hash = resolveList.size
+                for (r in resolveList) {
+                    hash = 31 * hash + r.activityInfo.packageName.hashCode()
+                }
+                hash
+            } catch (_: Exception) {
+                0
+            }
+        }
+
+        // Si ya hay caché y el número/nombres de paquetes no cambió, no reescanear
+        if (!forceRescan && AppLauncherCache.hasCache() && currentFingerprint == AppLauncherCache.lastPackageFingerprint) {
+            installedApps = AppLauncherCache.getCache()
+            isLoading = false
+            return
+        }
+
+        if (!AppLauncherCache.hasCache()) {
+            isLoading = true
+        } else {
+            isRefreshing = true
+        }
+
+        val freshApps = withContext(Dispatchers.IO) {
             queryInstalledApplications(context)
         }
-        installedApps = apps
+        AppLauncherCache.updateCache(freshApps, currentFingerprint)
+        installedApps = freshApps
         isLoading = false
+        isRefreshing = false
+    }
+
+    // Carga inicial no bloqueante
+    LaunchedEffect(Unit) {
+        checkAndScanApps(forceRescan = false)
     }
 
     // Filtrar lista de apps según el buscador y categoría
@@ -233,6 +305,31 @@ fun NativeAppLauncherSection(
                         color = Color(0xFF94A3B8),
                         lineHeight = 16.sp
                     )
+                }
+
+                // Botón de comprobación o recarga manual de apps instaladas
+                IconButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            checkAndScanApps(forceRescan = true)
+                        }
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            color = accentColor,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Actualizar lista de apps",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

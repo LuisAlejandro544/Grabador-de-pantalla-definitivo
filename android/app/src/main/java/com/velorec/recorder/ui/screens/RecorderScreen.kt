@@ -41,15 +41,17 @@ import com.velorec.recorder.ui.components.recorder.RecorderHudCard
  * RecorderScreen.kt
  * 
  * ¿QUÉ HACE ESTE ARCHIVO?
- * Pantalla principal de captura de pantalla y monitor de hardware en vivo.
+ * Pantalla principal de captura de pantalla y monitor de hardware en vivo en Jetpack Compose.
  * 
- * ARQUITECTURA MODULAR DESACOPLADA:
- * Orquesta los submódulos especializados de la UI de grabación:
+ * ARQUITECTURA MODULAR DE EXPERIENCIA NATIVA ERGONÓMICA:
  * 1. Banner Dinámico Remoto (Server-Driven UI desde GitHub Releases).
- * 2. 'QuickQualityCard': Selector de resolución nativa, control fino de bitrate, audio y cuenta regresiva.
- * 3. 'RecorderHudCard': Visor tipo HUD de cámara con animaciones de pulso y cronómetro en vivo.
- * 4. 'HardwareTelemetryRow': Badges de telemetría de CPU, latencia NDK, memoria y Zero-Copy.
- * 5. 'RecorderActionButtons': Botones táctiles ergonómicos de gran tamaño (Pausar/Reanudar y Iniciar/Detener).
+ * 2. 'RecorderHudCard' (Consola Viewfinder Hero en la parte superior): Muestra el estado activo
+ *    y cronómetro inmediatamente sin tener que scrollear.
+ * 3. 'RecorderActionButtons' (Botón Principal Iniciar/Detener): Ubicado justo debajo del visor
+ *    para acceso instantáneo de 1 solo toque con el pulgar.
+ * 4. 'HardwareTelemetryRow': Métricas en tiempo real de CPU, latencia NDK, memoria y Zero-Copy.
+ * 5. 'QuickQualityCard': Perfiles de 1-toque (Gamer, Ultra 120, Ahorro, Tutorial) y ajustes
+ *    táctiles ergonómicos, con enlace directo a la pestaña de Ajustes Avanzados.
  */
 @Composable
 fun NativeRecorderViewport(
@@ -78,7 +80,7 @@ fun NativeRecorderViewport(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 1. Banner Dinámico Remoto (Server-Driven UI de GitHub Releases)
@@ -86,18 +88,18 @@ fun NativeRecorderViewport(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 10.dp),
                 shape = RoundedCornerShape(14.dp),
                 color = accentColor.copy(alpha = 0.12f),
                 border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(26.dp)
                             .clip(CircleShape)
                             .background(accentColor.copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center
@@ -106,40 +108,25 @@ fun NativeRecorderViewport(
                             imageVector = Icons.Default.Campaign,
                             contentDescription = null,
                             tint = accentColor,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = bannerText,
-                        fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFFF1F5F9),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        lineHeight = 16.sp
+                        lineHeight = 15.sp
                     )
                 }
             }
         }
 
-        // 2. Tarjeta Nativa Material 3: Configuración Rápida de Grabación
-        QuickQualityCard(
-            selectedResolution = selectedResolution,
-            selectedBitrateMbps = selectedBitrateMbps,
-            selectedAudio = selectedAudio,
-            selectedCountdownSec = selectedCountdownSec,
-            isRecording = isRecording,
-            accentColor = accentColor,
-            primaryColor = primaryColor,
-            availableResolutions = availableResolutions,
-            onResolutionChange = onResolutionChange,
-            onBitrateChange = onBitrateChange,
-            onAudioChange = onAudioChange,
-            onCountdownChange = onCountdownChange
-        )
-
-        // 3. Monitor de Captura Nativo (HUD Viewfinder)
+        // 2. HERO VIEWFINDER DE CÁMARA (HUD Viewfinder)
+        // Posicionado en la parte superior para visibilidad inmediata al abrir la app
         RecorderHudCard(
             selectedEngine = selectedEngine,
             selectedResolution = selectedResolution,
@@ -153,21 +140,41 @@ fun NativeRecorderViewport(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 4. Métricas de Hardware en Vivo (Material 3 Badges)
-        HardwareTelemetryRow(
-            selectedEngine = selectedEngine,
-            isRecording = isRecording
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 5. Botones de Acción Táctiles Ergonómicos
+        // 3. BOTÓN PRINCIPAL DE ACCIÓN (INICIAR / DETENER GRABACIÓN)
+        // Inmediatamente accesible con una sola mano sin necesidad de hacer scroll
         RecorderActionButtons(
             isRecording = isRecording,
             isPaused = isPaused,
             primaryColor = primaryColor,
             onToggleRecord = onToggleRecord,
             onTogglePause = onTogglePause
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 4. TELEMETRÍA DE HARDWARE EN VIVO (CPU, Latencia NDK, RAM, Zero-Copy)
+        HardwareTelemetryRow(
+            selectedEngine = selectedEngine,
+            isRecording = isRecording
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 5. AJUSTES RÁPIDOS Y PERFILES GAMERS DE 1-TOQUE
+        QuickQualityCard(
+            selectedResolution = selectedResolution,
+            selectedBitrateMbps = selectedBitrateMbps,
+            selectedAudio = selectedAudio,
+            selectedCountdownSec = selectedCountdownSec,
+            isRecording = isRecording,
+            accentColor = accentColor,
+            primaryColor = primaryColor,
+            availableResolutions = availableResolutions,
+            onResolutionChange = onResolutionChange,
+            onBitrateChange = onBitrateChange,
+            onAudioChange = onAudioChange,
+            onCountdownChange = onCountdownChange,
+            onOpenSettings = onOpenSettings
         )
     }
 }

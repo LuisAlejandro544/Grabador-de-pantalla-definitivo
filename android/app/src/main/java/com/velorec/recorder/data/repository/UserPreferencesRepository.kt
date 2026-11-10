@@ -47,8 +47,22 @@ object UserPreferencesRepository {
     private const val KEY_RES_CATEGORY = "pref_res_category"
     private const val KEY_RES_IS_CUSTOM = "pref_res_is_custom"
 
+    // Clave para estado de pantalla de bienvenida / onboarding inicial
+    private const val KEY_ONBOARDING_COMPLETED = "pref_onboarding_completed"
+
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    // =========================================================================
+    // PANTALLA DE BIENVENIDA / ONBOARDING INICIAL
+    // =========================================================================
+    fun isOnboardingCompleted(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_ONBOARDING_COMPLETED, false)
+    }
+
+    fun setOnboardingCompleted(context: Context, completed: Boolean = true) {
+        getPrefs(context).edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).apply()
     }
 
     // =========================================================================

@@ -76,6 +76,7 @@ fun SettingsMainMenu(
     primaryColor: Color,
     remoteConfig: RemoteUiConfig,
     onNavigateTo: (SettingsSubScreen) -> Unit,
+    onCheckUpdates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -144,23 +145,82 @@ fun SettingsMainMenu(
                     fontSize = 11.sp,
                     color = Color(0xFF94A3B8)
                 )
+
+                if (remoteConfig.updateInfo.hasUpdate) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        color = SuccessGreen.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.CloudSync,
+                                contentDescription = null,
+                                tint = SuccessGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "¡Nueva versión v${remoteConfig.updateInfo.latestVersionTag} disponible!",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SuccessGreen
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = {
-                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(remoteConfig.apkDownloadUrl))
-                        context.startActivity(browserIntent)
-                    },
+
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        Icons.Default.OpenInNew,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = accentColor
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Ver Releases en GitHub", color = Color.White, fontSize = 12.sp)
+                    androidx.compose.material3.Button(
+                        onClick = onCheckUpdates,
+                        modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = if (remoteConfig.updateInfo.hasUpdate) SuccessGreen else primaryColor
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CloudSync,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (remoteConfig.updateInfo.hasUpdate) "Actualizar" else "Buscar Actualización",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(remoteConfig.apkDownloadUrl))
+                            context.startActivity(browserIntent)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = accentColor
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Ver en GitHub", color = Color.White, fontSize = 11.sp)
+                    }
                 }
             }
         }

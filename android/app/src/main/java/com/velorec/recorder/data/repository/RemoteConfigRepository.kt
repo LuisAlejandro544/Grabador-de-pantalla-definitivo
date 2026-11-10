@@ -32,10 +32,90 @@ import java.net.URL
  */
 object RemoteConfigRepository {
 
-    private const val REPO_RELEASES_URL =
-        "https://api.github.com/repos/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases/latest"
-    private const val RAW_FALLBACK_URL =
-        "https://raw.githubusercontent.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/main/app_config.json"
+    const val CURRENT_APP_VERSION = "1.0.0-E"
+
+    /**
+     * Compara jerárquicamente dos cadenas de versión semántica (ej: 'v1.0.1-E' vs '1.0.0-E').
+     * Retorna true si la versión remota es mayor a la instalada.
+     */
+    fun isNewerVersion(remoteTag: String, currentVersion: String = CURRENT_APP_VERSION): Boolean {
+        fun parseParts(v: String): Triple<Int, Int, Int> {
+            val clean = v.trim().removePrefix("v").removePrefix("V").substringBefore("-")
+            val parts = clean.split(".")
+            val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
+            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+            return Triple(major, minor, patch)
+        }
+        val (rMaj, rMin, rPat) = parseParts(remoteTag)
+        val (cMaj, cMin, cPat) = parseParts(currentVersion)
+        if (rMaj > cMaj) return true
+        if (rMaj < cMaj) return false
+        if (rMin > cMin) return true
+        if (rMin < cMin) return false
+        return rPat > cPat
+    }
+
+    /**
+     * Consulta directamente la API de GitHub Releases para comprobar si existe una nueva versión.
+     * Retorna el modelo completo AppUpdateInfo con notas del release y URL directa del APK.
+     */
+    suspend fun checkForAppUpdate(currentVersion: String = CURRENT_APP_VERSION): com.velorec.recorder.data.model.AppUpdateInfo {
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = URL(REPO_RELEASES_URL)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                conn.setRequestProperty("User-Agent", "VeloRecStudio-Android")
+                if (conn.responseCode == 200) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                    val releaseObj = JSONObject(body)
+                    val tagName = releaseObj.optString("tag_name", "")
+                    val releaseName = releaseObj.optString("name", "VeloRec $tagName")
+                    val releaseNotes = releaseObj.optString("body", "Actualización con mejoras de rendimiento y estabilidad.")
+                    val publishedAt = releaseObj.optString("published_at", "")
+                    val htmlUrl = releaseObj.optString("html_url", "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases/latest")
+
+                    var directApkUrl: String? = null
+                    val assets = releaseObj.optJSONArray("assets")
+                    if (assets != null) {
+                        for (i in 0 until assets.length()) {
+                            val asset = assets.getJSONObject(i)
+                            val assetName = asset.optString("name", "")
+                            if (assetName.endsWith(".apk", ignoreCase = true)) {
+                                directApkUrl = asset.optString("browser_download_url")
+                                // Preferir APK universal si hay múltiples
+                                if (assetName.contains("Universal", ignoreCase = true)) {
+                                    break
+                                }
+                            }
+                        }
+                    }
+
+                    val finalDownloadUrl = directApkUrl ?: htmlUrl
+                    val hasUpdate = tagName.isNotBlank() && isNewerVersion(tagName, currentVersion)
+                    val isStable = tagName.endsWith("-E", ignoreCase = true)
+
+                    com.velorec.recorder.data.model.AppUpdateInfo(
+                        hasUpdate = hasUpdate,
+                        latestVersionTag = tagName.ifBlank { currentVersion },
+                        currentVersionTag = currentVersion,
+                        releaseTitle = releaseName,
+                        releaseNotes = releaseNotes,
+                        apkDownloadUrl = finalDownloadUrl,
+                        isStable = isStable,
+                        publishedAt = publishedAt,
+                        checkedSuccessfully = true
+                    )
+                } else {
+                    com.velorec.recorder.data.model.AppUpdateInfo(checkedSuccessfully = false)
+                }
+            } catch (e: Exception) {
+                com.velorec.recorder.data.model.AppUpdateInfo(checkedSuccessfully = false)
+            }
+        }
+    }
 
     suspend fun fetchRemoteConfigSafe(): RemoteUiConfig {
         return withContext(Dispatchers.IO) {
@@ -57,21 +137,48 @@ object RemoteConfigRepository {
             }
 
             try {
-                // 1. Intentar descargar directamente el asset del release de GitHub
+                // 1. Intentar descargar directamente el asset del release de GitHub y consultar actualización
                 var jsonString: String? = null
+                var detectedUpdateInfo = com.velorec.recorder.data.model.AppUpdateInfo()
+
                 val releaseResponse = fetchString(REPO_RELEASES_URL)
                 if (releaseResponse != null) {
                     val releaseObj = JSONObject(releaseResponse)
+                    val tagName = releaseObj.optString("tag_name", "")
+                    val releaseTitle = releaseObj.optString("name", "VeloRec $tagName")
+                    val releaseNotes = releaseObj.optString("body", "")
+                    val publishedAt = releaseObj.optString("published_at", "")
+                    val htmlUrl = releaseObj.optString("html_url", "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases/latest")
+
+                    var directApkUrl: String? = null
                     val assets = releaseObj.optJSONArray("assets")
                     if (assets != null) {
                         for (i in 0 until assets.length()) {
                             val asset = assets.getJSONObject(i)
-                            if (asset.optString("name") == "app_config.json") {
+                            val aName = asset.optString("name", "")
+                            if (aName == "app_config.json") {
                                 val downloadUrl = asset.optString("browser_download_url")
                                 jsonString = fetchString(downloadUrl)
-                                break
+                            }
+                            if (aName.endsWith(".apk", ignoreCase = true) && directApkUrl == null) {
+                                directApkUrl = asset.optString("browser_download_url")
                             }
                         }
+                    }
+
+                    if (tagName.isNotBlank()) {
+                        val hasUpdate = isNewerVersion(tagName, CURRENT_APP_VERSION)
+                        detectedUpdateInfo = com.velorec.recorder.data.model.AppUpdateInfo(
+                            hasUpdate = hasUpdate,
+                            latestVersionTag = tagName,
+                            currentVersionTag = CURRENT_APP_VERSION,
+                            releaseTitle = releaseTitle,
+                            releaseNotes = releaseNotes,
+                            apkDownloadUrl = directApkUrl ?: htmlUrl,
+                            isStable = tagName.endsWith("-E", ignoreCase = true),
+                            publishedAt = publishedAt,
+                            checkedSuccessfully = true
+                        )
                     }
                 }
 
@@ -82,10 +189,10 @@ object RemoteConfigRepository {
 
                 if (jsonString != null) {
                     val root = JSONObject(jsonString)
-                    val version = root.optString("version", "1.0.0")
+                    val version = root.optString("version", CURRENT_APP_VERSION)
                     val apkDownloadUrl = root.optString(
                         "apk_download_url",
-                        "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases"
+                        "https://github.com/LuisAlejandro544/Grabador-de-pantalla-definitivo/releases/latest"
                     )
 
                     val themeObj = root.optJSONObject("theme")
@@ -118,10 +225,11 @@ object RemoteConfigRepository {
                             title = announceTitle,
                             message = announceMessage
                         ),
-                        isFetchedFromNetwork = true
+                        isFetchedFromNetwork = true,
+                        updateInfo = detectedUpdateInfo
                     )
                 } else {
-                    RemoteUiConfig() // Fallback seguro offline
+                    RemoteUiConfig(updateInfo = detectedUpdateInfo) // Fallback seguro offline con info de update si se detectó
                 }
             } catch (e: Exception) {
                 RemoteUiConfig() // Fallback seguro ante cualquier fallo de parseo
@@ -129,3 +237,4 @@ object RemoteConfigRepository {
         }
     }
 }
+

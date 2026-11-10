@@ -25,7 +25,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.0.0-E"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -50,6 +50,8 @@ android {
                 cppFlags("-std=c++23", "-O3")
             }
         }
+
+        manifestPlaceholders["enableDebugInspector"] = "false"
     }
 
     signingConfigs {
@@ -59,6 +61,34 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            val storeFilePath = project.findProperty("RELEASE_STORE_FILE") as? String
+                ?: System.getenv("RELEASE_STORE_FILE")
+                ?: "release.keystore"
+            val storePass = project.findProperty("RELEASE_STORE_PASSWORD") as? String
+                ?: System.getenv("RELEASE_STORE_PASSWORD")
+                ?: ""
+            val keyAliasName = project.findProperty("RELEASE_KEY_ALIAS") as? String
+                ?: System.getenv("RELEASE_KEY_ALIAS")
+                ?: ""
+            val keyPass = project.findProperty("RELEASE_KEY_PASSWORD") as? String
+                ?: System.getenv("RELEASE_KEY_PASSWORD")
+                ?: ""
+
+            val keystoreFile = file(storeFilePath)
+            if (keystoreFile.exists() && storePass.isNotBlank() && keyAliasName.isNotBlank()) {
+                storeFile = keystoreFile
+                storePassword = storePass
+                keyAlias = keyAliasName
+                keyPassword = keyPass.ifBlank { storePass }
+            } else {
+                // Fallback para debug si no hay archivo de release presente
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     buildTypes {
@@ -66,13 +96,18 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             isDebuggable = true
             applicationIdSuffix = ".debug"
+            manifestPlaceholders["enableDebugInspector"] = "true"
         }
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
+            manifestPlaceholders["enableDebugInspector"] = "false"
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -93,6 +128,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
         prefab = true // Habilita Prefab para enlazar paquetes nativos C/C++ AAR como Google Oboe
     }
 
