@@ -7,3 +7,5 @@ coverage/
 .env*
 !.env.example
 android/app/src/main/res/mipmap-*dpi/*.png
+android/app/src/main/res/raw/*.wav
+android/app/src/main/res/raw/*.ogg

@@ -23,6 +23,7 @@ import com.velorec.recorder.service.HardwareStorageDetector
 import com.velorec.recorder.service.RecordingCountdownHelper
 import com.velorec.recorder.service.RecordingNotificationHelper
 import com.velorec.recorder.service.RecordingSessionTimer
+import com.velorec.recorder.service.SoundEffectHelper
 import com.velorec.recorder.storage.GalleryStorageManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -95,6 +96,7 @@ class ScreenRecordService : Service() {
         const val ACTION_RESUME = "com.velorec.ACTION_RESUME"
         const val ACTION_STOP = "com.velorec.ACTION_STOP"
         const val ACTION_QUERY_STATUS = "com.velorec.ACTION_QUERY_STATUS"
+        const val ACTION_RESTORE_NOTIFICATION = "com.velorec.ACTION_RESTORE_NOTIFICATION"
         const val ACTION_STATE_CHANGED = "com.velorec.ACTION_STATE_CHANGED"
 
         const val EXTRA_STATE_IS_RECORDING = "extra_is_recording"
@@ -232,6 +234,7 @@ class ScreenRecordService : Service() {
     override fun onCreate() {
         super.onCreate()
         RecordingNotificationHelper.createNotificationChannel(this)
+        SoundEffectHelper.preload(this)
         // Limpiar archivos temporales residuales de sesiones previas en segundo plano
         serviceScope.launch(Dispatchers.IO) {
             try {
@@ -248,6 +251,7 @@ class ScreenRecordService : Service() {
             ACTION_RESUME -> handleResumeRecording()
             ACTION_STOP -> handleStopRecording()
             ACTION_QUERY_STATUS -> notifyStateChanged()
+            ACTION_RESTORE_NOTIFICATION -> restoreActiveNotification()
         }
         return Service.START_STICKY
     }
@@ -330,6 +334,7 @@ class ScreenRecordService : Service() {
                         fps = fps,
                         onTick = { remaining ->
                             _countdownRemainingFlow.value = remaining
+                            SoundEffectHelper.playTick()
                             notifyStateChanged()
                         },
                         isStillActive = { _isRecordingFlow.value && !isStopping.get() }
@@ -343,6 +348,9 @@ class ScreenRecordService : Service() {
                         return@launch
                     }
                 }
+
+                // Reproducir sonido de inicio antes de abrir captura de audio/video
+                SoundEffectHelper.playStart()
 
                 // Iniciar cronómetro de duración de la sesión
                 startServiceTimer()
@@ -547,8 +555,23 @@ class ScreenRecordService : Service() {
         }
     }
 
-    private fun updateNotification(isPaused: Boolean) {
+    private fun restoreActiveNotification() {
+        if (!_isRecordingFlow.value || isStopping.get()) return
+        val remaining = if (_isCountingDownFlow.value) _countdownRemainingFlow.value else 0
+        val notification = RecordingNotificationHelper.buildRecordingNotification(
+            this,
+            currentEngine,
+            currentWidth,
+            currentHeight,
+            currentFps,
+            isPaused = _isPausedFlow.value,
+            countdownRemaining = remaining
+        )
         val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager?.notify(RecordingNotificationHelper.NOTIFICATION_ID, notification)
+    }
+
+    private fun updateNotification(isPaused: Boolean) {
         val notification = RecordingNotificationHelper.buildRecordingNotification(
             this,
             currentEngine,
@@ -557,6 +580,7 @@ class ScreenRecordService : Service() {
             currentFps,
             isPaused = isPaused
         )
+        val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager?.notify(RecordingNotificationHelper.NOTIFICATION_ID, notification)
     }
 
@@ -594,6 +618,9 @@ class ScreenRecordService : Service() {
                     Log.e("ScreenRecordService", "Error al detener audioEngine: ${e.message}", e)
                 }
                 audioEngine = null
+
+                // Reproducir sonido de finalización una vez detenida la captura de audio
+                SoundEffectHelper.playStop()
 
                 // 2. Detener codificador en Rust
                 if (isNativeEncoderStarted) {
@@ -723,6 +750,7 @@ class ScreenRecordService : Service() {
             audioEngine?.stop()
         } catch (_: Exception) {}
         audioEngine = null
+        SoundEffectHelper.release()
         serviceScope.cancel()
     }
 

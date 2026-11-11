@@ -29,17 +29,20 @@ import java.io.File
  */
 object RecordingNotificationHelper {
 
-    const val CHANNEL_ID = "velorec_recording_channel"
+    const val CHANNEL_ID = "velorec_recording_channel_v2"
     const val NOTIFICATION_ID = 8801
 
     fun createNotificationChannel(context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Grabación de Pantalla VeloRec",
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = "Muestra el estado activo de grabación con C++23 / Rust"
+            setSound(null, null)
+            enableVibration(false)
             setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         val manager = context.getSystemService(NotificationManager::class.java)
         manager?.createNotificationChannel(channel)
@@ -86,14 +89,24 @@ object RecordingNotificationHelper {
             else -> "Motor: $engineLabel | ${width}x${height} @ ${fps}fps"
         }
 
+        // Intent de respaldo para restaurar la notificación si el usuario limpia las notificaciones en Android 14+
+        val restoreIntent = Intent(context, ScreenRecordService::class.java).apply {
+            action = ScreenRecordService.ACTION_RESTORE_NOTIFICATION
+        }
+        val restorePendingIntent = PendingIntent.getService(context, 3, restoreIntent, flags)
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentIntent(openAppPendingIntent)
+            .setDeleteIntent(restorePendingIntent)
             .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
         // Si la cuenta regresiva está activa, solo muestra acción de cancelar; al grabar, añade pausa/detener
         if (countdownRemaining == 0) {
@@ -119,7 +132,9 @@ object RecordingNotificationHelper {
             builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         }
 
-        return builder.build()
+        return builder.build().apply {
+            this.flags = this.flags or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR
+        }
     }
 
     /**
@@ -153,8 +168,10 @@ object RecordingNotificationHelper {
             .setSmallIcon(android.R.drawable.ic_menu_save)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
 
         if (progressPercent in 0..100) {
             builder.setProgress(100, progressPercent, false)
@@ -166,7 +183,9 @@ object RecordingNotificationHelper {
             builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         }
 
-        return builder.build()
+        return builder.build().apply {
+            this.flags = this.flags or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR
+        }
     }
 
     /**

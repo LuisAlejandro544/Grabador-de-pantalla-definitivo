@@ -184,11 +184,12 @@ jobs:
             fi
           done
 
-      # 9. Generar iconos PNG del launcher en todas las densidades (solo en tiempo de build)
-      - name: 🎨 Generar iconos PNG del launcher desde XML
+      # 9. Generar iconos PNG del launcher y descargar sonidos CC0 (solo en tiempo de build)
+      - name: 🎨 Generar iconos PNG y sonidos CC0
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin
           python3 scripts/generate_launcher_pngs.py
+          python3 scripts/fetch_sound_assets.py
 
       # 10. Compilar el APK Debug
       # Compila las vistas nativas en Kotlin Jetpack Compose (Material 3),
